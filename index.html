@@ -161,9 +161,11 @@ input,select{font-family:inherit}
 .filter-bar .refresh-info{margin-left:auto;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
 
 /* Pipeline header (env nodes row) */
-.pipeline-header{display:flex;align-items:center;gap:0;margin-bottom:20px;overflow-x:auto;padding-bottom:14px}
-.env-node{flex:1;min-width:0;position:relative;cursor:pointer}
-.env-node-inner{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin:0 6px;position:relative;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:6px}
+.pipeline-header{display:flex;align-items:center;gap:0;margin-bottom:20px;overflow-x:auto;padding-bottom:14px;position:relative}
+/* Continuous rail line behind all nodes */
+.pipeline-header::after{content:'';position:absolute;top:50%;left:24px;right:24px;height:2px;background:var(--border);z-index:0;transform:translateY(-50%)}
+.env-node{flex:1;min-width:0;position:relative;cursor:pointer;z-index:1}
+.env-node-inner{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin:0 2px;position:relative;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:6px}
 .env-node:hover .env-node-inner{border-color:var(--border-bright);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
 .env-node.active .env-node-inner{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim),0 4px 12px rgba(0,0,0,.1);transform:translateY(-2px)}
 .env-node-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
@@ -178,9 +180,10 @@ input,select{font-family:inherit}
 .env-badge.merged{background:var(--green-dim);color:var(--green)}
 .env-badge.draft{background:var(--surface2);color:var(--muted)}
 .env-node .env-health{width:8px;height:8px;border-radius:50%;display:inline-block}
-/* Connector line between nodes */
-.env-connector{display:flex;align-items:center;flex-shrink:0;width:28px;justify-content:center;z-index:1}
-.env-connector svg{width:20px;height:20px;color:var(--border-bright)}
+/* Connector between nodes */
+.env-connector{display:flex;align-items:center;flex-shrink:0;width:32px;justify-content:center;z-index:1;position:relative}
+.env-connector::before{content:'';position:absolute;top:50%;left:0;right:0;height:2px;background:var(--border-bright);transform:translateY(-50%)}
+.env-connector .conn-arrow{width:10px;height:10px;border-radius:50%;background:var(--border-bright);position:relative;z-index:1;flex-shrink:0}
 .env-drift{font-size:9px;padding:2px 6px;border-radius:8px;position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:2;font-weight:500}
 .env-drift.warn{background:var(--yellow-dim);color:var(--yellow)}
 .env-drift.ok{background:var(--green-dim);color:var(--green)}
@@ -323,6 +326,7 @@ input,select{font-family:inherit}
   .header nav button{padding:6px 10px;font-size:12px}
   .view{padding:12px}
   .pipeline-header{flex-direction:column;gap:8px;overflow-x:visible}
+  .pipeline-header::after{display:none}
   .env-node{min-width:auto}
   .env-connector{display:none}
   .pr-card{flex-direction:column;align-items:flex-start}
@@ -1113,7 +1117,7 @@ function renderPipeline() {
           ${!openCount && !mergedCount ? '<span class="env-badge draft">—</span>' : ''}
         </div>
       </div>
-      ${i < envs.length - 1 ? '<div class="env-connector"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10h12M12 6l4 4-4 4"/></svg></div>' : ''}
+      ${i < envs.length - 1 ? '<div class="env-connector"><div class="conn-arrow"></div></div>' : ''}
       ${drift ? '<div class="env-drift ' + (drift.behind > 5 ? 'warn' : 'ok') + '">' + drift.behind + ' behind</div>' : ''}
     </div>`;
   });
