@@ -1,0 +1,1432 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>SF Pipeline Tracker</title>
+<style>
+/* ── RESET ── */
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;background:var(--bg);color:var(--text);line-height:1.5;overflow-x:hidden}
+a{color:var(--accent);text-decoration:none}
+a:hover{text-decoration:underline}
+button{cursor:pointer;font-family:inherit}
+input,select{font-family:inherit}
+::-webkit-scrollbar{width:8px;height:8px}
+::-webkit-scrollbar-track{background:var(--bg)}
+::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+
+/* ── DARK THEME (default) ── */
+[data-theme="dark"]{
+  --bg:#0d1117;--surface:#161b22;--surface2:#1c2128;--border:#30363d;
+  --border-bright:#484f58;--text:#e6edf3;--muted:#8b949e;
+  --accent:#58a6ff;--accent-dim:rgba(88,166,255,.12);
+  --green:#3fb950;--green-dim:rgba(63,185,80,.12);
+  --red:#f85149;--red-dim:rgba(248,81,73,.12);
+  --yellow:#d29922;--yellow-dim:rgba(210,153,34,.12);
+  --blue:#58a6ff;--blue-dim:rgba(88,166,255,.12);
+  --purple:#bc8cff;--purple-dim:rgba(188,140,255,.12);
+  --orange:#db6d28;--orange-dim:rgba(219,109,40,.12);
+  --header-bg:rgba(13,17,23,.85);
+  --overlay:rgba(0,0,0,.6);--panel-bg:#1c2128;
+}
+/* ── LIGHT THEME ── */
+[data-theme="light"]{
+  --bg:#f6f8fa;--surface:#ffffff;--surface2:#f0f3f6;--border:#d0d7de;
+  --border-bright:#afb8c1;--text:#1f2328;--muted:#656d76;
+  --accent:#0969da;--accent-dim:rgba(9,105,218,.08);
+  --green:#1a7f37;--green-dim:rgba(26,127,55,.08);
+  --red:#cf222e;--red-dim:rgba(207,34,46,.08);
+  --yellow:#9a6700;--yellow-dim:rgba(154,103,0,.08);
+  --blue:#0969da;--blue-dim:rgba(9,105,218,.08);
+  --purple:#8250df;--purple-dim:rgba(130,80,223,.08);
+  --orange:#bc4c00;--orange-dim:rgba(188,76,0,.08);
+  --header-bg:rgba(246,248,250,.85);
+  --overlay:rgba(0,0,0,.4);--panel-bg:#ffffff;
+}
+
+/* ── HEADER ── */
+.header{position:sticky;top:0;z-index:100;backdrop-filter:blur(12px);background:var(--header-bg);border-bottom:1px solid var(--border);padding:0 24px;height:56px;display:flex;align-items:center;gap:16px}
+.header .logo{font-size:16px;font-weight:700;white-space:nowrap;display:flex;align-items:center;gap:8px}
+.header .logo svg{width:24px;height:24px;fill:var(--accent)}
+.header nav{display:flex;gap:4px;margin-left:16px}
+.header nav button{background:none;border:none;color:var(--muted);font-size:13px;padding:8px 14px;border-radius:6px;font-weight:500;transition:all .15s}
+.header nav button:hover{color:var(--text);background:var(--surface)}
+.header nav button.active{color:var(--text);background:var(--accent-dim)}
+.header .spacer{flex:1}
+.header .hdr-btn{background:none;border:1px solid var(--border);color:var(--muted);width:34px;height:34px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px;transition:all .15s}
+.header .hdr-btn:hover{color:var(--text);border-color:var(--border-bright)}
+.header .conn-badge{font-size:11px;padding:3px 10px;border-radius:12px;font-weight:500}
+.header .conn-badge.ok{background:var(--green-dim);color:var(--green)}
+.header .conn-badge.off{background:var(--red-dim);color:var(--red)}
+.header .conn-badge.none{display:none}
+
+/* ── VIEWS ── */
+.view{display:none;padding:24px;max-width:1400px;margin:0 auto}
+.view.active{display:block}
+
+/* ── PROJECT SELECTOR ── */
+#projectsView{max-width:600px}
+.proj-header{text-align:center;margin-bottom:32px}
+.proj-header h1{font-size:28px;margin-bottom:8px}
+.proj-header p{color:var(--muted);font-size:14px}
+.proj-list{display:flex;flex-direction:column;gap:8px;margin-bottom:24px}
+.proj-card{display:flex;align-items:center;gap:12px;padding:16px 20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;cursor:pointer;transition:all .15s}
+.proj-card:hover{border-color:var(--accent);background:var(--accent-dim)}
+.proj-card .proj-icon{width:40px;height:40px;border-radius:8px;background:var(--accent-dim);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.proj-card .proj-info{flex:1}
+.proj-card .proj-name{font-weight:600;font-size:15px}
+.proj-card .proj-meta{font-size:12px;color:var(--muted)}
+.proj-card .proj-del{background:none;border:none;color:var(--muted);font-size:18px;padding:4px 8px;border-radius:6px;opacity:0;transition:opacity .15s}
+.proj-card:hover .proj-del{opacity:1}
+.proj-card .proj-del:hover{color:var(--red);background:var(--red-dim)}
+.proj-empty{text-align:center;padding:48px 24px;color:var(--muted)}
+.proj-empty .proj-empty-icon{font-size:48px;margin-bottom:16px;opacity:.5}
+.proj-empty p{font-size:14px}
+
+/* ── CREATE / UNLOCK MODALS ── */
+.modal-overlay{position:fixed;inset:0;background:var(--overlay);z-index:200;display:none;align-items:center;justify-content:center}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:32px;width:420px;max-width:92vw;box-shadow:0 16px 48px rgba(0,0,0,.3)}
+.modal h2{font-size:20px;margin-bottom:4px}
+.modal .modal-sub{color:var(--muted);font-size:13px;margin-bottom:24px}
+.modal .field{margin-bottom:16px}
+.modal label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.modal input{width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;transition:border-color .15s}
+.modal input:focus{outline:none;border-color:var(--accent)}
+.modal .secret-wrap{position:relative}
+.modal .secret-wrap input{padding-right:44px}
+.modal .secret-toggle{position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);padding:4px;cursor:pointer}
+.modal .secret-toggle:hover{color:var(--text)}
+.modal .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:24px}
+.modal .modal-error{color:var(--red);font-size:12px;margin-top:4px;min-height:18px}
+
+/* ── BUTTONS ── */
+.btn{padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:500;transition:all .15s}
+.btn:hover{border-color:var(--border-bright)}
+.btn-primary{background:var(--accent);color:#fff;border-color:var(--accent)}
+.btn-primary:hover{opacity:.9}
+.btn-danger{background:var(--red-dim);color:var(--red);border-color:transparent}
+.btn-danger:hover{background:var(--red);color:#fff}
+.btn-sm{padding:5px 12px;font-size:12px;border-radius:6px}
+.btn-ghost{background:none;border:none;color:var(--muted);padding:6px 10px}
+.btn-ghost:hover{color:var(--text);background:var(--surface2)}
+
+/* ── SETTINGS VIEW ── */
+#settingsView{max-width:800px}
+.settings-section{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:24px;margin-bottom:16px}
+.settings-section h3{font-size:15px;margin-bottom:16px;display:flex;align-items:center;gap:8px}
+.settings-section .field{margin-bottom:14px}
+.settings-section label{display:block;font-size:12px;font-weight:600;color:var(--muted);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.settings-section input,.settings-section select{width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px}
+.settings-section input:focus,.settings-section select:focus{outline:none;border-color:var(--accent)}
+.conn-status{display:flex;align-items:center;gap:10px;padding:10px 16px;border-radius:8px;font-size:13px;margin-top:12px}
+.conn-status.ok{background:var(--green-dim);color:var(--green)}
+.conn-status.err{background:var(--red-dim);color:var(--red)}
+
+/* ── ENV PIPELINE CONFIG ── */
+.env-list{display:flex;flex-direction:column;gap:6px;margin:12px 0}
+.env-item{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.env-item .env-color{width:14px;height:14px;border-radius:50%;flex-shrink:0}
+.env-item .env-fields{display:flex;gap:8px;flex:1;flex-wrap:wrap}
+.env-item input{padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;width:130px}
+.env-item input:focus{outline:none;border-color:var(--accent)}
+.env-item .env-branch{color:var(--muted);font-size:12px;font-family:monospace;background:var(--surface2);padding:4px 8px;border-radius:4px}
+.env-item .env-actions{display:flex;gap:2px}
+.env-item .env-actions button{background:none;border:none;color:var(--muted);padding:4px 6px;border-radius:4px;font-size:14px}
+.env-item .env-actions button:hover{color:var(--text);background:var(--surface2)}
+.env-add-row{display:flex;gap:8px;align-items:center;margin-top:8px}
+.env-add-row select{padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;flex:1}
+.presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.presets button{font-size:11px;padding:4px 10px;border-radius:12px;background:var(--surface2);border:1px solid var(--border);color:var(--muted)}
+.presets button:hover{color:var(--text);border-color:var(--border-bright)}
+
+/* ── PIPELINE VIEW ── */
+#pipelineView{max-width:100%;overflow-x:auto}
+
+/* Summary bar */
+.summary-bar{display:flex;gap:12px;flex-wrap:wrap;margin-bottom:20px}
+.summary-stat{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:12px 18px;display:flex;align-items:center;gap:10px;min-width:140px}
+.summary-stat .stat-icon{font-size:20px}
+.summary-stat .stat-val{font-size:20px;font-weight:700}
+.summary-stat .stat-label{font-size:11px;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+
+/* Filter bar */
+.filter-bar{display:flex;gap:8px;align-items:center;margin-bottom:16px;flex-wrap:wrap}
+.filter-bar input{padding:7px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;width:240px}
+.filter-bar input:focus{outline:none;border-color:var(--accent)}
+.filter-bar select{padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px}
+.filter-bar .refresh-info{margin-left:auto;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
+
+/* Pipeline header (env nodes row) */
+.pipeline-header{display:flex;align-items:stretch;gap:0;margin-bottom:2px;min-width:fit-content;padding-left:220px}
+.env-node{flex:1;min-width:160px;position:relative;text-align:center}
+.env-node-inner{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 12px 10px;margin:0 4px;position:relative;overflow:hidden}
+.env-node-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
+.env-node .env-title{font-size:13px;font-weight:600;margin-bottom:2px}
+.env-node .env-branch-lbl{font-size:11px;font-family:monospace;color:var(--muted);background:var(--surface2);padding:2px 8px;border-radius:4px;display:inline-block;margin-bottom:4px}
+.env-node .env-stats{display:flex;gap:8px;justify-content:center;align-items:center;font-size:11px;color:var(--muted)}
+.env-node .env-pr-count{background:var(--accent-dim);color:var(--accent);padding:2px 8px;border-radius:10px;font-weight:600;font-size:11px}
+.env-node .env-health{width:8px;height:8px;border-radius:50%;display:inline-block}
+.env-connector{position:absolute;right:-14px;top:50%;transform:translateY(-50%);color:var(--border-bright);font-size:18px;z-index:1}
+.env-drift{font-size:10px;padding:2px 6px;border-radius:8px;position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:2}
+.env-drift.warn{background:var(--yellow-dim);color:var(--yellow)}
+.env-drift.ok{background:var(--green-dim);color:var(--green)}
+
+/* Swim lanes */
+.swim-lanes{min-width:fit-content}
+.swim-lane{display:flex;align-items:center;border-bottom:1px solid var(--border);min-height:52px}
+.swim-lane:hover{background:var(--surface)}
+.swim-lane .feature-name{width:220px;flex-shrink:0;padding:8px 16px 8px 0;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.swim-lane .feature-name .feat-branch{display:block;font-size:11px;color:var(--muted);font-family:monospace;font-weight:400;overflow:hidden;text-overflow:ellipsis}
+.swim-lane .env-cell{flex:1;min-width:160px;display:flex;align-items:center;justify-content:center;padding:8px 4px}
+.progress-circle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;transition:all .15s;position:relative;border:2px solid transparent}
+.progress-circle:hover{transform:scale(1.2)}
+.progress-circle.not-reached{background:var(--surface2);color:var(--muted);border-color:var(--border)}
+.progress-circle.pr-open{background:var(--blue-dim);color:var(--blue);border-color:var(--blue)}
+.progress-circle.pr-approved{background:var(--yellow-dim);color:var(--yellow);border-color:var(--yellow)}
+.progress-circle.merged{background:var(--green-dim);color:var(--green);border-color:var(--green)}
+.progress-circle.pr-blocked{background:var(--red-dim);color:var(--red);border-color:var(--red)}
+.progress-circle .pr-num{position:absolute;bottom:-14px;font-size:9px;color:var(--muted);white-space:nowrap}
+
+/* Sync PRs section */
+.sync-section{margin-top:24px;padding-top:16px;border-top:1px solid var(--border)}
+.sync-section h4{font-size:13px;color:var(--muted);margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.sync-section .sync-list{display:flex;flex-direction:column;gap:4px}
+.sync-pr{display:flex;align-items:center;gap:8px;padding:6px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;font-size:12px}
+.sync-pr .sync-status{width:6px;height:6px;border-radius:50%}
+
+/* Recently completed */
+.completed-section{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+.completed-section h4{font-size:13px;color:var(--muted);margin-bottom:8px;cursor:pointer;display:flex;align-items:center;gap:6px}
+.completed-list{display:flex;flex-direction:column;gap:4px}
+.completed-item{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:12px}
+.completed-item .c-icon{color:var(--green);font-size:14px}
+.completed-item .c-name{flex:1;font-weight:500}
+.completed-item .c-time{color:var(--muted)}
+
+/* ── SIDE PANEL ── */
+.side-panel-overlay{position:fixed;inset:0;background:var(--overlay);z-index:150;display:none;opacity:0;transition:opacity .2s}
+.side-panel-overlay.open{display:block;opacity:1}
+.side-panel{position:fixed;top:0;right:-480px;width:460px;max-width:92vw;height:100vh;background:var(--panel-bg);border-left:1px solid var(--border);z-index:151;transition:right .25s ease;overflow-y:auto;padding:24px}
+.side-panel.open{right:0}
+.side-panel .sp-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px}
+.side-panel .sp-close:hover{color:var(--text);background:var(--surface2)}
+.side-panel h3{font-size:18px;margin-bottom:4px;padding-right:40px}
+.side-panel .sp-num{color:var(--muted);font-size:14px;margin-bottom:16px}
+.side-panel .sp-section{margin-bottom:20px}
+.side-panel .sp-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600;margin-bottom:8px}
+.side-panel .sp-branch{display:inline-flex;align-items:center;gap:6px;font-size:12px;font-family:monospace;background:var(--surface2);padding:4px 10px;border-radius:6px;margin-bottom:2px}
+.sp-author{display:flex;align-items:center;gap:10px;margin-bottom:16px}
+.sp-author img{width:28px;height:28px;border-radius:50%;border:1px solid var(--border)}
+.sp-author .sp-author-name{font-size:13px;font-weight:500}
+.sp-merge-status{display:inline-flex;align-items:center;gap:6px;padding:6px 12px;border-radius:8px;font-size:12px;font-weight:500;margin-bottom:16px}
+.sp-merge-status.mergeable{background:var(--green-dim);color:var(--green)}
+.sp-merge-status.conflict{background:var(--red-dim);color:var(--red)}
+.sp-merge-status.unknown{background:var(--surface2);color:var(--muted)}
+.sp-reviewers{display:flex;flex-direction:column;gap:6px}
+.sp-reviewer{display:flex;align-items:center;gap:8px;font-size:12px}
+.sp-reviewer img{width:22px;height:22px;border-radius:50%}
+.sp-reviewer .rv-status{font-size:14px}
+.sp-checks{display:flex;flex-direction:column;gap:4px}
+.sp-check{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0}
+.sp-check .ck-icon{font-size:14px}
+.sp-labels{display:flex;gap:4px;flex-wrap:wrap}
+.sp-label{padding:3px 10px;border-radius:12px;font-size:11px;font-weight:500;border:1px solid}
+.sp-files{display:flex;align-items:center;gap:12px;font-size:13px}
+.sp-files .add{color:var(--green)}
+.sp-files .del{color:var(--red)}
+.sp-description{font-size:13px;color:var(--muted);line-height:1.6;white-space:pre-wrap;word-wrap:break-word;max-height:200px;overflow-y:auto;background:var(--bg);padding:12px;border-radius:8px}
+.sp-journey{display:flex;align-items:center;gap:0;margin-top:8px}
+.sp-journey .j-node{display:flex;flex-direction:column;align-items:center;gap:4px;flex:1}
+.sp-journey .j-dot{width:18px;height:18px;border-radius:50%;border:2px solid var(--border);display:flex;align-items:center;justify-content:center;font-size:10px}
+.sp-journey .j-dot.reached{border-color:var(--green);background:var(--green-dim);color:var(--green)}
+.sp-journey .j-dot.current{border-color:var(--blue);background:var(--blue-dim);color:var(--blue)}
+.sp-journey .j-name{font-size:9px;color:var(--muted)}
+.sp-journey .j-arrow{color:var(--border);font-size:12px;padding:0 2px;align-self:flex-start;margin-top:4px}
+.sp-timestamps{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:4px}
+
+/* ── REVIEW HEATMAP ── */
+.heatmap-section{margin-top:20px;padding-top:16px;border-top:1px solid var(--border)}
+.heatmap-section h4{font-size:13px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.heatmap-grid{display:flex;flex-wrap:wrap;gap:6px}
+.heatmap-cell{display:flex;align-items:center;gap:6px;padding:6px 10px;border-radius:8px;background:var(--surface);border:1px solid var(--border);font-size:12px}
+.heatmap-cell img{width:20px;height:20px;border-radius:50%}
+.heatmap-cell .hm-count{font-weight:700;min-width:16px;text-align:center;padding:2px 6px;border-radius:6px;font-size:11px}
+.hm-count.hot{background:var(--red-dim);color:var(--red)}
+.hm-count.warm{background:var(--yellow-dim);color:var(--yellow)}
+.hm-count.cool{background:var(--green-dim);color:var(--green)}
+
+/* ── LOADING / EMPTY ── */
+.loading{text-align:center;padding:48px;color:var(--muted)}
+.loading .spinner{display:inline-block;width:32px;height:32px;border:3px solid var(--border);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite;margin-bottom:12px}
+@keyframes spin{to{transform:rotate(360deg)}}
+.empty-state{text-align:center;padding:48px;color:var(--muted)}
+.empty-state .empty-icon{font-size:48px;opacity:.4;margin-bottom:12px}
+.empty-state p{font-size:14px;max-width:320px;margin:0 auto}
+.skeleton{background:linear-gradient(90deg,var(--surface) 25%,var(--surface2) 50%,var(--surface) 75%);background-size:200% 100%;animation:shimmer 1.5s infinite;border-radius:6px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
+/* ── FOOTER ── */
+.footer{padding:12px 24px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;margin-top:auto}
+
+/* ── RESPONSIVE ── */
+@media(max-width:768px){
+  .header{padding:0 12px;gap:8px}
+  .header nav button{padding:6px 10px;font-size:12px}
+  .view{padding:12px}
+  .pipeline-header{flex-direction:column;padding-left:0;gap:8px}
+  .env-node{min-width:auto}
+  .env-connector{display:none}
+  .swim-lane{flex-direction:column;align-items:flex-start}
+  .swim-lane .feature-name{width:auto;padding:8px 12px 4px}
+  .swim-lane .env-cell{min-width:auto;padding:4px 12px}
+  .filter-bar input{width:100%}
+  .summary-bar{gap:8px}
+  .summary-stat{min-width:auto;flex:1}
+  .side-panel{width:100vw}
+}
+
+/* ── TOOLTIP ── */
+.tooltip{position:fixed;z-index:300;background:var(--surface);border:1px solid var(--border);border-radius:8px;padding:10px 14px;font-size:12px;max-width:280px;box-shadow:0 8px 24px rgba(0,0,0,.3);pointer-events:none;opacity:0;transition:opacity .15s}
+.tooltip.visible{opacity:1}
+.tooltip .tt-title{font-weight:600;margin-bottom:4px}
+.tooltip .tt-author{color:var(--muted)}
+.tooltip .tt-status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;margin-top:4px}
+
+/* ── COLORS FOR ENV STRIPES ── */
+.env-color-0 .env-node-inner::before{background:#58a6ff}
+.env-color-1 .env-node-inner::before{background:#d29922}
+.env-color-2 .env-node-inner::before{background:#3fb950}
+.env-color-3 .env-node-inner::before{background:#bc8cff}
+.env-color-4 .env-node-inner::before{background:#f85149}
+.env-color-5 .env-node-inner::before{background:#db6d28}
+</style>
+</head>
+<body>
+<!-- ── HEADER ── -->
+<div class="header">
+  <div class="logo">
+    <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>
+    SF Pipeline
+  </div>
+  <nav id="mainNav" style="display:none">
+    <button onclick="showView('pipeline')" id="navPipeline">Pipeline</button>
+    <button onclick="showView('settings')" id="navSettings">Settings</button>
+  </nav>
+  <div class="spacer"></div>
+  <span id="connBadge" class="conn-badge none"></span>
+  <button class="hdr-btn" id="lockBtn" style="display:none" onclick="lockProject()" title="Lock project">🔒</button>
+  <button class="hdr-btn" onclick="toggleTheme()" title="Toggle theme" id="themeBtn">☀️</button>
+</div>
+
+<!-- ── PROJECT SELECTOR VIEW ── -->
+<div class="view active" id="projectsView">
+  <div class="proj-header">
+    <h1>🔷 SF Pipeline Tracker</h1>
+    <p>Gearset-style deployment pipeline visualization.<br>Select a project or create a new one.</p>
+  </div>
+  <div id="projectList"></div>
+  <button class="btn btn-primary" style="width:100%" onclick="openCreateModal()">+ New Project</button>
+  <div style="margin-top:24px;text-align:center">
+    <button class="btn-ghost btn-sm" onclick="importProject()">📥 Import project</button>
+  </div>
+</div>
+
+<!-- ── SETTINGS VIEW ── -->
+<div class="view" id="settingsView">
+  <h2 style="margin-bottom:20px">⚙️ Project Settings</h2>
+
+  <div class="settings-section">
+    <h3>🔗 GitHub Connection</h3>
+    <div class="field">
+      <label>Personal Access Token</label>
+      <div class="secret-wrap" style="position:relative">
+        <input id="cfgPat" type="password" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" style="padding-right:44px">
+        <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Needs <code>repo</code> scope for private repos. Stored encrypted.</div>
+    </div>
+    <div class="field">
+      <label>Repository</label>
+      <input id="cfgRepo" placeholder="owner/repo-name">
+    </div>
+    <button class="btn btn-primary btn-sm" onclick="testConnection()">Test Connection</button>
+    <div id="connStatus"></div>
+  </div>
+
+  <div class="settings-section">
+    <h3>🔀 Pipeline Environments</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Define your environment branches from left (earliest) to right (production).</p>
+    <div class="presets">
+      <button onclick="applyPreset('standard')">Standard (dev → staging → main)</button>
+      <button onclick="applyPreset('extended')">Extended (dev → int → uat → main)</button>
+      <button onclick="autoDetectEnvs()">🔍 Auto-detect from Gearset</button>
+    </div>
+    <div id="envList" class="env-list"></div>
+    <div class="env-add-row">
+      <select id="branchSelect"><option value="">— select branch —</option></select>
+      <button class="btn btn-sm" onclick="addEnv()">+ Add Environment</button>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h3>🔐 Security</h3>
+    <button class="btn btn-sm" onclick="changePassword()">Change Password</button>
+    <button class="btn btn-sm btn-danger" style="margin-left:8px" onclick="exportProject()">📤 Export Project</button>
+    <button class="btn btn-sm btn-danger" style="margin-left:8px" onclick="deleteCurrentProject()">🗑 Delete Project</button>
+  </div>
+
+  <div style="margin-top:16px">
+    <button class="btn btn-primary" onclick="saveSettings()">💾 Save & Go to Pipeline</button>
+  </div>
+</div>
+
+<!-- ── PIPELINE VIEW ── -->
+<div class="view" id="pipelineView">
+  <div class="summary-bar" id="summaryBar"></div>
+  <div class="filter-bar">
+    <input id="filterSearch" placeholder="🔍 Search features..." oninput="applyFilters()">
+    <select id="filterAuthor" onchange="applyFilters()"><option value="">All authors</option></select>
+    <select id="filterStatus" onchange="applyFilters()">
+      <option value="">All statuses</option>
+      <option value="open">Open</option>
+      <option value="approved">Approved</option>
+      <option value="changes_requested">Changes Requested</option>
+      <option value="draft">Draft</option>
+      <option value="merged">Merged</option>
+    </select>
+    <div class="refresh-info">
+      <span id="lastUpdated"></span>
+      <button class="btn btn-sm" onclick="refreshData()" id="refreshBtn">↻ Refresh</button>
+    </div>
+  </div>
+  <div id="pipelineContent">
+    <div class="loading"><div class="spinner"></div><p>Loading pipeline...</p></div>
+  </div>
+</div>
+
+<!-- ── SIDE PANEL ── -->
+<div class="side-panel-overlay" id="spOverlay" onclick="closeSidePanel()"></div>
+<div class="side-panel" id="sidePanel">
+  <button class="sp-close" onclick="closeSidePanel()">✕</button>
+  <div id="spContent"></div>
+</div>
+
+<!-- ── CREATE PROJECT MODAL ── -->
+<div class="modal-overlay" id="createModal">
+  <div class="modal">
+    <h2>New Project</h2>
+    <p class="modal-sub">Create a password-protected project.</p>
+    <div class="field">
+      <label>Project Name</label>
+      <input id="newProjName" placeholder="My SF Project">
+    </div>
+    <div class="field">
+      <label>Password</label>
+      <div class="secret-wrap" style="position:relative">
+        <input id="newProjPass" type="password" placeholder="Enter password" style="padding-right:44px">
+        <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>Confirm Password</label>
+      <input id="newProjPass2" type="password" placeholder="Confirm password">
+    </div>
+    <div class="modal-error" id="createError"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeCreateModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="createProject()">Create</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── UNLOCK PROJECT MODAL ── -->
+<div class="modal-overlay" id="unlockModal">
+  <div class="modal">
+    <h2 id="unlockTitle">Unlock Project</h2>
+    <p class="modal-sub">Enter the password to access this project.</p>
+    <div class="field">
+      <label>Password</label>
+      <div class="secret-wrap" style="position:relative">
+        <input id="unlockPass" type="password" placeholder="Enter password" style="padding-right:44px" onkeydown="if(event.key==='Enter')unlockProject()">
+        <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
+      </div>
+    </div>
+    <div class="modal-error" id="unlockError"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeUnlockModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="unlockProject()">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── TOOLTIP ── -->
+<div class="tooltip" id="tooltip"></div>
+
+<!-- ── FOOTER ── -->
+<div class="footer">
+  <span>SF Pipeline Tracker — Gearset-style visualization</span>
+  <span id="rateLimit"></span>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   CRYPTO MODULE — AES-256-GCM with PBKDF2 key derivation
+   ═══════════════════════════════════════════════════════ */
+const Crypto = {
+  async deriveKey(password, salt) {
+    const enc = new TextEncoder();
+    const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey(
+      { name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' },
+      keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']
+    );
+  },
+  async encrypt(password, data) {
+    const salt = crypto.getRandomValues(new Uint8Array(16));
+    const iv = crypto.getRandomValues(new Uint8Array(12));
+    const key = await this.deriveKey(password, salt);
+    const enc = new TextEncoder();
+    const ct = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, enc.encode(JSON.stringify(data)));
+    return {
+      salt: btoa(String.fromCharCode(...salt)),
+      iv: btoa(String.fromCharCode(...iv)),
+      ciphertext: btoa(String.fromCharCode(...new Uint8Array(ct)))
+    };
+  },
+  async decrypt(password, { salt, iv, ciphertext }) {
+    const s = Uint8Array.from(atob(salt), c => c.charCodeAt(0));
+    const i = Uint8Array.from(atob(iv), c => c.charCodeAt(0));
+    const ct = Uint8Array.from(atob(ciphertext), c => c.charCodeAt(0));
+    const key = await this.deriveKey(password, s);
+    const dec = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: i }, key, ct);
+    return JSON.parse(new TextDecoder().decode(dec));
+  }
+};
+
+/* ═══════════════════════════════════════════════════════
+   STATE
+   ═══════════════════════════════════════════════════════ */
+let currentProjectIndex = -1;
+let currentPassword = '';
+let projectData = null; // decrypted: { pat, repo, envs:[], prefs:{} }
+let pipelineCache = { prs: [], mergedPrs: [], branches: [], drifts: {}, features: [], lastFetch: 0 };
+let detailCache = {};
+let refreshTimer = null;
+let rateLimitRemaining = null;
+
+const ENV_COLORS = ['#58a6ff','#d29922','#3fb950','#bc8cff','#f85149','#db6d28'];
+const GS_REGEX = /^gs-pipeline\/(.+)_-_(.+)$/;
+
+/* ═══════════════════════════════════════════════════════
+   STORAGE
+   ═══════════════════════════════════════════════════════ */
+function getProjects() {
+  try { return JSON.parse(localStorage.getItem('sfpt_projects') || '[]'); } catch { return []; }
+}
+function saveProjects(projects) {
+  localStorage.setItem('sfpt_projects', JSON.stringify(projects));
+}
+
+/* ═══════════════════════════════════════════════════════
+   THEME
+   ═══════════════════════════════════════════════════════ */
+function applyTheme(theme) {
+  document.documentElement.setAttribute('data-theme', theme);
+  document.getElementById('themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
+  localStorage.setItem('sfpt_theme', theme);
+}
+function toggleTheme() {
+  const c = document.documentElement.getAttribute('data-theme');
+  applyTheme(c === 'dark' ? 'light' : 'dark');
+}
+applyTheme(localStorage.getItem('sfpt_theme') || 'dark');
+
+/* ═══════════════════════════════════════════════════════
+   NAVIGATION
+   ═══════════════════════════════════════════════════════ */
+function showView(name) {
+  document.querySelectorAll('.view').forEach(v => v.classList.remove('active'));
+  document.getElementById(name + 'View').classList.add('active');
+  document.querySelectorAll('#mainNav button').forEach(b => b.classList.remove('active'));
+  const nb = document.getElementById('nav' + name.charAt(0).toUpperCase() + name.slice(1));
+  if (nb) nb.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════════
+   PROJECT LIST
+   ═══════════════════════════════════════════════════════ */
+function renderProjectList() {
+  const projects = getProjects();
+  const el = document.getElementById('projectList');
+  if (!projects.length) {
+    el.innerHTML = '<div class="proj-empty"><div class="proj-empty-icon">📂</div><p>No projects yet. Create one to get started.</p></div>';
+    return;
+  }
+  el.innerHTML = '<div class="proj-list">' + projects.map((p, i) => `
+    <div class="proj-card" onclick="openUnlockModal(${i})">
+      <div class="proj-icon">🔷</div>
+      <div class="proj-info">
+        <div class="proj-name">${esc(p.name)}</div>
+        <div class="proj-meta">Encrypted project</div>
+      </div>
+      <button class="proj-del" onclick="event.stopPropagation();deleteProject(${i})" title="Delete">🗑</button>
+    </div>
+  `).join('') + '</div>';
+}
+
+function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
+
+/* ═══════════════════════════════════════════════════════
+   CREATE PROJECT
+   ═══════════════════════════════════════════════════════ */
+function openCreateModal() {
+  document.getElementById('createModal').classList.add('open');
+  document.getElementById('newProjName').value = '';
+  document.getElementById('newProjPass').value = '';
+  document.getElementById('newProjPass2').value = '';
+  document.getElementById('createError').textContent = '';
+  document.getElementById('newProjName').focus();
+}
+function closeCreateModal() { document.getElementById('createModal').classList.remove('open'); }
+
+async function createProject() {
+  const name = document.getElementById('newProjName').value.trim();
+  const pass = document.getElementById('newProjPass').value;
+  const pass2 = document.getElementById('newProjPass2').value;
+  const err = document.getElementById('createError');
+  if (!name) { err.textContent = 'Name is required'; return; }
+  if (pass.length < 4) { err.textContent = 'Password must be at least 4 characters'; return; }
+  if (pass !== pass2) { err.textContent = 'Passwords do not match'; return; }
+  err.textContent = '';
+  const data = { pat: '', repo: '', envs: [], prefs: {} };
+  const encrypted = await Crypto.encrypt(pass, data);
+  const projects = getProjects();
+  projects.push({ name, ...encrypted });
+  saveProjects(projects);
+  closeCreateModal();
+  currentProjectIndex = projects.length - 1;
+  currentPassword = pass;
+  projectData = data;
+  enterProject();
+}
+
+/* ═══════════════════════════════════════════════════════
+   UNLOCK PROJECT
+   ═══════════════════════════════════════════════════════ */
+let pendingUnlockIdx = -1;
+function openUnlockModal(idx) {
+  pendingUnlockIdx = idx;
+  const projects = getProjects();
+  document.getElementById('unlockTitle').textContent = 'Unlock: ' + esc(projects[idx].name);
+  document.getElementById('unlockPass').value = '';
+  document.getElementById('unlockError').textContent = '';
+  document.getElementById('unlockModal').classList.add('open');
+  setTimeout(() => document.getElementById('unlockPass').focus(), 100);
+}
+function closeUnlockModal() { document.getElementById('unlockModal').classList.remove('open'); pendingUnlockIdx = -1; }
+
+async function unlockProject() {
+  const pass = document.getElementById('unlockPass').value;
+  const err = document.getElementById('unlockError');
+  if (!pass) { err.textContent = 'Enter password'; return; }
+  const projects = getProjects();
+  const proj = projects[pendingUnlockIdx];
+  try {
+    const data = await Crypto.decrypt(pass, { salt: proj.salt, iv: proj.iv, ciphertext: proj.ciphertext });
+    currentProjectIndex = pendingUnlockIdx;
+    currentPassword = pass;
+    projectData = data;
+    closeUnlockModal();
+    enterProject();
+  } catch {
+    err.textContent = 'Wrong password';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   DELETE PROJECT
+   ═══════════════════════════════════════════════════════ */
+function deleteProject(idx) {
+  const projects = getProjects();
+  if (!confirm('Delete project "' + projects[idx].name + '"? This cannot be undone.')) return;
+  projects.splice(idx, 1);
+  saveProjects(projects);
+  renderProjectList();
+}
+function deleteCurrentProject() {
+  if (currentProjectIndex < 0) return;
+  const projects = getProjects();
+  if (!confirm('Delete this project? This cannot be undone.')) return;
+  projects.splice(currentProjectIndex, 1);
+  saveProjects(projects);
+  lockProject();
+}
+
+/* ═══════════════════════════════════════════════════════
+   ENTER / LOCK PROJECT
+   ═══════════════════════════════════════════════════════ */
+function enterProject() {
+  document.getElementById('mainNav').style.display = 'flex';
+  document.getElementById('lockBtn').style.display = 'flex';
+  // populate settings from decrypted data
+  document.getElementById('cfgPat').value = projectData.pat || '';
+  document.getElementById('cfgRepo').value = projectData.repo || '';
+  updateConnBadge();
+  renderEnvList();
+  if (projectData.pat && projectData.repo && projectData.envs.length) {
+    showView('pipeline');
+    refreshData();
+  } else {
+    showView('settings');
+  }
+}
+
+function lockProject() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  currentProjectIndex = -1;
+  currentPassword = '';
+  projectData = null;
+  pipelineCache = { prs: [], mergedPrs: [], branches: [], drifts: {}, features: [], lastFetch: 0 };
+  detailCache = {};
+  document.getElementById('mainNav').style.display = 'none';
+  document.getElementById('lockBtn').style.display = 'none';
+  document.getElementById('connBadge').className = 'conn-badge none';
+  showView('projects');
+  renderProjectList();
+}
+
+/* ═══════════════════════════════════════════════════════
+   EXPORT / IMPORT
+   ═══════════════════════════════════════════════════════ */
+function exportProject() {
+  if (currentProjectIndex < 0) return;
+  const projects = getProjects();
+  const proj = projects[currentProjectIndex];
+  const blob = new Blob([JSON.stringify(proj)], { type: 'application/json' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = proj.name.replace(/[^a-zA-Z0-9]/g, '_') + '_export.json';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function importProject() {
+  const input = document.createElement('input');
+  input.type = 'file';
+  input.accept = '.json';
+  input.onchange = async () => {
+    try {
+      const text = await input.files[0].text();
+      const proj = JSON.parse(text);
+      if (!proj.name || !proj.salt || !proj.iv || !proj.ciphertext) throw new Error('Invalid');
+      const projects = getProjects();
+      projects.push(proj);
+      saveProjects(projects);
+      renderProjectList();
+    } catch { alert('Invalid project file'); }
+  };
+  input.click();
+}
+
+/* ═══════════════════════════════════════════════════════
+   CHANGE PASSWORD
+   ═══════════════════════════════════════════════════════ */
+async function changePassword() {
+  const newPass = prompt('Enter new password (min 4 chars):');
+  if (!newPass || newPass.length < 4) { alert('Password too short'); return; }
+  const encrypted = await Crypto.encrypt(newPass, projectData);
+  const projects = getProjects();
+  projects[currentProjectIndex] = { name: projects[currentProjectIndex].name, ...encrypted };
+  saveProjects(projects);
+  currentPassword = newPass;
+  alert('Password changed');
+}
+
+/* ═══════════════════════════════════════════════════════
+   SAVE SETTINGS (encrypted)
+   ═══════════════════════════════════════════════════════ */
+async function saveSettings() {
+  projectData.pat = document.getElementById('cfgPat').value.trim();
+  projectData.repo = document.getElementById('cfgRepo').value.trim();
+  // envs already updated via renderEnvList interactions
+  const encrypted = await Crypto.encrypt(currentPassword, projectData);
+  const projects = getProjects();
+  projects[currentProjectIndex] = { name: projects[currentProjectIndex].name, ...encrypted };
+  saveProjects(projects);
+  updateConnBadge();
+  if (projectData.pat && projectData.repo && projectData.envs.length) {
+    showView('pipeline');
+    refreshData();
+  }
+}
+
+async function persistProject() {
+  if (currentProjectIndex < 0) return;
+  const encrypted = await Crypto.encrypt(currentPassword, projectData);
+  const projects = getProjects();
+  projects[currentProjectIndex] = { name: projects[currentProjectIndex].name, ...encrypted };
+  saveProjects(projects);
+}
+
+function updateConnBadge() {
+  const b = document.getElementById('connBadge');
+  if (projectData && projectData.pat && projectData.repo) {
+    b.className = 'conn-badge ok';
+    b.textContent = '● Connected';
+  } else {
+    b.className = 'conn-badge off';
+    b.textContent = '○ Not connected';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOGGLE SECRET
+   ═══════════════════════════════════════════════════════ */
+function toggleSecret(btn) {
+  const input = btn.parentElement.querySelector('input');
+  input.type = input.type === 'password' ? 'text' : 'password';
+  btn.textContent = input.type === 'password' ? '👁' : '🙈';
+}
+
+/* ═══════════════════════════════════════════════════════
+   GITHUB API
+   ═══════════════════════════════════════════════════════ */
+async function ghFetch(path, opts = {}) {
+  const headers = { Accept: 'application/vnd.github+json' };
+  if (projectData.pat) headers.Authorization = 'Bearer ' + projectData.pat;
+  const res = await fetch('https://api.github.com' + path, { headers, ...opts });
+  const rl = res.headers.get('X-RateLimit-Remaining');
+  if (rl !== null) {
+    rateLimitRemaining = parseInt(rl);
+    const el = document.getElementById('rateLimit');
+    if (el) el.textContent = 'API: ' + rateLimitRemaining + ' calls remaining';
+  }
+  if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+  return res.json();
+}
+
+async function ghFetchAll(path) {
+  let page = 1, all = [];
+  while (true) {
+    const sep = path.includes('?') ? '&' : '?';
+    const data = await ghFetch(path + sep + 'page=' + page + '&per_page=100');
+    all = all.concat(data);
+    if (data.length < 100) break;
+    page++;
+  }
+  return all;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TEST CONNECTION
+   ═══════════════════════════════════════════════════════ */
+async function testConnection() {
+  const pat = document.getElementById('cfgPat').value.trim();
+  const repo = document.getElementById('cfgRepo').value.trim();
+  const el = document.getElementById('connStatus');
+  if (!pat || !repo) { el.innerHTML = '<div class="conn-status err">⚠ PAT and repo are required</div>'; return; }
+  const oldPat = projectData.pat, oldRepo = projectData.repo;
+  projectData.pat = pat; projectData.repo = repo;
+  try {
+    const r = await ghFetch('/repos/' + repo);
+    el.innerHTML = '<div class="conn-status ok">✓ Connected to <strong>' + esc(r.full_name) + '</strong> (' + (r.private ? 'private' : 'public') + ')</div>';
+    await loadBranches();
+  } catch (e) {
+    el.innerHTML = '<div class="conn-status err">✕ ' + esc(e.message) + '</div>';
+    projectData.pat = oldPat; projectData.repo = oldRepo;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   BRANCHES
+   ═══════════════════════════════════════════════════════ */
+async function loadBranches() {
+  try {
+    const branches = await ghFetchAll('/repos/' + projectData.repo + '/branches');
+    pipelineCache.branches = branches.map(b => b.name);
+    const sel = document.getElementById('branchSelect');
+    sel.innerHTML = '<option value="">— select branch —</option>' +
+      pipelineCache.branches.map(b => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('');
+  } catch {}
+}
+
+/* ═══════════════════════════════════════════════════════
+   ENV PIPELINE CONFIG
+   ═══════════════════════════════════════════════════════ */
+function renderEnvList() {
+  const el = document.getElementById('envList');
+  if (!projectData || !projectData.envs.length) {
+    el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px">No environments configured yet.</div>';
+    return;
+  }
+  el.innerHTML = projectData.envs.map((env, i) => `
+    <div class="env-item">
+      <div class="env-color" style="background:${ENV_COLORS[i % ENV_COLORS.length]}"></div>
+      <div class="env-fields">
+        <input value="${esc(env.displayName)}" onchange="updateEnv(${i},'displayName',this.value)" placeholder="Display name">
+        <span class="env-branch">${esc(env.branch)}</span>
+        <input value="${esc(env.orgLabel || '')}" onchange="updateEnv(${i},'orgLabel',this.value)" placeholder="SF Org label" style="width:110px">
+      </div>
+      <div class="env-actions">
+        <button onclick="moveEnv(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
+        <button onclick="moveEnv(${i},1)" ${i === projectData.envs.length - 1 ? 'disabled' : ''}>▼</button>
+        <button onclick="removeEnv(${i})">✕</button>
+      </div>
+    </div>
+  `).join('');
+}
+
+function addEnv() {
+  const sel = document.getElementById('branchSelect');
+  const branch = sel.value;
+  if (!branch) return;
+  if (projectData.envs.some(e => e.branch === branch)) return;
+  projectData.envs.push({ branch, displayName: branch.charAt(0).toUpperCase() + branch.slice(1), orgLabel: '' });
+  renderEnvList();
+  sel.value = '';
+}
+
+function removeEnv(i) { projectData.envs.splice(i, 1); renderEnvList(); }
+function moveEnv(i, dir) {
+  const j = i + dir;
+  if (j < 0 || j >= projectData.envs.length) return;
+  [projectData.envs[i], projectData.envs[j]] = [projectData.envs[j], projectData.envs[i]];
+  renderEnvList();
+}
+function updateEnv(i, key, val) { projectData.envs[i][key] = val; }
+
+function applyPreset(type) {
+  const presets = {
+    standard: [
+      { branch: 'develop', displayName: 'Development', orgLabel: '' },
+      { branch: 'staging', displayName: 'Staging', orgLabel: '' },
+      { branch: 'main', displayName: 'Production', orgLabel: '' }
+    ],
+    extended: [
+      { branch: 'develop', displayName: 'Development', orgLabel: '' },
+      { branch: 'int', displayName: 'Integration', orgLabel: '' },
+      { branch: 'uat', displayName: 'UAT', orgLabel: '' },
+      { branch: 'main', displayName: 'Production', orgLabel: '' }
+    ]
+  };
+  projectData.envs = presets[type] || [];
+  renderEnvList();
+}
+
+async function autoDetectEnvs() {
+  if (!projectData.pat || !projectData.repo) { alert('Connect to a repo first'); return; }
+  try {
+    const branches = await ghFetchAll('/repos/' + projectData.repo + '/branches');
+    const envSet = new Set();
+    branches.forEach(b => {
+      const m = b.name.match(GS_REGEX);
+      if (m) envSet.add(m[2]);
+    });
+    if (!envSet.size) {
+      alert('No gs-pipeline/* branches found. Configure manually.');
+      return;
+    }
+    const detected = Array.from(envSet);
+    // also add 'main' if not in set
+    if (!detected.includes('main') && branches.some(b => b.name === 'main')) detected.push('main');
+    projectData.envs = detected.map(b => ({ branch: b, displayName: b.charAt(0).toUpperCase() + b.slice(1), orgLabel: '' }));
+    renderEnvList();
+  } catch (e) { alert('Error: ' + e.message); }
+}
+
+/* ═══════════════════════════════════════════════════════
+   DATA FETCHING
+   ═══════════════════════════════════════════════════════ */
+async function refreshData() {
+  if (!projectData || !projectData.pat || !projectData.repo || !projectData.envs.length) return;
+  const btn = document.getElementById('refreshBtn');
+  btn.disabled = true; btn.textContent = '⟳ Loading...';
+  try {
+    const repo = projectData.repo;
+    // Parallel batch fetch
+    const [openPrs, mergedPrs] = await Promise.all([
+      ghFetchAll('/repos/' + repo + '/pulls?state=open'),
+      ghFetch('/repos/' + repo + '/pulls?state=closed&sort=updated&direction=desc&per_page=30')
+    ]);
+    // Filter to only merged
+    const actualMerged = mergedPrs.filter(pr => pr.merged_at);
+
+    // Fetch drift between consecutive envs (parallel)
+    const drifts = {};
+    const driftPromises = [];
+    for (let i = 0; i < projectData.envs.length - 1; i++) {
+      const a = projectData.envs[i].branch, b = projectData.envs[i + 1].branch;
+      const key = a + '...' + b;
+      driftPromises.push(
+        ghFetch('/repos/' + repo + '/compare/' + encodeURIComponent(a) + '...' + encodeURIComponent(b))
+          .then(d => { drifts[key] = { ahead: d.ahead_by, behind: d.behind_by, status: d.status }; })
+          .catch(() => { drifts[key] = null; })
+      );
+    }
+    await Promise.all(driftPromises);
+
+    pipelineCache.prs = openPrs;
+    pipelineCache.mergedPrs = actualMerged;
+    pipelineCache.drifts = drifts;
+    pipelineCache.lastFetch = Date.now();
+
+    // Build features
+    buildFeatures();
+    renderPipeline();
+    renderSummary();
+    populateFilterAuthors();
+
+    // Start auto-refresh
+    if (refreshTimer) clearInterval(refreshTimer);
+    refreshTimer = setInterval(refreshData, 120000);
+  } catch (e) {
+    document.getElementById('pipelineContent').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error loading data: ' + esc(e.message) + '</p></div>';
+  }
+  btn.disabled = false; btn.textContent = '↻ Refresh';
+  document.getElementById('lastUpdated').textContent = 'Updated: just now';
+  updateLastUpdatedTimer();
+}
+
+/* ═══════════════════════════════════════════════════════
+   FEATURE GROUPING
+   ═══════════════════════════════════════════════════════ */
+function buildFeatures() {
+  const allPrs = [...pipelineCache.prs, ...pipelineCache.mergedPrs];
+  const envBranches = projectData.envs.map(e => e.branch);
+  const featureMap = new Map(); // featureName -> { name, branch, prs: Map<envBranch, pr> }
+
+  allPrs.forEach(pr => {
+    if (!envBranches.includes(pr.base.ref)) return;
+    const headRef = pr.head.ref;
+    // Try Gearset promotion branch pattern
+    const gsMatch = headRef.match(GS_REGEX);
+    let featureName, featureBranch;
+    if (gsMatch) {
+      featureName = gsMatch[1];
+      featureBranch = gsMatch[1];
+    } else {
+      // Non-Gearset: use head branch as feature name
+      featureName = headRef;
+      featureBranch = headRef;
+    }
+    // Skip sync PRs
+    if (pr.title && pr.title.startsWith('Sync:')) return;
+
+    if (!featureMap.has(featureName)) {
+      featureMap.set(featureName, { name: featureName, branch: featureBranch, prs: new Map(), lastUpdated: pr.updated_at });
+    }
+    const feat = featureMap.get(featureName);
+    const targetEnv = pr.base.ref;
+    // Keep the most recent PR for each env
+    if (!feat.prs.has(targetEnv) || new Date(pr.updated_at) > new Date(feat.prs.get(targetEnv).updated_at)) {
+      feat.prs.set(targetEnv, pr);
+    }
+    if (new Date(pr.updated_at) > new Date(feat.lastUpdated)) {
+      feat.lastUpdated = pr.updated_at;
+    }
+  });
+
+  // Collect sync PRs separately
+  pipelineCache.syncPrs = allPrs.filter(pr => pr.title && pr.title.startsWith('Sync:') && envBranches.includes(pr.base.ref));
+
+  // Sort by last updated
+  pipelineCache.features = Array.from(featureMap.values()).sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated));
+}
+
+/* ═══════════════════════════════════════════════════════
+   RENDER PIPELINE
+   ═══════════════════════════════════════════════════════ */
+function renderPipeline() {
+  const envs = projectData.envs;
+  if (!envs.length) {
+    document.getElementById('pipelineContent').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">🔧</div><p>Configure environments in Settings first.</p></div>';
+    return;
+  }
+
+  let html = '';
+
+  // Pipeline header row
+  html += '<div class="pipeline-header">';
+  envs.forEach((env, i) => {
+    const prCount = pipelineCache.prs.filter(pr => pr.base.ref === env.branch).length;
+    const driftKey = i < envs.length - 1 ? env.branch + '...' + envs[i + 1].branch : null;
+    const drift = driftKey ? pipelineCache.drifts[driftKey] : null;
+    html += `<div class="env-node env-color-${i % 6}">
+      <div class="env-node-inner">
+        <div class="env-title">${esc(env.displayName)}</div>
+        <div class="env-branch-lbl">${esc(env.branch)}</div>
+        ${env.orgLabel ? '<div style="font-size:10px;color:var(--muted)">☁ ' + esc(env.orgLabel) + '</div>' : ''}
+        <div class="env-stats">
+          ${prCount ? '<span class="env-pr-count">' + prCount + ' PR' + (prCount > 1 ? 's' : '') + '</span>' : ''}
+        </div>
+      </div>
+      ${i < envs.length - 1 ? '<div class="env-connector">→</div>' : ''}
+      ${drift ? '<div class="env-drift ' + (drift.behind > 5 ? 'warn' : 'ok') + '">' + drift.behind + ' behind</div>' : ''}
+    </div>`;
+  });
+  html += '</div>';
+
+  // Swim lanes
+  const features = getFilteredFeatures();
+  if (!features.length) {
+    html += '<div class="empty-state" style="margin-top:32px"><div class="empty-icon">✨</div><p>No features in the pipeline.</p></div>';
+  } else {
+    html += '<div class="swim-lanes">';
+    features.forEach(feat => {
+      html += '<div class="swim-lane">';
+      html += `<div class="feature-name" title="${esc(feat.name)}">
+        ${esc(feat.name.length > 35 ? feat.name.slice(0, 35) + '…' : feat.name)}
+        <span class="feat-branch">${esc(feat.branch)}</span>
+      </div>`;
+      envs.forEach(env => {
+        const pr = feat.prs.get(env.branch);
+        html += '<div class="env-cell">';
+        if (pr) {
+          const cls = getPrCircleClass(pr);
+          const icon = getPrCircleIcon(pr);
+          html += `<div class="progress-circle ${cls}"
+            onclick="openSidePanel(${pr.number})"
+            onmouseenter="showTooltip(event,${pr.number})"
+            onmouseleave="hideTooltip()">
+            ${icon}
+            <span class="pr-num">#${pr.number}</span>
+          </div>`;
+        } else {
+          html += '<div class="progress-circle not-reached">·</div>';
+        }
+        html += '</div>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+  }
+
+  // Sync PRs
+  if (pipelineCache.syncPrs && pipelineCache.syncPrs.length) {
+    html += '<div class="sync-section"><h4 onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'flex\':\'none\'">🔄 Sync PRs (' + pipelineCache.syncPrs.length + ') ▾</h4><div class="sync-list" style="display:none">';
+    pipelineCache.syncPrs.forEach(pr => {
+      html += `<div class="sync-pr" style="cursor:pointer" onclick="openSidePanel(${pr.number})">
+        <div class="sync-status" style="background:${pr.state === 'open' ? 'var(--blue)' : 'var(--green)'}"></div>
+        <span>#${pr.number}</span>
+        <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${esc(pr.title)}</span>
+        <span style="color:var(--muted)">${pr.base.ref}</span>
+      </div>`;
+    });
+    html += '</div></div>';
+  }
+
+  // Recently completed
+  const completed = pipelineCache.features.filter(f => {
+    const prodEnv = envs[envs.length - 1];
+    const pr = f.prs.get(prodEnv.branch);
+    return pr && pr.merged_at;
+  }).slice(0, 15);
+  if (completed.length) {
+    html += '<div class="completed-section"><h4 onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'flex\':\'none\'">✅ Recently Completed (' + completed.length + ') ▾</h4><div class="completed-list" style="display:none">';
+    completed.forEach(f => {
+      const prodPr = f.prs.get(envs[envs.length - 1].branch);
+      const mergedAgo = timeAgo(prodPr.merged_at);
+      html += `<div class="completed-item"><span class="c-icon">✓</span><span class="c-name">${esc(f.name)}</span><span class="c-time">${mergedAgo}</span></div>`;
+    });
+    html += '</div></div>';
+  }
+
+  // Heatmap
+  html += renderHeatmap();
+
+  document.getElementById('pipelineContent').innerHTML = html;
+}
+
+function getPrCircleClass(pr) {
+  if (pr.merged_at) return 'merged';
+  if (pr.draft) return 'not-reached';
+  // Check review state from labels or basic info
+  if (pr._reviewState === 'approved') return 'pr-approved';
+  if (pr._reviewState === 'changes_requested') return 'pr-blocked';
+  return 'pr-open';
+}
+function getPrCircleIcon(pr) {
+  if (pr.merged_at) return '✓';
+  if (pr.draft) return '◌';
+  if (pr._reviewState === 'approved') return '✓';
+  if (pr._reviewState === 'changes_requested') return '✕';
+  return '○';
+}
+
+/* ═══════════════════════════════════════════════════════
+   RENDER SUMMARY BAR
+   ═══════════════════════════════════════════════════════ */
+function renderSummary() {
+  const openFeatures = pipelineCache.features.filter(f => {
+    return Array.from(f.prs.values()).some(pr => !pr.merged_at);
+  }).length;
+  const totalOpenPrs = pipelineCache.prs.length;
+  const envs = projectData.envs;
+  // Find bottleneck env
+  let maxPrs = 0, bottleneck = '-';
+  envs.forEach(env => {
+    const c = pipelineCache.prs.filter(pr => pr.base.ref === env.branch).length;
+    if (c > maxPrs) { maxPrs = c; bottleneck = env.displayName; }
+  });
+  // Avg age of open PRs
+  let avgAge = '-';
+  if (totalOpenPrs) {
+    const totalMs = pipelineCache.prs.reduce((sum, pr) => sum + (Date.now() - new Date(pr.created_at).getTime()), 0);
+    const avgMs = totalMs / totalOpenPrs;
+    avgAge = Math.round(avgMs / 86400000) + 'd';
+  }
+
+  document.getElementById('summaryBar').innerHTML = `
+    <div class="summary-stat"><span class="stat-icon">🔢</span><div><div class="stat-val">${openFeatures}</div><div class="stat-label">Features in flight</div></div></div>
+    <div class="summary-stat"><span class="stat-icon">📋</span><div><div class="stat-val">${totalOpenPrs}</div><div class="stat-label">Open PRs</div></div></div>
+    <div class="summary-stat"><span class="stat-icon">⏱️</span><div><div class="stat-val">${avgAge}</div><div class="stat-label">Avg PR age</div></div></div>
+    <div class="summary-stat"><span class="stat-icon">🚨</span><div><div class="stat-val">${esc(bottleneck)}</div><div class="stat-label">Bottleneck</div></div></div>
+  `;
+}
+
+/* ═══════════════════════════════════════════════════════
+   REVIEW BOTTLENECK HEATMAP
+   ═══════════════════════════════════════════════════════ */
+function renderHeatmap() {
+  const reviewerMap = new Map();
+  pipelineCache.prs.forEach(pr => {
+    if (pr.requested_reviewers) {
+      pr.requested_reviewers.forEach(rv => {
+        if (!reviewerMap.has(rv.login)) reviewerMap.set(rv.login, { login: rv.login, avatar: rv.avatar_url, count: 0 });
+        reviewerMap.get(rv.login).count++;
+      });
+    }
+  });
+  if (!reviewerMap.size) return '';
+  const reviewers = Array.from(reviewerMap.values()).sort((a, b) => b.count - a.count);
+  let html = '<div class="heatmap-section"><h4>👥 Pending Reviews</h4><div class="heatmap-grid">';
+  reviewers.forEach(rv => {
+    const cls = rv.count >= 3 ? 'hot' : rv.count >= 2 ? 'warm' : 'cool';
+    html += `<div class="heatmap-cell"><img src="${esc(rv.avatar)}&s=40" alt="${esc(rv.login)}"><span>${esc(rv.login)}</span><span class="hm-count ${cls}">${rv.count}</span></div>`;
+  });
+  html += '</div></div>';
+  return html;
+}
+
+/* ═══════════════════════════════════════════════════════
+   FILTERS
+   ═══════════════════════════════════════════════════════ */
+function populateFilterAuthors() {
+  const authors = new Set();
+  pipelineCache.prs.forEach(pr => authors.add(pr.user.login));
+  const sel = document.getElementById('filterAuthor');
+  sel.innerHTML = '<option value="">All authors</option>' +
+    Array.from(authors).sort().map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
+}
+
+function getFilteredFeatures() {
+  const search = document.getElementById('filterSearch').value.toLowerCase();
+  const author = document.getElementById('filterAuthor').value;
+  const status = document.getElementById('filterStatus').value;
+  return pipelineCache.features.filter(feat => {
+    if (search && !feat.name.toLowerCase().includes(search)) return false;
+    const prs = Array.from(feat.prs.values());
+    if (author && !prs.some(pr => pr.user.login === author)) return false;
+    if (status) {
+      if (status === 'merged' && !prs.some(pr => pr.merged_at)) return false;
+      if (status === 'open' && !prs.some(pr => !pr.merged_at && !pr.draft)) return false;
+      if (status === 'draft' && !prs.some(pr => pr.draft)) return false;
+    }
+    return true;
+  });
+}
+
+function applyFilters() { renderPipeline(); }
+
+/* ═══════════════════════════════════════════════════════
+   SIDE PANEL
+   ═══════════════════════════════════════════════════════ */
+async function openSidePanel(prNumber) {
+  hideTooltip();
+  document.getElementById('spOverlay').classList.add('open');
+  document.getElementById('sidePanel').classList.add('open');
+  const el = document.getElementById('spContent');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>Loading PR details...</p></div>';
+
+  try {
+    const repo = projectData.repo;
+    // Fetch PR details, reviews, and checks in parallel
+    const [pr, reviews, checks] = await Promise.all([
+      detailCache['pr_' + prNumber] || ghFetch('/repos/' + repo + '/pulls/' + prNumber),
+      detailCache['rv_' + prNumber] || ghFetch('/repos/' + repo + '/pulls/' + prNumber + '/reviews'),
+      ghFetch('/repos/' + repo + '/commits/' + (findPrSha(prNumber)) + '/check-runs').catch(() => ({ check_runs: [] }))
+    ]);
+    detailCache['pr_' + prNumber] = pr;
+    detailCache['rv_' + prNumber] = reviews;
+
+    let html = '';
+    // Title
+    html += `<h3>${esc(pr.title)}</h3>`;
+    html += `<div class="sp-num"><a href="${esc(pr.html_url)}" target="_blank">#${pr.number}</a> · ${pr.state}${pr.draft ? ' (draft)' : ''}${pr.merged_at ? ' · merged' : ''}</div>`;
+
+    // Author
+    html += `<div class="sp-author"><img src="${esc(pr.user.avatar_url)}&s=56" alt=""><div><div class="sp-author-name">${esc(pr.user.login)}</div><div style="font-size:11px;color:var(--muted)">${timeAgo(pr.created_at)}</div></div></div>`;
+
+    // Branches
+    html += `<div class="sp-section"><div class="sp-section-title">Branches</div><div class="sp-branch">${esc(pr.head.ref)}</div> → <div class="sp-branch">${esc(pr.base.ref)}</div></div>`;
+
+    // Merge status
+    const ms = pr.mergeable === true ? 'mergeable' : pr.mergeable === false ? 'conflict' : 'unknown';
+    const msLabel = ms === 'mergeable' ? '✓ Mergeable' : ms === 'conflict' ? '✕ Conflicts' : '? Unknown';
+    html += `<div class="sp-merge-status ${ms}">${msLabel}</div>`;
+
+    // Reviewers
+    if (reviews.length) {
+      const latest = {};
+      reviews.forEach(r => {
+        if (r.user && r.state !== 'COMMENTED') latest[r.user.login] = r;
+      });
+      html += '<div class="sp-section"><div class="sp-section-title">Reviewers</div><div class="sp-reviewers">';
+      Object.values(latest).forEach(r => {
+        const icon = r.state === 'APPROVED' ? '✅' : r.state === 'CHANGES_REQUESTED' ? '🔄' : '⏳';
+        html += `<div class="sp-reviewer"><img src="${esc(r.user.avatar_url)}&s=44" alt=""><span>${esc(r.user.login)}</span><span class="rv-status">${icon}</span><span style="color:var(--muted);font-size:11px">${r.state.toLowerCase().replace('_', ' ')}</span></div>`;
+      });
+      html += '</div></div>';
+    }
+
+    // Status checks
+    if (checks.check_runs && checks.check_runs.length) {
+      html += '<div class="sp-section"><div class="sp-section-title">Status Checks</div><div class="sp-checks">';
+      checks.check_runs.forEach(ck => {
+        const icon = ck.conclusion === 'success' ? '✅' : ck.conclusion === 'failure' ? '❌' : '🟡';
+        html += `<div class="sp-check"><span class="ck-icon">${icon}</span><span>${esc(ck.name)}</span><span style="color:var(--muted);margin-left:auto;font-size:11px">${ck.conclusion || 'pending'}</span></div>`;
+      });
+      html += '</div></div>';
+    }
+
+    // Labels
+    if (pr.labels && pr.labels.length) {
+      html += '<div class="sp-section"><div class="sp-section-title">Labels</div><div class="sp-labels">';
+      pr.labels.forEach(l => {
+        html += `<span class="sp-label" style="background:#${l.color}20;color:#${l.color};border-color:#${l.color}40">${esc(l.name)}</span>`;
+      });
+      html += '</div></div>';
+    }
+
+    // Files
+    html += `<div class="sp-section"><div class="sp-section-title">Files Changed</div><div class="sp-files"><span>${pr.changed_files || '?'} files</span><span class="add">+${pr.additions || 0}</span><span class="del">-${pr.deletions || 0}</span></div></div>`;
+
+    // Description
+    if (pr.body) {
+      const desc = pr.body.length > 300 ? pr.body.slice(0, 300) + '…' : pr.body;
+      html += `<div class="sp-section"><div class="sp-section-title">Description</div><div class="sp-description">${esc(desc)}</div></div>`;
+    }
+
+    // Feature journey
+    html += renderFeatureJourney(pr);
+
+    // Timestamps
+    html += `<div class="sp-section"><div class="sp-section-title">Timestamps</div><div class="sp-timestamps">
+      <span>Created: ${new Date(pr.created_at).toLocaleString()} (${timeAgo(pr.created_at)})</span>
+      <span>Updated: ${new Date(pr.updated_at).toLocaleString()} (${timeAgo(pr.updated_at)})</span>
+      ${pr.merged_at ? '<span>Merged: ' + new Date(pr.merged_at).toLocaleString() + ' (' + timeAgo(pr.merged_at) + ')</span>' : ''}
+    </div></div>`;
+
+    el.innerHTML = html;
+  } catch (e) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error: ' + esc(e.message) + '</p></div>';
+  }
+}
+
+function closeSidePanel() {
+  document.getElementById('spOverlay').classList.remove('open');
+  document.getElementById('sidePanel').classList.remove('open');
+}
+
+function findPrSha(prNumber) {
+  const all = [...pipelineCache.prs, ...pipelineCache.mergedPrs];
+  const pr = all.find(p => p.number === prNumber);
+  return pr ? pr.head.sha : '';
+}
+
+function renderFeatureJourney(pr) {
+  const headRef = pr.head.ref;
+  const gsMatch = headRef.match(GS_REGEX);
+  const featureName = gsMatch ? gsMatch[1] : headRef;
+  const feat = pipelineCache.features.find(f => f.name === featureName);
+  if (!feat) return '';
+  const envs = projectData.envs;
+  let html = '<div class="sp-section"><div class="sp-section-title">Feature Journey</div><div class="sp-journey">';
+  envs.forEach((env, i) => {
+    const envPr = feat.prs.get(env.branch);
+    let cls = '';
+    if (envPr && envPr.merged_at) cls = 'reached';
+    else if (envPr) cls = 'current';
+    html += `<div class="j-node"><div class="j-dot ${cls}">${cls === 'reached' ? '✓' : cls === 'current' ? '○' : ''}</div><div class="j-name">${esc(env.displayName)}</div></div>`;
+    if (i < envs.length - 1) html += '<div class="j-arrow">→</div>';
+  });
+  html += '</div></div>';
+  return html;
+}
+
+/* ═══════════════════════════════════════════════════════
+   TOOLTIP
+   ═══════════════════════════════════════════════════════ */
+function showTooltip(event, prNumber) {
+  const all = [...pipelineCache.prs, ...pipelineCache.mergedPrs];
+  const pr = all.find(p => p.number === prNumber);
+  if (!pr) return;
+  const tt = document.getElementById('tooltip');
+  const statusColor = pr.merged_at ? 'var(--purple)' : pr.draft ? 'var(--muted)' : 'var(--green)';
+  const statusText = pr.merged_at ? 'Merged' : pr.draft ? 'Draft' : 'Open';
+  tt.innerHTML = `
+    <div class="tt-title">#${pr.number} ${esc(pr.title.slice(0, 60))}</div>
+    <div class="tt-author">by ${esc(pr.user.login)} · ${timeAgo(pr.created_at)}</div>
+    <div class="tt-status" style="background:${statusColor}20;color:${statusColor}">${statusText}</div>
+  `;
+  const rect = event.target.getBoundingClientRect();
+  tt.style.left = rect.left + 'px';
+  tt.style.top = (rect.bottom + 8) + 'px';
+  tt.classList.add('visible');
+}
+function hideTooltip() { document.getElementById('tooltip').classList.remove('visible'); }
+
+/* ═══════════════════════════════════════════════════════
+   HELPERS
+   ═══════════════════════════════════════════════════════ */
+function timeAgo(dateStr) {
+  const ms = Date.now() - new Date(dateStr).getTime();
+  const s = Math.floor(ms / 1000), m = Math.floor(s / 60), h = Math.floor(m / 60), d = Math.floor(h / 24);
+  if (d > 0) return d + 'd ago';
+  if (h > 0) return h + 'h ago';
+  if (m > 0) return m + 'm ago';
+  return 'just now';
+}
+
+let lastUpdatedInterval;
+function updateLastUpdatedTimer() {
+  if (lastUpdatedInterval) clearInterval(lastUpdatedInterval);
+  lastUpdatedInterval = setInterval(() => {
+    if (pipelineCache.lastFetch) {
+      document.getElementById('lastUpdated').textContent = 'Updated: ' + timeAgo(new Date(pipelineCache.lastFetch).toISOString());
+    }
+  }, 30000);
+}
+
+/* ═══════════════════════════════════════════════════════
+   KEYBOARD SHORTCUTS
+   ═══════════════════════════════════════════════════════ */
+document.addEventListener('keydown', e => {
+  if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA' || e.target.tagName === 'SELECT') return;
+  if (e.key === 'r' || e.key === 'R') { e.preventDefault(); refreshData(); }
+  if (e.key === 't' || e.key === 'T') { e.preventDefault(); toggleTheme(); }
+  if (e.key === 's' || e.key === 'S') { e.preventDefault(); if (projectData) showView('settings'); }
+  if (e.key === 'Escape') { closeSidePanel(); closeCreateModal(); closeUnlockModal(); }
+});
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+   ═══════════════════════════════════════════════════════ */
+renderProjectList();
+</script>
+</body>
+</html>
