@@ -131,6 +131,7 @@ input,select{font-family:inherit}
 .env-item .env-color{width:14px;height:14px;border-radius:50%;flex-shrink:0}
 .env-item .env-fields{display:flex;gap:8px;flex:1;flex-wrap:wrap}
 .env-item input{padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;width:130px}
+.env-item input.env-url{width:220px;font-size:12px;color:var(--accent)}
 .env-item input:focus{outline:none;border-color:var(--accent)}
 .env-item .env-branch{color:var(--muted);font-size:12px;font-family:monospace;background:var(--surface2);padding:4px 8px;border-radius:4px}
 .env-item .env-actions{display:flex;gap:2px}
@@ -166,6 +167,8 @@ input,select{font-family:inherit}
 .env-node-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .env-node .env-title{font-size:13px;font-weight:600;margin-bottom:2px}
 .env-node .env-branch-lbl{font-size:11px;font-family:monospace;color:var(--muted);background:var(--surface2);padding:2px 8px;border-radius:4px;display:inline-block;margin-bottom:4px}
+.env-node .env-org-link{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--accent);text-decoration:none;padding:2px 8px;border-radius:4px;background:var(--accent-dim);transition:all .15s;margin-bottom:4px}
+.env-node .env-org-link:hover{background:var(--accent);color:#fff;text-decoration:none}
 .env-node .env-stats{display:flex;gap:8px;justify-content:center;align-items:center;font-size:11px;color:var(--muted)}
 .env-node .env-pr-count{background:var(--accent-dim);color:var(--accent);padding:2px 8px;border-radius:10px;font-weight:600;font-size:11px}
 .env-node .env-health{width:8px;height:8px;border-radius:50%;display:inline-block}
@@ -868,6 +871,7 @@ function renderEnvList() {
         <input value="${esc(env.displayName)}" onchange="updateEnv(${i},'displayName',this.value)" placeholder="Display name">
         <span class="env-branch">${esc(env.branch)}</span>
         <input value="${esc(env.orgLabel || '')}" onchange="updateEnv(${i},'orgLabel',this.value)" placeholder="SF Org label" style="width:110px">
+        <input class="env-url" value="${esc(env.orgUrl || '')}" onchange="updateEnv(${i},'orgUrl',this.value)" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">
       </div>
       <div class="env-actions">
         <button onclick="moveEnv(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
@@ -883,7 +887,7 @@ function addEnv() {
   const branch = sel.value;
   if (!branch) return;
   if (projectData.envs.some(e => e.branch === branch)) return;
-  projectData.envs.push({ branch, displayName: branch.charAt(0).toUpperCase() + branch.slice(1), orgLabel: '' });
+  projectData.envs.push({ branch, displayName: branch.charAt(0).toUpperCase() + branch.slice(1), orgLabel: '', orgUrl: '' });
   renderEnvList();
   sel.value = '';
 }
@@ -900,15 +904,15 @@ function updateEnv(i, key, val) { projectData.envs[i][key] = val; }
 function applyPreset(type) {
   const presets = {
     standard: [
-      { branch: 'develop', displayName: 'Development', orgLabel: '' },
-      { branch: 'staging', displayName: 'Staging', orgLabel: '' },
-      { branch: 'main', displayName: 'Production', orgLabel: '' }
+      { branch: 'develop', displayName: 'Development', orgLabel: '', orgUrl: '' },
+      { branch: 'staging', displayName: 'Staging', orgLabel: '', orgUrl: '' },
+      { branch: 'main', displayName: 'Production', orgLabel: '', orgUrl: '' }
     ],
     extended: [
-      { branch: 'develop', displayName: 'Development', orgLabel: '' },
-      { branch: 'int', displayName: 'Integration', orgLabel: '' },
-      { branch: 'uat', displayName: 'UAT', orgLabel: '' },
-      { branch: 'main', displayName: 'Production', orgLabel: '' }
+      { branch: 'develop', displayName: 'Development', orgLabel: '', orgUrl: '' },
+      { branch: 'int', displayName: 'Integration', orgLabel: '', orgUrl: '' },
+      { branch: 'uat', displayName: 'UAT', orgLabel: '', orgUrl: '' },
+      { branch: 'main', displayName: 'Production', orgLabel: '', orgUrl: '' }
     ]
   };
   projectData.envs = presets[type] || [];
@@ -931,7 +935,7 @@ async function autoDetectEnvs() {
     const detected = Array.from(envSet);
     // also add 'main' if not in set
     if (!detected.includes('main') && branches.some(b => b.name === 'main')) detected.push('main');
-    projectData.envs = detected.map(b => ({ branch: b, displayName: b.charAt(0).toUpperCase() + b.slice(1), orgLabel: '' }));
+    projectData.envs = detected.map(b => ({ branch: b, displayName: b.charAt(0).toUpperCase() + b.slice(1), orgLabel: '', orgUrl: '' }));
     renderEnvList();
   } catch (e) { alert('Error: ' + e.message); }
 }
@@ -1060,6 +1064,7 @@ function renderPipeline() {
         <div class="env-title">${esc(env.displayName)}</div>
         <div class="env-branch-lbl">${esc(env.branch)}</div>
         ${env.orgLabel ? '<div style="font-size:10px;color:var(--muted)">☁ ' + esc(env.orgLabel) + '</div>' : ''}
+        ${env.orgUrl ? '<a class="env-org-link" href="' + esc(env.orgUrl) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">🔗 Open Org</a>' : ''}
         <div class="env-stats">
           ${prCount ? '<span class="env-pr-count">' + prCount + ' PR' + (prCount > 1 ? 's' : '') + '</span>' : ''}
         </div>
