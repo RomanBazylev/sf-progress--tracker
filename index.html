@@ -161,37 +161,77 @@ input,select{font-family:inherit}
 .filter-bar .refresh-info{margin-left:auto;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
 
 /* Pipeline header (env nodes row) */
-.pipeline-header{display:flex;align-items:stretch;gap:0;margin-bottom:2px;min-width:fit-content;padding-left:220px}
-.env-node{flex:1;min-width:160px;position:relative;text-align:center}
-.env-node-inner{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 12px 10px;margin:0 4px;position:relative;overflow:hidden}
+.pipeline-header{display:flex;align-items:stretch;gap:0;margin-bottom:16px;min-width:fit-content}
+.env-node{flex:1;min-width:140px;position:relative;text-align:center;cursor:pointer}
+.env-node-inner{background:var(--surface);border:2px solid var(--border);border-radius:10px;padding:14px 12px 10px;margin:0 4px;position:relative;overflow:hidden;transition:all .2s}
+.env-node:hover .env-node-inner{border-color:var(--border-bright);background:var(--surface2)}
+.env-node.active .env-node-inner{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
 .env-node-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
 .env-node .env-title{font-size:13px;font-weight:600;margin-bottom:2px}
 .env-node .env-branch-lbl{font-size:11px;font-family:monospace;color:var(--muted);background:var(--surface2);padding:2px 8px;border-radius:4px;display:inline-block;margin-bottom:4px}
 .env-node .env-org-link{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--accent);text-decoration:none;padding:2px 8px;border-radius:4px;background:var(--accent-dim);transition:all .15s;margin-bottom:4px}
 .env-node .env-org-link:hover{background:var(--accent);color:#fff;text-decoration:none}
-.env-node .env-stats{display:flex;gap:8px;justify-content:center;align-items:center;font-size:11px;color:var(--muted)}
-.env-node .env-pr-count{background:var(--accent-dim);color:var(--accent);padding:2px 8px;border-radius:10px;font-weight:600;font-size:11px}
+.env-node .env-badges{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:6px;flex-wrap:wrap}
+.env-badge{padding:2px 8px;border-radius:10px;font-weight:600;font-size:11px;display:inline-flex;align-items:center;gap:3px}
+.env-badge.open{background:var(--blue-dim);color:var(--blue)}
+.env-badge.merged{background:var(--green-dim);color:var(--green)}
+.env-badge.draft{background:var(--surface2);color:var(--muted)}
 .env-node .env-health{width:8px;height:8px;border-radius:50%;display:inline-block}
 .env-connector{position:absolute;right:-14px;top:50%;transform:translateY(-50%);color:var(--border-bright);font-size:18px;z-index:1}
 .env-drift{font-size:10px;padding:2px 6px;border-radius:8px;position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:2}
 .env-drift.warn{background:var(--yellow-dim);color:var(--yellow)}
 .env-drift.ok{background:var(--green-dim);color:var(--green)}
 
-/* Swim lanes */
-.swim-lanes{min-width:fit-content}
-.swim-lane{display:flex;align-items:center;border-bottom:1px solid var(--border);min-height:52px}
-.swim-lane:hover{background:var(--surface)}
-.swim-lane .feature-name{width:220px;flex-shrink:0;padding:8px 16px 8px 0;font-size:13px;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.swim-lane .feature-name .feat-branch{display:block;font-size:11px;color:var(--muted);font-family:monospace;font-weight:400;overflow:hidden;text-overflow:ellipsis}
-.swim-lane .env-cell{flex:1;min-width:160px;display:flex;align-items:center;justify-content:center;padding:8px 4px}
-.progress-circle{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;cursor:pointer;transition:all .15s;position:relative;border:2px solid transparent}
-.progress-circle:hover{transform:scale(1.2)}
-.progress-circle.not-reached{background:var(--surface2);color:var(--muted);border-color:var(--border)}
-.progress-circle.pr-open{background:var(--blue-dim);color:var(--blue);border-color:var(--blue)}
-.progress-circle.pr-approved{background:var(--yellow-dim);color:var(--yellow);border-color:var(--yellow)}
-.progress-circle.merged{background:var(--green-dim);color:var(--green);border-color:var(--green)}
-.progress-circle.pr-blocked{background:var(--red-dim);color:var(--red);border-color:var(--red)}
-.progress-circle .pr-num{position:absolute;bottom:-14px;font-size:9px;color:var(--muted);white-space:nowrap}
+/* Env panel (below pipeline header) */
+.env-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0;margin-bottom:20px;animation:fadeIn .2s ease}
+@keyframes fadeIn{from{opacity:0;transform:translateY(-8px)}to{opacity:1;transform:translateY(0)}}
+.env-tabs{display:flex;border-bottom:1px solid var(--border);padding:0 16px}
+.env-tab{padding:12px 20px;font-size:13px;font-weight:500;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;transition:all .15s;background:none;border-top:none;border-left:none;border-right:none}
+.env-tab:hover{color:var(--text)}
+.env-tab.active{color:var(--accent);border-bottom-color:var(--accent)}
+.env-tab .tab-count{margin-left:6px;padding:1px 7px;border-radius:10px;font-size:11px;font-weight:600;background:var(--surface2);color:var(--muted)}
+.env-tab.active .tab-count{background:var(--accent-dim);color:var(--accent)}
+.env-panel-body{padding:12px 16px;max-height:600px;overflow-y:auto}
+.env-panel-empty{text-align:center;padding:32px;color:var(--muted);font-size:13px}
+
+/* PR cards */
+.pr-card{display:flex;align-items:center;gap:12px;padding:12px 16px;border:1px solid var(--border);border-radius:10px;margin-bottom:8px;cursor:pointer;transition:all .15s;background:var(--bg)}
+.pr-card:hover{border-color:var(--accent);background:var(--accent-dim)}
+.pr-card .pr-status-icon{width:32px;height:32px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:15px;flex-shrink:0;border:2px solid}
+.pr-status-icon.open{background:var(--blue-dim);color:var(--blue);border-color:var(--blue)}
+.pr-status-icon.draft{background:var(--surface2);color:var(--muted);border-color:var(--border)}
+.pr-status-icon.approved{background:var(--green-dim);color:var(--green);border-color:var(--green)}
+.pr-status-icon.changes{background:var(--red-dim);color:var(--red);border-color:var(--red)}
+.pr-status-icon.merged{background:var(--purple-dim);color:var(--purple);border-color:var(--purple)}
+.pr-card .pr-info{flex:1;min-width:0}
+.pr-card .pr-title-row{display:flex;align-items:center;gap:8px;margin-bottom:2px}
+.pr-card .pr-title{font-size:13px;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pr-card .pr-number{font-size:12px;color:var(--muted);flex-shrink:0}
+.pr-card .pr-meta{display:flex;align-items:center;gap:8px;font-size:11px;color:var(--muted);flex-wrap:wrap}
+.pr-card .pr-feature{font-family:monospace;font-size:11px;background:var(--surface2);padding:1px 6px;border-radius:4px;max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pr-card .pr-author{display:flex;align-items:center;gap:4px}
+.pr-card .pr-author img{width:16px;height:16px;border-radius:50%}
+.pr-card .pr-age{color:var(--muted)}
+.pr-card .pr-labels{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px}
+.pr-card .pr-label-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+
+/* Mini journey dots on PR card */
+.mini-journey{display:flex;align-items:center;gap:0;flex-shrink:0;margin-left:auto}
+.mini-journey .mj-dot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--border);margin:0 1px}
+.mini-journey .mj-dot.reached{border-color:var(--green);background:var(--green)}
+.mini-journey .mj-dot.current{border-color:var(--blue);background:var(--blue)}
+.mini-journey .mj-dot.future{border-color:var(--border);background:transparent}
+.mini-journey .mj-arrow{color:var(--border);font-size:8px;margin:0 1px}
+
+/* Overview cards (default state) */
+.overview-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-top:16px}
+.activity-feed{margin-top:20px}
+.activity-feed h4{font-size:13px;color:var(--muted);margin-bottom:10px;display:flex;align-items:center;gap:6px}
+.activity-item{display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:12px}
+.activity-item:last-child{border-bottom:none}
+.activity-item .act-icon{font-size:14px;flex-shrink:0}
+.activity-item .act-text{flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.activity-item .act-time{color:var(--muted);flex-shrink:0;font-size:11px}
 
 /* Sync PRs section */
 .sync-section{margin-top:24px;padding-top:16px;border-top:1px solid var(--border)}
@@ -279,15 +319,15 @@ input,select{font-family:inherit}
   .header{padding:0 12px;gap:8px}
   .header nav button{padding:6px 10px;font-size:12px}
   .view{padding:12px}
-  .pipeline-header{flex-direction:column;padding-left:0;gap:8px}
+  .pipeline-header{flex-direction:column;gap:8px}
   .env-node{min-width:auto}
   .env-connector{display:none}
-  .swim-lane{flex-direction:column;align-items:flex-start}
-  .swim-lane .feature-name{width:auto;padding:8px 12px 4px}
-  .swim-lane .env-cell{min-width:auto;padding:4px 12px}
+  .pr-card{flex-direction:column;align-items:flex-start}
+  .mini-journey{margin-left:0;margin-top:6px}
   .filter-bar input{width:100%}
   .summary-bar{gap:8px}
   .summary-stat{min-width:auto;flex:1}
+  .overview-grid{grid-template-columns:1fr}
   .side-panel{width:100vw}
 }
 
@@ -390,16 +430,8 @@ input,select{font-family:inherit}
 <div class="view" id="pipelineView">
   <div class="summary-bar" id="summaryBar"></div>
   <div class="filter-bar">
-    <input id="filterSearch" placeholder="🔍 Search features..." oninput="applyFilters()">
+    <input id="filterSearch" placeholder="🔍 Search PRs..." oninput="applyFilters()">
     <select id="filterAuthor" onchange="applyFilters()"><option value="">All authors</option></select>
-    <select id="filterStatus" onchange="applyFilters()">
-      <option value="">All statuses</option>
-      <option value="open">Open</option>
-      <option value="approved">Approved</option>
-      <option value="changes_requested">Changes Requested</option>
-      <option value="draft">Draft</option>
-      <option value="merged">Merged</option>
-    </select>
     <div class="refresh-info">
       <span id="lastUpdated"></span>
       <button class="btn btn-sm" onclick="refreshData()" id="refreshBtn">↻ Refresh</button>
@@ -694,6 +726,8 @@ function lockProject() {
   projectData = null;
   pipelineCache = { prs: [], mergedPrs: [], branches: [], drifts: {}, features: [], lastFetch: 0 };
   detailCache = {};
+  activeEnvIndex = -1;
+  activeEnvTab = 'open';
   document.getElementById('mainNav').style.display = 'none';
   document.getElementById('lockBtn').style.display = 'none';
   document.getElementById('connBadge').className = 'conn-badge none';
@@ -1041,8 +1075,11 @@ function buildFeatures() {
 }
 
 /* ═══════════════════════════════════════════════════════
-   RENDER PIPELINE
+   RENDER PIPELINE (Environment-Centric)
    ═══════════════════════════════════════════════════════ */
+let activeEnvIndex = -1; // -1 = overview, 0+ = selected env
+let activeEnvTab = 'open'; // 'open' or 'merged'
+
 function renderPipeline() {
   const envs = projectData.envs;
   if (!envs.length) {
@@ -1053,20 +1090,24 @@ function renderPipeline() {
 
   let html = '';
 
-  // Pipeline header row
+  // Pipeline header row — clickable env nodes
   html += '<div class="pipeline-header">';
   envs.forEach((env, i) => {
-    const prCount = pipelineCache.prs.filter(pr => pr.base.ref === env.branch).length;
+    const openCount = pipelineCache.prs.filter(pr => pr.base.ref === env.branch).length;
+    const mergedCount = pipelineCache.mergedPrs.filter(pr => pr.base.ref === env.branch).length;
     const driftKey = i < envs.length - 1 ? env.branch + '...' + envs[i + 1].branch : null;
     const drift = driftKey ? pipelineCache.drifts[driftKey] : null;
-    html += `<div class="env-node env-color-${i % 6}">
+    const isActive = activeEnvIndex === i;
+    html += `<div class="env-node env-color-${i % 6}${isActive ? ' active' : ''}" onclick="selectEnv(${i})">
       <div class="env-node-inner">
         <div class="env-title">${esc(env.displayName)}</div>
         <div class="env-branch-lbl">${esc(env.branch)}</div>
         ${env.orgLabel ? '<div style="font-size:10px;color:var(--muted)">☁ ' + esc(env.orgLabel) + '</div>' : ''}
         ${env.orgUrl ? '<a class="env-org-link" href="' + esc(env.orgUrl) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">🔗 Open Org</a>' : ''}
-        <div class="env-stats">
-          ${prCount ? '<span class="env-pr-count">' + prCount + ' PR' + (prCount > 1 ? 's' : '') + '</span>' : ''}
+        <div class="env-badges">
+          ${openCount ? '<span class="env-badge open">○ ' + openCount + ' open</span>' : ''}
+          ${mergedCount ? '<span class="env-badge merged">✓ ' + mergedCount + '</span>' : ''}
+          ${!openCount && !mergedCount ? '<span class="env-badge draft">—</span>' : ''}
         </div>
       </div>
       ${i < envs.length - 1 ? '<div class="env-connector">→</div>' : ''}
@@ -1075,45 +1116,206 @@ function renderPipeline() {
   });
   html += '</div>';
 
-  // Swim lanes
-  const features = getFilteredFeatures();
-  if (!features.length) {
-    html += '<div class="empty-state" style="margin-top:32px"><div class="empty-icon">✨</div><p>No features in the pipeline.</p></div>';
+  // Below header: either env panel or overview
+  if (activeEnvIndex >= 0 && activeEnvIndex < envs.length) {
+    html += renderEnvPanel(activeEnvIndex, activeEnvTab);
   } else {
-    html += '<div class="swim-lanes">';
-    features.forEach(feat => {
-      html += '<div class="swim-lane">';
-      html += `<div class="feature-name" title="${esc(feat.name)}">
-        ${esc(feat.name.length > 35 ? feat.name.slice(0, 35) + '…' : feat.name)}
-        <span class="feat-branch">${esc(feat.branch)}</span>
-      </div>`;
-      envs.forEach(env => {
-        const pr = feat.prs.get(env.branch);
-        html += '<div class="env-cell">';
-        if (pr) {
-          const cls = getPrCircleClass(pr);
-          const icon = getPrCircleIcon(pr);
-          html += `<div class="progress-circle ${cls}"
-            onclick="openSidePanel(${pr.number})"
-            onmouseenter="showTooltip(event,${pr.number})"
-            onmouseleave="hideTooltip()">
-            ${icon}
-            <span class="pr-num">#${pr.number}</span>
-          </div>`;
-        } else {
-          html += '<div class="progress-circle not-reached">·</div>';
-        }
-        html += '</div>';
-      });
-      html += '</div>';
+    html += renderOverview();
+  }
+
+  document.getElementById('pipelineContent').innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SELECT ENV
+   ═══════════════════════════════════════════════════════ */
+function selectEnv(idx) {
+  if (activeEnvIndex === idx) {
+    // Deselect → go back to overview
+    activeEnvIndex = -1;
+  } else {
+    activeEnvIndex = idx;
+    activeEnvTab = 'open';
+  }
+  renderPipeline();
+}
+
+function switchEnvTab(tab) {
+  activeEnvTab = tab;
+  renderPipeline();
+}
+
+/* ═══════════════════════════════════════════════════════
+   ENV PANEL (Open / Merged tabs with PR cards)
+   ═══════════════════════════════════════════════════════ */
+function renderEnvPanel(envIndex) {
+  const env = projectData.envs[envIndex];
+  const search = document.getElementById('filterSearch').value.toLowerCase();
+  const author = document.getElementById('filterAuthor').value;
+
+  // Get PRs targeting this environment
+  const openPrs = filterPrList(pipelineCache.prs.filter(pr => pr.base.ref === env.branch), search, author);
+  const mergedPrs = filterPrList(pipelineCache.mergedPrs.filter(pr => pr.base.ref === env.branch), search, author);
+  const syncPrs = filterPrList((pipelineCache.syncPrs || []).filter(pr => pr.base.ref === env.branch), search, author);
+
+  const openCount = openPrs.length;
+  const mergedCount = mergedPrs.length;
+  const tab = activeEnvTab;
+
+  let html = '<div class="env-panel">';
+
+  // Tabs
+  html += '<div class="env-tabs">';
+  html += `<button class="env-tab${tab === 'open' ? ' active' : ''}" onclick="switchEnvTab('open')">Open PRs<span class="tab-count">${openCount}</span></button>`;
+  html += `<button class="env-tab${tab === 'merged' ? ' active' : ''}" onclick="switchEnvTab('merged')">Recently Merged<span class="tab-count">${mergedCount}</span></button>`;
+  if (syncPrs.length) {
+    html += `<button class="env-tab${tab === 'sync' ? ' active' : ''}" onclick="switchEnvTab('sync')">🔄 Sync<span class="tab-count">${syncPrs.length}</span></button>`;
+  }
+  html += '</div>';
+
+  // Tab body
+  html += '<div class="env-panel-body">';
+  let prsToShow;
+  if (tab === 'merged') prsToShow = mergedPrs;
+  else if (tab === 'sync') prsToShow = syncPrs;
+  else prsToShow = openPrs;
+
+  if (!prsToShow.length) {
+    const label = tab === 'merged' ? 'merged PRs' : tab === 'sync' ? 'sync PRs' : 'open PRs';
+    html += `<div class="env-panel-empty">No ${label} for ${esc(env.displayName)}</div>`;
+  } else {
+    prsToShow.forEach(pr => { html += renderPrCard(pr); });
+  }
+  html += '</div></div>';
+
+  return html;
+}
+
+function filterPrList(prs, search, author) {
+  return prs.filter(pr => {
+    if (search) {
+      const haystack = (pr.title + ' ' + pr.head.ref + ' #' + pr.number).toLowerCase();
+      if (!haystack.includes(search)) return false;
+    }
+    if (author && pr.user.login !== author) return false;
+    return true;
+  });
+}
+
+/* ═══════════════════════════════════════════════════════
+   PR CARD
+   ═══════════════════════════════════════════════════════ */
+function renderPrCard(pr) {
+  const statusCls = getPrStatusClass(pr);
+  const statusIcon = getPrStatusIcon(pr);
+  const featureName = extractFeatureName(pr.head.ref);
+  const age = timeAgo(pr.merged_at || pr.updated_at);
+
+  let html = `<div class="pr-card" onclick="openSidePanel(${pr.number})">`;
+  html += `<div class="pr-status-icon ${statusCls}">${statusIcon}</div>`;
+  html += '<div class="pr-info">';
+  html += `<div class="pr-title-row"><span class="pr-title">${esc(pr.title)}</span><span class="pr-number">#${pr.number}</span></div>`;
+  html += '<div class="pr-meta">';
+  html += `<span class="pr-feature">${esc(featureName)}</span>`;
+  html += `<span class="pr-author"><img src="${esc(pr.user.avatar_url)}&s=32" alt="">${esc(pr.user.login)}</span>`;
+  html += `<span class="pr-age">${age}</span>`;
+  if (pr.requested_reviewers && pr.requested_reviewers.length) {
+    html += `<span>👁 ${pr.requested_reviewers.length}</span>`;
+  }
+  html += '</div>';
+  // Labels
+  if (pr.labels && pr.labels.length) {
+    html += '<div class="pr-labels">';
+    pr.labels.forEach(l => {
+      html += `<span class="pr-label-dot" style="background:#${l.color}" title="${esc(l.name)}"></span>`;
     });
     html += '</div>';
   }
+  html += '</div>'; // close pr-info
 
-  // Sync PRs
-  if (pipelineCache.syncPrs && pipelineCache.syncPrs.length) {
-    html += '<div class="sync-section"><h4 onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'flex\':\'none\'">🔄 Sync PRs (' + pipelineCache.syncPrs.length + ') ▾</h4><div class="sync-list" style="display:none">';
-    pipelineCache.syncPrs.forEach(pr => {
+  // Mini journey dots
+  html += renderMiniJourney(pr);
+
+  html += '</div>'; // close pr-card
+  return html;
+}
+
+function getPrStatusClass(pr) {
+  if (pr.merged_at) return 'merged';
+  if (pr.draft) return 'draft';
+  if (pr._reviewState === 'approved') return 'approved';
+  if (pr._reviewState === 'changes_requested') return 'changes';
+  return 'open';
+}
+
+function getPrStatusIcon(pr) {
+  if (pr.merged_at) return '⏵';
+  if (pr.draft) return '◌';
+  if (pr._reviewState === 'approved') return '✓';
+  if (pr._reviewState === 'changes_requested') return '✕';
+  return '○';
+}
+
+function extractFeatureName(headRef) {
+  const gsMatch = headRef.match(GS_REGEX);
+  return gsMatch ? gsMatch[1] : headRef;
+}
+
+function renderMiniJourney(pr) {
+  const headRef = pr.head.ref;
+  const featureName = extractFeatureName(headRef);
+  const feat = pipelineCache.features.find(f => f.name === featureName);
+  const envs = projectData.envs;
+  if (!feat || envs.length < 2) return '';
+
+  let html = '<div class="mini-journey" title="Feature journey">';
+  envs.forEach((env, i) => {
+    const envPr = feat.prs.get(env.branch);
+    let cls = 'future';
+    if (envPr && envPr.merged_at) cls = 'reached';
+    else if (envPr) cls = 'current';
+    html += `<div class="mj-dot ${cls}" title="${esc(env.displayName)}"></div>`;
+    if (i < envs.length - 1) html += '<span class="mj-arrow">›</span>';
+  });
+  html += '</div>';
+  return html;
+}
+
+/* ═══════════════════════════════════════════════════════
+   OVERVIEW (no env selected)
+   ═══════════════════════════════════════════════════════ */
+function renderOverview() {
+  let html = '';
+
+  // Recent activity feed
+  const allPrs = [...pipelineCache.prs, ...pipelineCache.mergedPrs]
+    .sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at))
+    .slice(0, 15);
+
+  if (allPrs.length) {
+    html += '<div class="activity-feed"><h4>📋 Recent Activity</h4>';
+    allPrs.forEach(pr => {
+      const icon = pr.merged_at ? '🟣' : pr.draft ? '⚪' : '🔵';
+      const status = pr.merged_at ? 'merged' : pr.draft ? 'draft' : 'open';
+      html += `<div class="activity-item" style="cursor:pointer" onclick="openSidePanel(${pr.number})">
+        <span class="act-icon">${icon}</span>
+        <span class="act-text"><strong>#${pr.number}</strong> ${esc(pr.title)} → <code>${esc(pr.base.ref)}</code></span>
+        <span class="act-time">${esc(pr.user.login)} · ${timeAgo(pr.updated_at)}</span>
+      </div>`;
+    });
+    html += '</div>';
+  } else {
+    html += '<div class="empty-state" style="margin-top:32px"><div class="empty-icon">✨</div><p>No PRs found. Click an environment above to explore.</p></div>';
+  }
+
+  // Heatmap stays in overview
+  html += renderHeatmap();
+
+  // Sync PRs overview
+  const syncPrs = pipelineCache.syncPrs || [];
+  if (syncPrs.length) {
+    html += '<div class="sync-section"><h4 onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'flex\':\'none\'">🔄 Sync PRs (' + syncPrs.length + ') ▾</h4><div class="sync-list" style="display:none">';
+    syncPrs.forEach(pr => {
       html += `<div class="sync-pr" style="cursor:pointer" onclick="openSidePanel(${pr.number})">
         <div class="sync-status" style="background:${pr.state === 'open' ? 'var(--blue)' : 'var(--green)'}"></div>
         <span>#${pr.number}</span>
@@ -1124,42 +1326,7 @@ function renderPipeline() {
     html += '</div></div>';
   }
 
-  // Recently completed
-  const completed = pipelineCache.features.filter(f => {
-    const prodEnv = envs[envs.length - 1];
-    const pr = f.prs.get(prodEnv.branch);
-    return pr && pr.merged_at;
-  }).slice(0, 15);
-  if (completed.length) {
-    html += '<div class="completed-section"><h4 onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'flex\':\'none\'">✅ Recently Completed (' + completed.length + ') ▾</h4><div class="completed-list" style="display:none">';
-    completed.forEach(f => {
-      const prodPr = f.prs.get(envs[envs.length - 1].branch);
-      const mergedAgo = timeAgo(prodPr.merged_at);
-      html += `<div class="completed-item"><span class="c-icon">✓</span><span class="c-name">${esc(f.name)}</span><span class="c-time">${mergedAgo}</span></div>`;
-    });
-    html += '</div></div>';
-  }
-
-  // Heatmap
-  html += renderHeatmap();
-
-  document.getElementById('pipelineContent').innerHTML = html;
-}
-
-function getPrCircleClass(pr) {
-  if (pr.merged_at) return 'merged';
-  if (pr.draft) return 'not-reached';
-  // Check review state from labels or basic info
-  if (pr._reviewState === 'approved') return 'pr-approved';
-  if (pr._reviewState === 'changes_requested') return 'pr-blocked';
-  return 'pr-open';
-}
-function getPrCircleIcon(pr) {
-  if (pr.merged_at) return '✓';
-  if (pr.draft) return '◌';
-  if (pr._reviewState === 'approved') return '✓';
-  if (pr._reviewState === 'changes_requested') return '✕';
-  return '○';
+  return html;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1171,18 +1338,15 @@ function renderSummary() {
   }).length;
   const totalOpenPrs = pipelineCache.prs.length;
   const envs = projectData.envs;
-  // Find bottleneck env
   let maxPrs = 0, bottleneck = '-';
   envs.forEach(env => {
     const c = pipelineCache.prs.filter(pr => pr.base.ref === env.branch).length;
     if (c > maxPrs) { maxPrs = c; bottleneck = env.displayName; }
   });
-  // Avg age of open PRs
   let avgAge = '-';
   if (totalOpenPrs) {
     const totalMs = pipelineCache.prs.reduce((sum, pr) => sum + (Date.now() - new Date(pr.created_at).getTime()), 0);
-    const avgMs = totalMs / totalOpenPrs;
-    avgAge = Math.round(avgMs / 86400000) + 'd';
+    avgAge = Math.round(totalMs / totalOpenPrs / 86400000) + 'd';
   }
 
   document.getElementById('summaryBar').innerHTML = `
@@ -1222,27 +1386,10 @@ function renderHeatmap() {
    ═══════════════════════════════════════════════════════ */
 function populateFilterAuthors() {
   const authors = new Set();
-  pipelineCache.prs.forEach(pr => authors.add(pr.user.login));
+  [...pipelineCache.prs, ...pipelineCache.mergedPrs].forEach(pr => authors.add(pr.user.login));
   const sel = document.getElementById('filterAuthor');
   sel.innerHTML = '<option value="">All authors</option>' +
     Array.from(authors).sort().map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
-}
-
-function getFilteredFeatures() {
-  const search = document.getElementById('filterSearch').value.toLowerCase();
-  const author = document.getElementById('filterAuthor').value;
-  const status = document.getElementById('filterStatus').value;
-  return pipelineCache.features.filter(feat => {
-    if (search && !feat.name.toLowerCase().includes(search)) return false;
-    const prs = Array.from(feat.prs.values());
-    if (author && !prs.some(pr => pr.user.login === author)) return false;
-    if (status) {
-      if (status === 'merged' && !prs.some(pr => pr.merged_at)) return false;
-      if (status === 'open' && !prs.some(pr => !pr.merged_at && !pr.draft)) return false;
-      if (status === 'draft' && !prs.some(pr => pr.draft)) return false;
-    }
-    return true;
-  });
 }
 
 function applyFilters() { renderPipeline(); }
