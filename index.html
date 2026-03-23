@@ -161,24 +161,27 @@ input,select{font-family:inherit}
 .filter-bar .refresh-info{margin-left:auto;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
 
 /* Pipeline header (env nodes row) */
-.pipeline-header{display:flex;align-items:stretch;gap:0;margin-bottom:16px;min-width:fit-content}
-.env-node{flex:1;min-width:140px;position:relative;text-align:center;cursor:pointer}
-.env-node-inner{background:var(--surface);border:2px solid var(--border);border-radius:10px;padding:14px 12px 10px;margin:0 4px;position:relative;overflow:hidden;transition:all .2s}
-.env-node:hover .env-node-inner{border-color:var(--border-bright);background:var(--surface2)}
-.env-node.active .env-node-inner{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-dim)}
-.env-node-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:3px}
-.env-node .env-title{font-size:13px;font-weight:600;margin-bottom:2px}
-.env-node .env-branch-lbl{font-size:11px;font-family:monospace;color:var(--muted);background:var(--surface2);padding:2px 8px;border-radius:4px;display:inline-block;margin-bottom:4px}
-.env-node .env-org-link{display:inline-flex;align-items:center;gap:4px;font-size:10px;color:var(--accent);text-decoration:none;padding:2px 8px;border-radius:4px;background:var(--accent-dim);transition:all .15s;margin-bottom:4px}
+.pipeline-header{display:flex;align-items:center;gap:0;margin-bottom:20px;overflow-x:auto;padding-bottom:14px}
+.env-node{flex:1;min-width:0;position:relative;cursor:pointer}
+.env-node-inner{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin:0 6px;position:relative;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:6px}
+.env-node:hover .env-node-inner{border-color:var(--border-bright);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
+.env-node.active .env-node-inner{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim),0 4px 12px rgba(0,0,0,.1);transform:translateY(-2px)}
+.env-node-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
+.env-node .env-title{font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.env-node .env-branch-lbl{font-size:10px;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;color:var(--muted);background:var(--bg);padding:2px 8px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.env-node .env-org-link{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--accent);text-decoration:none;padding:2px 8px;border-radius:4px;background:var(--accent-dim);transition:all .15s;white-space:nowrap}
 .env-node .env-org-link:hover{background:var(--accent);color:#fff;text-decoration:none}
-.env-node .env-badges{display:flex;gap:6px;justify-content:center;align-items:center;margin-top:6px;flex-wrap:wrap}
-.env-badge{padding:2px 8px;border-radius:10px;font-weight:600;font-size:11px;display:inline-flex;align-items:center;gap:3px}
+.env-node .env-org-label{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
+.env-node .env-badges{display:flex;gap:4px;justify-content:center;align-items:center;flex-wrap:wrap}
+.env-badge{padding:2px 7px;border-radius:10px;font-weight:600;font-size:10px;display:inline-flex;align-items:center;gap:2px;white-space:nowrap}
 .env-badge.open{background:var(--blue-dim);color:var(--blue)}
 .env-badge.merged{background:var(--green-dim);color:var(--green)}
 .env-badge.draft{background:var(--surface2);color:var(--muted)}
 .env-node .env-health{width:8px;height:8px;border-radius:50%;display:inline-block}
-.env-connector{position:absolute;right:-14px;top:50%;transform:translateY(-50%);color:var(--border-bright);font-size:18px;z-index:1}
-.env-drift{font-size:10px;padding:2px 6px;border-radius:8px;position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:2}
+/* Connector line between nodes */
+.env-connector{display:flex;align-items:center;flex-shrink:0;width:28px;justify-content:center;z-index:1}
+.env-connector svg{width:20px;height:20px;color:var(--border-bright)}
+.env-drift{font-size:9px;padding:2px 6px;border-radius:8px;position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:2;font-weight:500}
 .env-drift.warn{background:var(--yellow-dim);color:var(--yellow)}
 .env-drift.ok{background:var(--green-dim);color:var(--green)}
 
@@ -319,7 +322,7 @@ input,select{font-family:inherit}
   .header{padding:0 12px;gap:8px}
   .header nav button{padding:6px 10px;font-size:12px}
   .view{padding:12px}
-  .pipeline-header{flex-direction:column;gap:8px}
+  .pipeline-header{flex-direction:column;gap:8px;overflow-x:visible}
   .env-node{min-width:auto}
   .env-connector{display:none}
   .pr-card{flex-direction:column;align-items:flex-start}
@@ -1100,17 +1103,17 @@ function renderPipeline() {
     const isActive = activeEnvIndex === i;
     html += `<div class="env-node env-color-${i % 6}${isActive ? ' active' : ''}" onclick="selectEnv(${i})">
       <div class="env-node-inner">
-        <div class="env-title">${esc(env.displayName)}</div>
-        <div class="env-branch-lbl">${esc(env.branch)}</div>
-        ${env.orgLabel ? '<div style="font-size:10px;color:var(--muted)">☁ ' + esc(env.orgLabel) + '</div>' : ''}
-        ${env.orgUrl ? '<a class="env-org-link" href="' + esc(env.orgUrl) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">🔗 Open Org</a>' : ''}
+        <div class="env-title" title="${esc(env.displayName)}">${esc(env.displayName)}</div>
+        <div class="env-branch-lbl" title="${esc(env.branch)}">${esc(env.branch)}</div>
+        ${env.orgLabel ? '<div class="env-org-label" title="' + esc(env.orgLabel) + '">☁ ' + esc(env.orgLabel) + '</div>' : ''}
+        ${env.orgUrl ? '<a class="env-org-link" href="' + esc(env.orgUrl) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">🔗 Org</a>' : ''}
         <div class="env-badges">
-          ${openCount ? '<span class="env-badge open">○ ' + openCount + ' open</span>' : ''}
+          ${openCount ? '<span class="env-badge open">' + openCount + ' open</span>' : ''}
           ${mergedCount ? '<span class="env-badge merged">✓ ' + mergedCount + '</span>' : ''}
           ${!openCount && !mergedCount ? '<span class="env-badge draft">—</span>' : ''}
         </div>
       </div>
-      ${i < envs.length - 1 ? '<div class="env-connector">→</div>' : ''}
+      ${i < envs.length - 1 ? '<div class="env-connector"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M4 10h12M12 6l4 4-4 4"/></svg></div>' : ''}
       ${drift ? '<div class="env-drift ' + (drift.behind > 5 ? 'warn' : 'ok') + '">' + drift.behind + ' behind</div>' : ''}
     </div>`;
   });
