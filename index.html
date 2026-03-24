@@ -320,6 +320,43 @@ input,select{font-family:inherit}
 /* ── FOOTER ── */
 .footer{padding:12px 24px;font-size:11px;color:var(--muted);border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center;margin-top:auto}
 
+/* ── PROMOTE / ACTIONS ── */
+.sp-actions{display:flex;gap:8px;margin:8px 0;flex-wrap:wrap}
+.sp-actions .btn{flex:1;min-width:120px;text-align:center;display:flex;align-items:center;justify-content:center;gap:6px}
+.btn-promote{background:var(--green);color:#fff;border-color:var(--green);font-weight:600}
+.btn-promote:hover{opacity:.9}
+.btn-promote:disabled{opacity:.4;cursor:not-allowed}
+.sp-promote-status{font-size:12px;padding:8px 12px;border-radius:8px;margin-bottom:8px}
+.sp-promote-status.success{background:var(--green);background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+.sp-promote-status.error{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
+.sp-promote-status.loading{background:color-mix(in srgb,var(--blue) 15%,transparent);color:var(--blue)}
+
+/* ── BATCH SELECTION ── */
+.batch-bar{display:flex;align-items:center;gap:12px;padding:10px 16px;background:color-mix(in srgb,var(--accent) 10%,transparent);border:1px solid var(--accent);border-radius:10px;margin-bottom:12px;flex-wrap:wrap}
+.batch-bar .batch-count{font-size:13px;font-weight:600;color:var(--accent)}
+.batch-bar .batch-actions{display:flex;gap:6px;margin-left:auto}
+.pr-card-selectable{position:relative}
+.pr-card-selectable .pr-checkbox{position:absolute;top:12px;left:12px;width:18px;height:18px;accent-color:var(--accent);cursor:pointer;z-index:2}
+.pr-card-selectable .pr-card{padding-left:40px}
+
+/* ── LINKED ISSUES ── */
+.sp-issues{display:flex;flex-direction:column;gap:4px}
+.sp-issue{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 8px;background:var(--surface2);border-radius:6px}
+.sp-issue a{color:var(--accent);font-weight:500}
+.sp-issue .issue-type{font-size:11px;padding:1px 6px;border-radius:4px;font-weight:600}
+.sp-issue .issue-type.jira{background:#0052cc20;color:#0052cc}
+.sp-issue .issue-type.gh{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+
+/* ── POST-DEPLOY CHECKLIST ── */
+.sp-checklist{display:flex;flex-direction:column;gap:4px}
+.sp-check-item{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 8px;background:var(--surface2);border-radius:6px;cursor:pointer;transition:all .15s}
+.sp-check-item:hover{background:var(--bg)}
+.sp-check-item input[type=checkbox]{accent-color:var(--green);width:16px;height:16px;flex-shrink:0}
+.sp-check-item.done{opacity:.5;text-decoration:line-through}
+.sp-checklist-add{display:flex;gap:6px;margin-top:6px}
+.sp-checklist-add input{flex:1;padding:5px 10px;background:var(--bg);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px}
+.sp-checklist-add input:focus{outline:none;border-color:var(--accent)}
+
 /* ── RESPONSIVE ── */
 @media(max-width:768px){
   .header{padding:0 12px;gap:8px}
@@ -558,6 +595,7 @@ let pipelineCache = { prs: [], mergedPrs: [], branches: [], drifts: {}, features
 let detailCache = {};
 let refreshTimer = null;
 let rateLimitRemaining = null;
+let batchSelected = new Set();
 
 const ENV_COLORS = ['#58a6ff','#d29922','#3fb950','#bc8cff','#f85149','#db6d28'];
 const GS_REGEX = /^gs-pipeline\/(.+)_-_(.+)$/;
@@ -735,6 +773,7 @@ function lockProject() {
   detailCache = {};
   activeEnvIndex = -1;
   activeEnvTab = 'open';
+  batchSelected = new Set();
   document.getElementById('mainNav').style.display = 'none';
   document.getElementById('lockBtn').style.display = 'none';
   document.getElementById('connBadge').className = 'conn-badge none';
@@ -838,9 +877,10 @@ function toggleSecret(btn) {
    GITHUB API
    ═══════════════════════════════════════════════════════ */
 async function ghFetch(path, opts = {}) {
-  const headers = { Accept: 'application/vnd.github+json' };
+  const headers = { Accept: 'application/vnd.github+json', ...(opts.headers || {}) };
   if (projectData.pat) headers.Authorization = 'Bearer ' + projectData.pat;
-  const res = await fetch('https://api.github.com' + path, { headers, ...opts });
+  const { headers: _h, ...restOpts } = opts;
+  const res = await fetch('https://api.github.com' + path, { headers, ...restOpts });
   const rl = res.headers.get('X-RateLimit-Remaining');
   if (rl !== null) {
     rateLimitRemaining = parseInt(rl);
@@ -1180,6 +1220,17 @@ function renderEnvPanel(envIndex) {
   }
   html += '</div>';
 
+  // Batch bar (only for open tab with selections)
+  if (tab === 'open' && batchSelected.size > 0) {
+    html += `<div class="batch-bar">
+      <span class="batch-count">${batchSelected.size} PR${batchSelected.size > 1 ? 's' : ''} selected</span>
+      <div class="batch-actions">
+        <button class="btn btn-sm btn-promote" onclick="batchPromote()">&#9654; Promote Selected</button>
+        <button class="btn btn-sm" onclick="batchClear()">Clear</button>
+      </div>
+    </div>`;
+  }
+
   // Tab body
   html += '<div class="env-panel-body">';
   let prsToShow;
@@ -1191,7 +1242,11 @@ function renderEnvPanel(envIndex) {
     const label = tab === 'merged' ? 'merged PRs' : tab === 'sync' ? 'sync PRs' : 'open PRs';
     html += `<div class="env-panel-empty">No ${label} for ${esc(env.displayName)}</div>`;
   } else {
-    prsToShow.forEach(pr => { html += renderPrCard(pr); });
+    if (tab === 'open') {
+      prsToShow.forEach(pr => { html += renderPrCardSelectable(pr); });
+    } else {
+      prsToShow.forEach(pr => { html += renderPrCard(pr); });
+    }
   }
   html += '</div></div>';
 
@@ -1286,6 +1341,57 @@ function renderMiniJourney(pr) {
   });
   html += '</div>';
   return html;
+}
+
+/* ═══════════════════════════════════════════════════════
+   SELECTABLE PR CARD (checkbox for batch)
+   ═══════════════════════════════════════════════════════ */
+function renderPrCardSelectable(pr) {
+  const checked = batchSelected.has(pr.number) ? 'checked' : '';
+  return `<div class="pr-card-selectable">
+    <input type="checkbox" class="pr-checkbox" ${checked}
+      onclick="event.stopPropagation();toggleBatchPr(${pr.number})"
+      title="Select for batch promote">
+    ${renderPrCard(pr)}
+  </div>`;
+}
+
+/* ═══════════════════════════════════════════════════════
+   BATCH PROMOTE
+   ═══════════════════════════════════════════════════════ */
+function toggleBatchPr(prNum) {
+  if (batchSelected.has(prNum)) batchSelected.delete(prNum);
+  else batchSelected.add(prNum);
+  renderPipeline();
+}
+
+function batchClear() {
+  batchSelected.clear();
+  renderPipeline();
+}
+
+async function batchPromote() {
+  if (!batchSelected.size) return;
+  const nums = Array.from(batchSelected);
+  if (!confirm('Promote (merge) ' + nums.length + ' PR(s)?\n\n' + nums.map(n => '#' + n).join(', ') + '\n\nThis will merge them sequentially.')) return;
+
+  const results = [];
+  for (const num of nums) {
+    try {
+      await promotePr(num, false);
+      results.push({ num, ok: true });
+    } catch (e) {
+      results.push({ num, ok: false, err: e.message });
+    }
+  }
+  batchSelected.clear();
+  await refreshData();
+
+  const ok = results.filter(r => r.ok).length;
+  const fail = results.filter(r => !r.ok);
+  let msg = ok + '/' + results.length + ' PR(s) promoted successfully.';
+  if (fail.length) msg += '\n\nFailed:\n' + fail.map(r => '#' + r.num + ': ' + r.err).join('\n');
+  alert(msg);
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1483,6 +1589,26 @@ async function openSidePanel(prNumber) {
     // Feature journey
     html += renderFeatureJourney(pr);
 
+    // Linked issues (Jira / GitHub)
+    html += renderLinkedIssues(pr);
+
+    // Promote actions (only for open, non-draft PRs)
+    if (!pr.merged_at && !pr.draft && pr.state === 'open') {
+      html += '<div class="sp-section"><div class="sp-section-title">Actions</div>';
+      html += '<div id="promoteStatus"></div>';
+      html += '<div class="sp-actions">';
+      html += `<button class="btn btn-promote" id="promoteBtn" onclick="promotePrFromPanel(${pr.number})">&#9654; Promote Changes</button>`;
+      html += `<a class="btn" href="${esc(pr.html_url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">Open in GitHub</a>`;
+      html += '</div></div>';
+    } else {
+      html += `<div class="sp-section"><div class="sp-section-title">Actions</div>
+        <div class="sp-actions"><a class="btn" href="${esc(pr.html_url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">View in GitHub</a></div>
+      </div>`;
+    }
+
+    // Post-deploy checklist (merged PRs)
+    html += renderPostDeployChecklist(pr);
+
     // Timestamps
     html += `<div class="sp-section"><div class="sp-section-title">Timestamps</div><div class="sp-timestamps">
       <span>Created: ${new Date(pr.created_at).toLocaleString()} (${timeAgo(pr.created_at)})</span>
@@ -1525,6 +1651,171 @@ function renderFeatureJourney(pr) {
   });
   html += '</div></div>';
   return html;
+}
+
+/* ═══════════════════════════════════════════════════════
+   PROMOTE PR (Merge + Auto-propagate)
+   ═══════════════════════════════════════════════════════ */
+async function promotePrFromPanel(prNum) {
+  const btn = document.getElementById('promoteBtn');
+  const status = document.getElementById('promoteStatus');
+  btn.disabled = true;
+  btn.textContent = '\u23f3 Promoting...';
+  status.innerHTML = '<div class="sp-promote-status loading">Merging PR #' + prNum + '...</div>';
+  try {
+    const result = await promotePr(prNum, true);
+    status.innerHTML = '<div class="sp-promote-status success">\u2713 ' + esc(result.message || 'Merged successfully') + '</div>';
+    btn.textContent = '\u2713 Promoted';
+    setTimeout(() => refreshData(), 2000);
+  } catch (e) {
+    status.innerHTML = '<div class="sp-promote-status error">\u2715 ' + esc(e.message) + '</div>';
+    btn.disabled = false;
+    btn.innerHTML = '&#9654; Promote Changes';
+  }
+}
+
+async function promotePr(prNum, autoProp) {
+  const repo = projectData.repo;
+  const mergeResult = await ghFetch('/repos/' + repo + '/pulls/' + prNum + '/merge', {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ merge_method: 'merge' })
+  });
+
+  if (autoProp) {
+    await autoPropagate(prNum);
+  }
+
+  return mergeResult;
+}
+
+async function autoPropagate(prNum) {
+  const all = [...pipelineCache.prs, ...pipelineCache.mergedPrs];
+  const pr = all.find(p => p.number === prNum);
+  if (!pr) return;
+
+  const envs = projectData.envs;
+  const currentEnvIdx = envs.findIndex(e => e.branch === pr.base.ref);
+  if (currentEnvIdx < 0 || currentEnvIdx >= envs.length - 1) return;
+
+  const nextEnv = envs[currentEnvIdx + 1];
+  const headRef = pr.head.ref;
+  const featureName = extractFeatureName(headRef);
+
+  const gsMatch = headRef.match(GS_REGEX);
+  let newHead;
+  if (gsMatch) {
+    newHead = 'gs-pipeline/' + gsMatch[1] + '_-_' + nextEnv.branch;
+  } else {
+    newHead = pr.base.ref;
+  }
+
+  try {
+    const owner = projectData.repo.split('/')[0];
+    const existing = await ghFetch('/repos/' + projectData.repo + '/pulls?head=' +
+      encodeURIComponent(owner + ':' + newHead) +
+      '&base=' + encodeURIComponent(nextEnv.branch) + '&state=open');
+    if (existing.length > 0) return;
+  } catch (e) { /* ignore check errors */ }
+
+  try {
+    await ghFetch('/repos/' + projectData.repo + '/pulls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: featureName + ' \u2192 ' + nextEnv.displayName,
+        head: newHead,
+        base: nextEnv.branch,
+        body: 'Auto-propagated from #' + prNum + ' after promote to ' + envs[currentEnvIdx].displayName + '.'
+      })
+    });
+  } catch (e) { /* propagation is best-effort */ }
+}
+
+/* ═══════════════════════════════════════════════════════
+   LINKED ISSUES (Jira / GitHub Issues)
+   ═══════════════════════════════════════════════════════ */
+function renderLinkedIssues(pr) {
+  const issues = extractIssues(pr);
+  if (!issues.length) return '';
+  let html = '<div class="sp-section"><div class="sp-section-title">Linked Issues</div><div class="sp-issues">';
+  issues.forEach(iss => {
+    const typeCls = iss.type === 'jira' ? 'jira' : 'gh';
+    const typeLabel = iss.type === 'jira' ? 'JIRA' : 'GH';
+    html += `<div class="sp-issue"><span class="issue-type ${typeCls}">${typeLabel}</span><a href="${esc(iss.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(iss.key)}</a></div>`;
+  });
+  html += '</div></div>';
+  return html;
+}
+
+function extractIssues(pr) {
+  const issues = [];
+  const text = (pr.title || '') + ' ' + (pr.body || '') + ' ' + (pr.head.ref || '');
+  const seen = new Set();
+  // Jira pattern: PROJECT-123
+  const jiraRe = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
+  let m;
+  while ((m = jiraRe.exec(text)) !== null) {
+    if (!seen.has(m[1])) {
+      seen.add(m[1]);
+      issues.push({ type: 'jira', key: m[1], url: 'https://jira.atlassian.com/browse/' + encodeURIComponent(m[1]) });
+    }
+  }
+  // GitHub issue references: #123
+  const ghRe = /(?:^|\s)#(\d+)\b/g;
+  while ((m = ghRe.exec(text)) !== null) {
+    const num = parseInt(m[1]);
+    const key = '#' + num;
+    if (!seen.has(key) && num !== pr.number) {
+      seen.add(key);
+      issues.push({ type: 'gh', key: key, url: 'https://github.com/' + projectData.repo + '/issues/' + num });
+    }
+  }
+  return issues;
+}
+
+/* ═══════════════════════════════════════════════════════
+   POST-DEPLOY CHECKLIST
+   ═══════════════════════════════════════════════════════ */
+function getChecklist(prNum) {
+  if (!projectData.checklists) projectData.checklists = {};
+  if (!projectData.checklists[prNum]) projectData.checklists[prNum] = [];
+  return projectData.checklists[prNum];
+}
+
+function renderPostDeployChecklist(pr) {
+  if (!pr.merged_at) return '';
+  const items = getChecklist(pr.number);
+  let html = '<div class="sp-section"><div class="sp-section-title">Post-Deploy Checklist</div><div class="sp-checklist">';
+  items.forEach((item, i) => {
+    const doneCls = item.done ? ' done' : '';
+    html += `<div class="sp-check-item${doneCls}" onclick="toggleCheckItem(${pr.number},${i})">
+      <input type="checkbox" ${item.done ? 'checked' : ''} onclick="event.stopPropagation();toggleCheckItem(${pr.number},${i})">
+      <span>${esc(item.text)}</span>
+    </div>`;
+  });
+  html += '</div>';
+  html += `<div class="sp-checklist-add">
+    <input id="newCheckItem" placeholder="Add checklist step..." onkeydown="if(event.key==='Enter')addCheckItem(${pr.number})">
+    <button class="btn btn-sm" onclick="addCheckItem(${pr.number})">+</button>
+  </div></div>`;
+  return html;
+}
+
+function toggleCheckItem(prNum, idx) {
+  const items = getChecklist(prNum);
+  items[idx].done = !items[idx].done;
+  persistProject();
+  openSidePanel(prNum);
+}
+
+function addCheckItem(prNum) {
+  const input = document.getElementById('newCheckItem');
+  const text = input.value.trim();
+  if (!text) return;
+  getChecklist(prNum).push({ text, done: false });
+  persistProject();
+  openSidePanel(prNum);
 }
 
 /* ═══════════════════════════════════════════════════════
