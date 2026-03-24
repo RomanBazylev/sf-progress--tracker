@@ -181,33 +181,37 @@ input,select{font-family:inherit}
 .filter-bar select{padding:7px 10px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px}
 .filter-bar .refresh-info{margin-left:auto;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
 
-/* Pipeline header (env nodes row) */
-.pipeline-header{display:flex;align-items:center;gap:0;margin-bottom:20px;overflow-x:auto;padding-bottom:14px;position:relative}
-/* Continuous rail line behind all nodes */
-.pipeline-header::after{content:'';position:absolute;top:50%;left:24px;right:24px;height:2px;background:var(--border);z-index:0;transform:translateY(-50%)}
-.env-node{flex:1;min-width:0;position:relative;cursor:pointer;z-index:1}
-.env-node-inner{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:16px;margin:0 2px;position:relative;transition:all .2s;display:flex;flex-direction:column;align-items:center;gap:6px}
-.env-node:hover .env-node-inner{border-color:var(--border-bright);transform:translateY(-2px);box-shadow:0 4px 12px rgba(0,0,0,.1)}
-.env-node.active .env-node-inner{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim),0 4px 12px rgba(0,0,0,.1);transform:translateY(-2px)}
-.env-node-inner::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:12px 12px 0 0}
-.env-node .env-title{font-size:14px;font-weight:700;letter-spacing:-.01em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.env-node .env-branch-lbl{font-size:10px;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;color:var(--muted);background:var(--bg);padding:2px 8px;border-radius:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.env-node .env-org-link{display:inline-flex;align-items:center;gap:3px;font-size:10px;color:var(--accent);text-decoration:none;padding:2px 8px;border-radius:4px;background:var(--accent-dim);transition:all .15s;white-space:nowrap}
-.env-node .env-org-link:hover{background:var(--accent);color:#fff;text-decoration:none}
-.env-node .env-org-label{font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
-.env-node .env-badges{display:flex;gap:4px;justify-content:center;align-items:center;flex-wrap:wrap}
-.env-badge{padding:2px 7px;border-radius:10px;font-weight:600;font-size:10px;display:inline-flex;align-items:center;gap:2px;white-space:nowrap}
-.env-badge.open{background:var(--blue-dim);color:var(--blue)}
-.env-badge.merged{background:var(--green-dim);color:var(--green)}
-.env-badge.draft{background:var(--surface2);color:var(--muted)}
-.env-node .env-health{width:8px;height:8px;border-radius:50%;display:inline-block}
-/* Connector between nodes */
-.env-connector{display:flex;align-items:center;flex-shrink:0;width:32px;justify-content:center;z-index:1;position:relative}
-.env-connector::before{content:'';position:absolute;top:50%;left:0;right:0;height:2px;background:var(--border-bright);transform:translateY(-50%)}
-.env-connector .conn-arrow{width:10px;height:10px;border-radius:50%;background:var(--border-bright);position:relative;z-index:1;flex-shrink:0}
-.env-drift{font-size:9px;padding:2px 6px;border-radius:8px;position:absolute;bottom:-10px;left:50%;transform:translateX(-50%);white-space:nowrap;z-index:2;font-weight:500}
-.env-drift.warn{background:var(--yellow-dim);color:var(--yellow)}
-.env-drift.ok{background:var(--green-dim);color:var(--green)}
+/* Pipeline header (env nodes row) — Gearset-style horizontal flow */
+.pipeline-header{display:flex;align-items:stretch;margin-bottom:24px;overflow-x:auto;padding:4px 0 20px 0;position:relative;gap:0}
+.pipeline-stage{flex:1;min-width:140px;display:flex;align-items:stretch;position:relative;z-index:1}
+.pipeline-stage-card{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .2s;position:relative;display:flex;flex-direction:column;gap:4px}
+.pipeline-stage-card:hover{border-color:var(--accent);box-shadow:0 4px 16px rgba(0,0,0,.12);transform:translateY(-1px)}
+.pipeline-stage.active .pipeline-stage-card{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent-dim);background:color-mix(in srgb,var(--accent) 4%,var(--surface))}
+/* Color accent bar at top */
+.pipeline-stage-card::before{content:'';position:absolute;top:0;left:0;right:0;height:3px;border-radius:10px 10px 0 0}
+.pipeline-stage:nth-child(1) .pipeline-stage-card::before,.pipeline-stage:nth-child(1) .stage-arrow{--stg-color:#58a6ff}
+.pipeline-stage:nth-child(2) .pipeline-stage-card::before,.pipeline-stage:nth-child(2) .stage-arrow{--stg-color:#d29922}
+.pipeline-stage:nth-child(3) .pipeline-stage-card::before,.pipeline-stage:nth-child(3) .stage-arrow{--stg-color:#3fb950}
+.pipeline-stage:nth-child(4) .pipeline-stage-card::before,.pipeline-stage:nth-child(4) .stage-arrow{--stg-color:#bc8cff}
+.pipeline-stage:nth-child(5) .pipeline-stage-card::before,.pipeline-stage:nth-child(5) .stage-arrow{--stg-color:#f85149}
+.pipeline-stage:nth-child(6) .pipeline-stage-card::before,.pipeline-stage:nth-child(6) .stage-arrow{--stg-color:#db6d28}
+.pipeline-stage-card::before{background:var(--stg-color,var(--accent))}
+/* Stage title row */
+.stage-title{font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.stage-branch{font-size:10px;font-family:'SF Mono',SFMono-Regular,Consolas,monospace;color:var(--muted);background:var(--bg);padding:2px 6px;border-radius:4px;display:inline-block;max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.stage-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:4px}
+.stage-meta .sm-item{font-size:11px;display:flex;align-items:center;gap:3px}
+.stage-meta .sm-open{color:var(--blue)}
+.stage-meta .sm-merged{color:var(--green)}
+.stage-meta .sm-org{color:var(--muted);font-size:10px}
+/* Arrow connector between stages */
+.stage-arrow{display:flex;align-items:center;justify-content:center;width:36px;flex-shrink:0;position:relative;z-index:2}
+.stage-arrow::before{content:'';position:absolute;top:50%;left:0;right:0;height:2px;background:var(--stg-color,var(--border));transform:translateY(-50%)}
+.stage-arrow::after{content:'';position:absolute;right:4px;top:50%;width:8px;height:8px;border-top:2px solid var(--stg-color,var(--border));border-right:2px solid var(--stg-color,var(--border));transform:translateY(-50%) rotate(45deg)}
+/* Drift badge under arrow */
+.stage-drift{position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:9px;padding:1px 6px;border-radius:6px;font-weight:600;z-index:3}
+.stage-drift.warn{background:var(--yellow-dim);color:var(--yellow)}
+.stage-drift.ok{background:var(--green-dim);color:var(--green)}
 
 /* Env panel (below pipeline header) */
 .env-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:0;margin-bottom:20px;animation:fadeIn .2s ease}
@@ -295,6 +299,7 @@ input,select{font-family:inherit}
 .sp-merge-status.mergeable{background:var(--green-dim);color:var(--green)}
 .sp-merge-status.conflict{background:var(--red-dim);color:var(--red)}
 .sp-merge-status.unknown{background:var(--surface2);color:var(--muted)}
+.sp-merge-status.checking{background:var(--surface2);color:var(--muted)}
 .sp-reviewers{display:flex;flex-direction:column;gap:6px}
 .sp-reviewer{display:flex;align-items:center;gap:8px;font-size:12px}
 .sp-reviewer img{width:22px;height:22px;border-radius:50%}
@@ -367,6 +372,7 @@ input,select{font-family:inherit}
 .sp-issue .issue-type{font-size:11px;padding:1px 6px;border-radius:4px;font-weight:600}
 .sp-issue .issue-type.sf{background:#00a1e020;color:#00a1e0}
 .sp-issue .issue-type.gh{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+.sp-issue .issue-type.ext{background:var(--purple-dim);color:var(--purple)}
 
 /* ── METADATA VIEW ── */
 .meta-connect{max-width:560px;margin:0 auto}
@@ -455,8 +461,8 @@ input,select{font-family:inherit}
   .view{padding:12px}
   .pipeline-header{flex-direction:column;gap:8px;overflow-x:visible}
   .pipeline-header::after{display:none}
-  .env-node{min-width:auto}
-  .env-connector{display:none}
+  .pipeline-stage{min-width:auto}
+  .stage-arrow{display:none}
   .pr-card{flex-direction:column;align-items:flex-start}
   .mini-journey{margin-left:0;margin-top:6px}
   .filter-bar input{width:100%}
@@ -473,13 +479,7 @@ input,select{font-family:inherit}
 .tooltip .tt-author{color:var(--muted)}
 .tooltip .tt-status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;margin-top:4px}
 
-/* ── COLORS FOR ENV STRIPES ── */
-.env-color-0 .env-node-inner::before{background:#58a6ff}
-.env-color-1 .env-node-inner::before{background:#d29922}
-.env-color-2 .env-node-inner::before{background:#3fb950}
-.env-color-3 .env-node-inner::before{background:#bc8cff}
-.env-color-4 .env-node-inner::before{background:#f85149}
-.env-color-5 .env-node-inner::before{background:#db6d28}
+/* ── COLORS FOR ENV STRIPES (legacy compat) ── */
 </style>
 </head>
 <body>
@@ -794,7 +794,7 @@ let batchSelected = new Set();
 
 // Salesforce metadata state
 let sfState = { token: null, instance: null, user: null };
-let metaCache = { components: [], gitTree: {}, gitBranch: '' };
+let metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
 let metaFetchConfig = { types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'], datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' };
 let repoBranches = [];
 
@@ -1377,7 +1377,7 @@ function renderPipeline() {
 
   let html = '';
 
-  // Pipeline header row — clickable env nodes
+  // Pipeline header row — Gearset-style horizontal flow
   html += '<div class="pipeline-header">';
   envs.forEach((env, i) => {
     const openCount = pipelineCache.prs.filter(pr => pr.base.ref === env.branch).length;
@@ -1385,22 +1385,27 @@ function renderPipeline() {
     const driftKey = i < envs.length - 1 ? env.branch + '...' + envs[i + 1].branch : null;
     const drift = driftKey ? pipelineCache.drifts[driftKey] : null;
     const isActive = activeEnvIndex === i;
-    html += `<div class="env-node env-color-${i % 6}${isActive ? ' active' : ''}" onclick="selectEnv(${i})">
-      <div class="env-node-inner">
-        <div class="env-title" title="${esc(env.displayName)}">${esc(env.displayName)}</div>
-        <div class="env-branch-lbl" title="${esc(env.branch)}">${esc(env.branch)}</div>
-        ${env.orgLabel ? '<div class="env-org-label" title="' + esc(env.orgLabel) + '">☁ ' + esc(env.orgLabel) + '</div>' : ''}
-        ${env.orgUrl ? '<a class="env-org-link" href="' + esc(env.orgUrl) + '" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">🔗 Org</a>' : ''}
-        <div class="env-badges">
-          ${openCount ? '<span class="env-badge open">' + openCount + ' open</span>' : ''}
-          ${mergedCount ? '<span class="env-badge merged">✓ ' + mergedCount + '</span>' : ''}
-          ${!openCount && !mergedCount ? '<span class="env-badge draft">—</span>' : ''}
-        </div>
-        <div style="font-size:9px;color:var(--muted);margin-top:2px;opacity:.6">${isActive ? '▲ click to collapse' : '▼ click to expand'}</div>
-      </div>
-      ${i < envs.length - 1 ? '<div class="env-connector"><div class="conn-arrow"></div></div>' : ''}
-      ${drift ? '<div class="env-drift ' + (drift.behind > 5 ? 'warn' : 'ok') + '">' + drift.behind + ' behind</div>' : ''}
-    </div>`;
+
+    html += `<div class="pipeline-stage${isActive ? ' active' : ''}">`;
+    html += `<div class="pipeline-stage-card" onclick="selectEnv(${i})" title="Click to ${isActive ? 'collapse' : 'view PRs for'} ${esc(env.displayName)}">`;
+    html += `<div class="stage-title">${esc(env.displayName)}</div>`;
+    html += `<div class="stage-branch">${esc(env.branch)}</div>`;
+    html += '<div class="stage-meta">';
+    if (openCount) html += `<span class="sm-item sm-open">● ${openCount} open</span>`;
+    if (mergedCount) html += `<span class="sm-item sm-merged">✓ ${mergedCount} merged</span>`;
+    if (!openCount && !mergedCount) html += `<span class="sm-item" style="color:var(--muted)">—</span>`;
+    html += '</div>';
+    if (env.orgLabel) html += `<div class="sm-item sm-org">☁ ${esc(env.orgLabel)}</div>`;
+    if (env.orgUrl) html += `<a class="sm-item" href="${esc(env.orgUrl)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()" style="color:var(--accent);text-decoration:none;font-size:10px">🔗 Open Org</a>`;
+    html += '</div>';
+
+    // Arrow connector between stages
+    if (i < envs.length - 1) {
+      html += '<div class="stage-arrow">';
+      if (drift) html += `<div class="stage-drift ${drift.behind > 5 ? 'warn' : 'ok'}">${drift.behind} behind</div>`;
+      html += '</div>';
+    }
+    html += '</div>';
   });
   html += '</div>';
 
@@ -1784,8 +1789,8 @@ async function openSidePanel(prNumber) {
     html += `<div class="sp-section"><div class="sp-section-title">Branches</div><div class="sp-branch">${esc(pr.head.ref)}</div> → <div class="sp-branch">${esc(pr.base.ref)}</div></div>`;
 
     // Merge status
-    const ms = pr.mergeable === true ? 'mergeable' : pr.mergeable === false ? 'conflict' : 'unknown';
-    const msLabel = ms === 'mergeable' ? '✓ Mergeable' : ms === 'conflict' ? '✕ Conflicts' : '? Unknown';
+    const ms = pr.mergeable === true ? 'mergeable' : pr.mergeable === false ? 'conflict' : 'checking';
+    const msLabel = ms === 'mergeable' ? '✓ Mergeable' : ms === 'conflict' ? '✕ Conflicts' : '⏳ Checking...';
     html += `<div class="sp-merge-status ${ms}">${msLabel}</div>`;
 
     // Reviewers
@@ -1987,8 +1992,8 @@ function renderLinkedIssues(pr) {
   if (!issues.length) return '';
   let html = '<div class="sp-section"><div class="sp-section-title">Linked Issues</div><div class="sp-issues">';
   issues.forEach(iss => {
-    const typeCls = iss.type === 'sf' ? 'sf' : 'gh';
-    const typeLabel = iss.type === 'sf' ? 'CASE' : 'GH';
+    const typeCls = iss.type === 'sf' ? 'sf' : iss.type === 'gh' ? 'gh' : 'ext';
+    const typeLabel = iss.type === 'sf' ? 'SF' : iss.type === 'gh' ? 'GH' : 'LINK';
     html += `<div class="sp-issue"><span class="issue-type ${typeCls}">${typeLabel}</span><a href="${esc(iss.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(iss.key)}</a></div>`;
   });
   html += '</div></div>';
@@ -1997,32 +2002,48 @@ function renderLinkedIssues(pr) {
 
 function extractIssues(pr) {
   const issues = [];
-  const text = (pr.title || '') + ' ' + (pr.body || '') + ' ' + (pr.head.ref || '');
+  const body = pr.body || '';
+  const text = (pr.title || '') + ' ' + body + ' ' + (pr.head.ref || '');
   const seen = new Set();
-  // Salesforce Case numbers: "Case 00012345", "case-12345", "CASE#00012345", or standalone 5-8 digit numbers starting with 0
-  const caseRe = /\bcase[- #:]*?(\d{5,8})\b/gi;
   let m;
+
+  // 1. Extract actual Salesforce URLs from body (highest priority — real links)
+  const sfUrlRe = /https?:\/\/[^\s"'<>]+?\.(?:my\.salesforce|salesforce|lightning\.force)\.com[^\s"'<>]*/gi;
+  while ((m = sfUrlRe.exec(body)) !== null) {
+    const url = m[0].replace(/[),.\]]+$/, ''); // trim trailing punctuation
+    if (seen.has(url)) continue;
+    seen.add(url);
+    // Try to extract a readable label from the URL
+    const caseMatch = url.match(/\/Case\/([^/]+)/i);
+    const storyMatch = url.match(/\/([A-Z]+-\d+)/);
+    const label = caseMatch ? 'Case ' + caseMatch[1] : storyMatch ? storyMatch[1] : 'SF Link';
+    issues.push({ type: 'sf', key: label, url });
+  }
+
+  // 2. Extract other URLs from PR body (Jira, ADO, etc.)
+  const linkRe = /https?:\/\/[^\s"'<>]+?(?:jira|atlassian|azure|servicenow)[^\s"'<>]*/gi;
+  while ((m = linkRe.exec(body)) !== null) {
+    const url = m[0].replace(/[),.\]]+$/, '');
+    if (seen.has(url)) continue;
+    seen.add(url);
+    const ticketMatch = url.match(/\/([A-Z]+-\d+)/);
+    const label = ticketMatch ? ticketMatch[1] : 'Linked Issue';
+    issues.push({ type: 'ext', key: label, url });
+  }
+
+  // 3. Fallback — Case number patterns (only if no SF URLs found for that case)
+  const caseRe = /\bcase[- #:]*?(\d{5,8})\b/gi;
   while ((m = caseRe.exec(text)) !== null) {
     const caseNum = m[1];
-    if (!seen.has(caseNum) && caseNum !== String(pr.number)) {
-      seen.add(caseNum);
+    if (!seen.has('case:' + caseNum) && caseNum !== String(pr.number)) {
+      seen.add('case:' + caseNum);
       const baseUrl = (projectData.caseBaseUrl || '').replace(/\/+$/, '');
-      const url = baseUrl ? baseUrl + '/lightning/r/Case/' + caseNum + '/view' : '#';
-      issues.push({ type: 'sf', key: 'Case ' + caseNum, url });
+      const url = baseUrl ? baseUrl + '/lightning/r/Case/' + caseNum + '/view' : '';
+      if (url) issues.push({ type: 'sf', key: 'Case ' + caseNum, url });
     }
   }
-  // Also catch standalone 0-prefixed 8-digit numbers (SF case IDs)
-  const zeroRe = /\b(0\d{7})\b/g;
-  while ((m = zeroRe.exec(text)) !== null) {
-    const caseNum = m[1];
-    if (!seen.has(caseNum) && caseNum !== String(pr.number)) {
-      seen.add(caseNum);
-      const baseUrl = (projectData.caseBaseUrl || '').replace(/\/+$/, '');
-      const url = baseUrl ? baseUrl + '/lightning/r/Case/' + caseNum + '/view' : '#';
-      issues.push({ type: 'sf', key: 'Case ' + caseNum, url });
-    }
-  }
-  // GitHub issue references: #123
+
+  // 4. GitHub issue references: #123
   const ghRe = /(?:^|\s)#(\d+)\b/g;
   while ((m = ghRe.exec(text)) !== null) {
     const num = parseInt(m[1]);
@@ -2215,7 +2236,7 @@ function restoreSfSession() {
 
 function sfDisconnect() {
   sfState = { token: null, instance: null, user: null };
-  metaCache = { components: [], gitTree: {}, gitBranch: '' };
+  metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
   sessionStorage.removeItem('sf_token');
   sessionStorage.removeItem('sf_instance');
   renderMetadataView();
@@ -2273,7 +2294,7 @@ function renderMetadataView() {
   }
 
   // Connected — show fetch config if no data yet
-  if (!metaCache.components.length) {
+  if (!metaCache.hasFetched) {
     if (!repoBranches.length && projectData && projectData.pat) loadRepoBranches();
     let html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
     html += '<h2>☁️ Metadata Browser</h2>';
@@ -2281,6 +2302,22 @@ function renderMetadataView() {
     html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
     html += '</div>';
     html += buildFetchConfigHtml();
+    el.innerHTML = html;
+    return;
+  }
+
+  // Fetched but no results
+  if (!metaCache.components.length) {
+    let html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
+    html += '<h2>☁️ Metadata Browser</h2>';
+    html += '<div class="meta-status ok">✓ Connected as ' + esc(sfState.user || 'OAuth') + ' — ' + esc(sfState.instance) + '</div>';
+    html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
+    html += '</div>';
+    html += '<div class="empty-state" style="padding:40px"><div class="empty-icon">🔍</div>';
+    html += '<p>No components matched your filter criteria.</p>';
+    html += '<p style="font-size:12px;color:var(--muted);margin-top:8px">Try adjusting the metadata types, date range, or branch selection.</p>';
+    html += '<button class="btn btn-primary" style="margin-top:16px" onclick="metaCache.hasFetched=false;renderMetadataView()">← Modify Filters</button>';
+    html += '</div>';
     el.innerHTML = html;
     return;
   }
@@ -2618,6 +2655,7 @@ async function fetchMetadata() {
     await fetchGitTreeForDiff(components);
 
     metaCache.components = components;
+    metaCache.hasFetched = true;
     renderMetadataView();
   } catch (e) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error fetching metadata: ' + esc(e.message) + '</p></div>';
