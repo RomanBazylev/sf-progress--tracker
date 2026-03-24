@@ -375,6 +375,7 @@ input,select{font-family:inherit}
 .meta-row .meta-change.modified{background:color-mix(in srgb,var(--yellow) 15%,transparent);color:var(--yellow)}
 .meta-row .meta-change.deleted{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
 .meta-row .meta-change.same{background:var(--surface2);color:var(--muted)}
+.meta-row-actions{display:flex;gap:4px;flex-shrink:0}
 .meta-actions{display:flex;gap:8px;padding:12px 0;border-top:1px solid var(--border);margin-top:12px;flex-wrap:wrap;align-items:center}
 .meta-actions .meta-summary{font-size:12px;color:var(--muted);margin-right:auto}
 
@@ -2187,7 +2188,7 @@ function renderMetadataView() {
   types.forEach(t => { html += '<option>' + esc(t) + '</option>'; });
   html += '</select>';
   html += '<select id="metaChangeFilter" onchange="filterMetaRows()">';
-  html += '<option value="">All statuses</option><option value="new">New</option><option value="modified">Modified</option><option value="same">Unchanged</option>';
+  html += '<option value="">All statuses</option><option value="new">New in SF</option><option value="modified">Modified</option><option value="same">In Sync</option>';
   html += '</select>';
   html += '<input id="metaSearch" placeholder="🔍 Search components..." oninput="filterMetaRows()">';
   const total = metaCache.components.length;
@@ -2210,12 +2211,12 @@ function renderMetadataView() {
   html += '<div class="meta-actions">';
   const selCount = metaCache.components.filter(c => c.selected).length;
   html += '<div class="meta-summary">' + selCount + ' selected</div>';
-  html += '<button class="btn btn-sm" onclick="metaSelectAll()">Select All Changed</button>';
-  html += '<button class="btn btn-sm" onclick="metaDeselectAll()">Deselect All</button>';
-  html += '<button class="btn btn-sm" onclick="metaCache.components=[];renderMetadataView()">← Change Filters</button>';
-  html += '<button class="btn btn-sf" onclick="fetchMetadata()">↻ Re-fetch</button>';
+  html += '<button class="btn btn-sm" onclick="metaSelectAll()" title="Select all components that are New or Modified (excludes In Sync)">Select All Changed</button>';
+  html += '<button class="btn btn-sm" onclick="metaDeselectAll()" title="Deselect all components">Deselect All</button>';
+  html += '<button class="btn btn-sm" onclick="metaCache.components=[];renderMetadataView()" title="Go back to type & date filter settings">← Change Filters</button>';
+  html += '<button class="btn btn-sf" onclick="fetchMetadata()" title="Re-fetch ALL metadata from Salesforce using current filter settings (types & date range)">↻ Re-fetch</button>';
   if (selCount > 0) {
-    html += '<button class="btn btn-primary" onclick="showCommitForm()">Commit ' + selCount + ' to Git</button>';
+    html += '<button class="btn btn-primary" onclick="showCommitForm()" title="Commit selected components to the git branch">Commit ' + selCount + ' to Git</button>';
   }
   html += '</div>';
 
@@ -2290,15 +2291,23 @@ function buildMetaConnectHtml() {
   </div>`;
 }
 
+const META_CHANGE_LABELS = { 'new': 'New in SF', 'modified': 'Modified', 'same': 'In Sync', 'deleted': 'Deleted' };
+const META_CHANGE_TIPS = { 'new': 'This component exists in Salesforce but not in the git branch', 'modified': 'Content differs between Salesforce and git', 'same': 'Content is identical in Salesforce and git', 'deleted': 'This component was removed from Salesforce' };
+
 function renderMetaRow(c, idx) {
   const checked = c.selected ? 'checked' : '';
+  const label = META_CHANGE_LABELS[c.change] || c.change;
+  const tip = META_CHANGE_TIPS[c.change] || '';
   return `<div class="meta-row${c.selected ? ' selected' : ''}" data-type="${esc(c.type)}" data-change="${c.change}" onclick="toggleMetaComponent(${idx})">
     <input type="checkbox" class="meta-cb" ${checked} onclick="event.stopPropagation();toggleMetaComponent(${idx})">
     <span class="meta-name" title="${esc(c.fullName)}">${esc(c.name)}</span>
     <span class="meta-type">${esc(c.type)}</span>
     <span class="meta-date-cell">${c.lastModified ? new Date(c.lastModified).toLocaleDateString() : ''}</span>
-    <span class="meta-change ${c.change}">${c.change}</span>
-    ${c.change !== 'same' ? '<button class="btn btn-sm" onclick="event.stopPropagation();showDiff(' + idx + ')">Diff</button>' : ''}
+    <span class="meta-change ${c.change}" title="${tip}">${label}</span>
+    <span class="meta-row-actions">
+      <button class="btn btn-sm" onclick="event.stopPropagation();viewComponent(${idx})" title="View full component source code">View</button>
+      ${c.change !== 'same' ? '<button class="btn btn-sm" onclick="event.stopPropagation();showDiff(' + idx + ')" title="Show line-by-line diff between Salesforce and git">Diff</button>' : ''}
+    </span>
   </div>`;
 }
 
@@ -2554,6 +2563,18 @@ function showDiff(idx) {
 
 function closeDiffModal() {
   document.getElementById('diffModal').style.display = 'none';
+}
+
+function viewComponent(idx) {
+  const c = metaCache.components[idx];
+  const body = c.body || '(no body available — this is a bundle reference)';
+  document.getElementById('diffTitle').textContent = '📄 ' + c.fullName;
+  let html = '<div class="diff-hdr">/* Source from Salesforce — ' + esc(c.type) + ' — last modified: ' + (c.lastModified ? new Date(c.lastModified).toLocaleString() : 'unknown') + ' */</div>\n';
+  body.split('\n').forEach((line, i) => {
+    html += '<div><span style="color:var(--muted);user-select:none;display:inline-block;width:45px;text-align:right;margin-right:12px">' + (i + 1) + '</span>' + esc(line) + '</div>';
+  });
+  document.getElementById('diffBody').innerHTML = html;
+  document.getElementById('diffModal').style.display = '';
 }
 
 /* ═══════════════════════════════════════════════════════
