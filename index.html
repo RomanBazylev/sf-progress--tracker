@@ -280,6 +280,10 @@ input,select{font-family:inherit}
 .completed-item .c-name{flex:1;font-weight:500}
 .completed-item .c-time{color:var(--muted)}
 
+/* Floating metadata fetch progress */
+.meta-fetch-floating{position:fixed;bottom:24px;left:50%;transform:translateX(-50%);z-index:200;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:12px 24px;box-shadow:0 8px 32px rgba(0,0,0,.3);display:flex;align-items:center;gap:12px;font-size:13px;font-weight:500;animation:toastIn .3s ease}
+.meta-fetch-floating .spinner{width:18px;height:18px}
+
 /* ── SIDE PANEL ── */
 .side-panel-overlay{position:fixed;inset:0;background:var(--overlay);z-index:150;display:none;opacity:0;transition:opacity .2s}
 .side-panel-overlay.open{display:block;opacity:1}
@@ -287,7 +291,7 @@ input,select{font-family:inherit}
 .side-panel.open{right:0}
 .side-panel .sp-close{position:absolute;top:16px;right:16px;background:none;border:none;color:var(--muted);font-size:20px;cursor:pointer;padding:4px 8px;border-radius:6px}
 .side-panel .sp-close:hover{color:var(--text);background:var(--surface2)}
-.side-panel h3{font-size:18px;margin-bottom:4px;padding-right:40px}
+.side-panel h3{font-size:18px;margin-bottom:4px;padding-right:40px;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;word-break:break-word}
 .side-panel .sp-num{color:var(--muted);font-size:14px;margin-bottom:16px}
 .side-panel .sp-section{margin-bottom:20px}
 .side-panel .sp-section-title{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);font-weight:600;margin-bottom:8px}
@@ -563,7 +567,20 @@ input,select{font-family:inherit}
   </div>
 
   <div class="settings-section">
-    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">4/4</span>🔐 Security</h3>
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">4/5</span>⚙️ Merge Options</h3>
+    <div class="field">
+      <label>Default Merge Method</label>
+      <select id="cfgMergeMethod" style="padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+        <option value="merge">Merge commit</option>
+        <option value="squash">Squash and merge</option>
+        <option value="rebase">Rebase and merge</option>
+      </select>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Used when promoting PRs via Pipeline view</div>
+    </div>
+  </div>
+
+  <div class="settings-section">
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">5/5</span>🔐 Security</h3>
     <button class="btn btn-sm" onclick="changePassword()">Change Password</button>
     <button class="btn btn-sm btn-danger" style="margin-left:8px" onclick="exportProject()">📤 Export Project</button>
     <button class="btn btn-sm btn-danger" style="margin-left:8px" onclick="deleteCurrentProject()">🗑 Delete Project</button>
@@ -791,6 +808,7 @@ let detailCache = {};
 let refreshTimer = null;
 let rateLimitRemaining = null;
 let batchSelected = new Set();
+let isPromoting = false;
 
 // Salesforce metadata state
 let sfState = { token: null, instance: null, user: null };
@@ -901,7 +919,7 @@ async function createProject() {
   if (pass.length < 4) { err.textContent = 'Password must be at least 4 characters'; return; }
   if (pass !== pass2) { err.textContent = 'Passwords do not match'; return; }
   err.textContent = '';
-  const data = { pat: '', repo: '', envs: [], prefs: {} };
+  const data = { pat: '', repo: '', envs: [], prefs: {}, checklists: {}, mergeMethod: 'merge' };
   const encrypted = await Crypto.encrypt(pass, data);
   const projects = getProjects();
   projects.push({ name, ...encrypted });
@@ -972,6 +990,9 @@ function enterProject() {
   document.getElementById('mainNav').style.display = 'flex';
   document.getElementById('lockBtn').style.display = 'flex';
   document.getElementById('helpBtn').style.display = 'flex';
+  // Reset filters from previous project
+  document.getElementById('filterSearch').value = '';
+  document.getElementById('filterAuthor').innerHTML = '<option value="">All authors</option>';
   // Show project name
   const projects = getProjects();
   const projBadge = document.getElementById('projBadge');
@@ -981,6 +1002,7 @@ function enterProject() {
   document.getElementById('cfgPat').value = projectData.pat || '';
   document.getElementById('cfgRepo').value = projectData.repo || '';
   document.getElementById('cfgCaseUrl').value = projectData.caseBaseUrl || '';
+  document.getElementById('cfgMergeMethod').value = projectData.mergeMethod || 'merge';
   updateConnBadge();
   renderEnvList();
   if (projectData.pat && projectData.repo && projectData.envs.length) {
@@ -1075,6 +1097,7 @@ async function saveSettings() {
   projectData.pat = document.getElementById('cfgPat').value.trim();
   projectData.repo = document.getElementById('cfgRepo').value.trim();
   projectData.caseBaseUrl = document.getElementById('cfgCaseUrl').value.trim().replace(/\/+$/, '');
+  projectData.mergeMethod = document.getElementById('cfgMergeMethod').value;
   // envs already updated via renderEnvList interactions
   const encrypted = await Crypto.encrypt(currentPassword, projectData);
   const projects = getProjects();
@@ -1299,6 +1322,22 @@ async function refreshData() {
     }
     await Promise.all(driftPromises);
 
+    // Fetch review states for open PRs (batch, parallel, max 10 at a time)
+    const reviewBatch = openPrs.slice(0, 30);
+    const reviewPromises = reviewBatch.map(pr =>
+      ghFetch('/repos/' + repo + '/pulls/' + pr.number + '/reviews')
+        .then(reviews => {
+          const latest = {};
+          reviews.forEach(r => { if (r.user && r.state !== 'COMMENTED') latest[r.user.login] = r; });
+          const states = Object.values(latest).map(r => r.state);
+          if (states.includes('CHANGES_REQUESTED')) pr._reviewState = 'changes_requested';
+          else if (states.includes('APPROVED')) pr._reviewState = 'approved';
+          else pr._reviewState = null;
+        })
+        .catch(() => { pr._reviewState = null; })
+    );
+    await Promise.all(reviewPromises);
+
     pipelineCache.prs = openPrs;
     pipelineCache.mergedPrs = actualMerged;
     pipelineCache.drifts = drifts;
@@ -1475,10 +1514,12 @@ function renderEnvPanel(envIndex) {
 
   // Batch bar (only for open tab with selections)
   if (tab === 'open' && batchSelected.size > 0) {
+    const promDisabled = isPromoting ? ' disabled' : '';
+    const promLabel = isPromoting ? '⏳ Promoting...' : '&#9654; Promote Selected';
     html += `<div class="batch-bar">
       <span class="batch-count">${batchSelected.size} PR${batchSelected.size > 1 ? 's' : ''} selected</span>
       <div class="batch-actions">
-        <button class="btn btn-sm btn-promote" onclick="batchPromote()">&#9654; Promote Selected</button>
+        <button class="btn btn-sm btn-promote" onclick="batchPromote()"${promDisabled}>${promLabel}</button>
         <button class="btn btn-sm" onclick="batchClear()">Clear</button>
       </div>
     </div>`;
@@ -1624,10 +1665,11 @@ function batchClear() {
 }
 
 async function batchPromote() {
-  if (!batchSelected.size) return;
+  if (!batchSelected.size || isPromoting) return;
   const nums = Array.from(batchSelected);
   if (!confirm('Promote (merge) ' + nums.length + ' PR(s)?\n\n' + nums.map(n => '#' + n).join(', ') + '\n\nThis will merge them sequentially.')) return;
 
+  isPromoting = true;
   const results = [];
   for (const num of nums) {
     try {
@@ -1639,6 +1681,7 @@ async function batchPromote() {
   }
   batchSelected.clear();
   await refreshData();
+  isPromoting = false;
 
   const ok = results.filter(r => r.ok).length;
   const fail = results.filter(r => !r.ok);
@@ -1680,7 +1723,7 @@ function renderOverview() {
   // Sync PRs overview
   const syncPrs = pipelineCache.syncPrs || [];
   if (syncPrs.length) {
-    html += '<div class="sync-section"><h4 onclick="this.nextElementSibling.style.display=this.nextElementSibling.style.display===\'none\'?\'flex\':\'none\'">🔄 Sync PRs (' + syncPrs.length + ') ▾</h4><div class="sync-list" style="display:none">';
+    html += '<div class="sync-section"><h4 onclick="var l=this.nextElementSibling;var open=l.style.display!==\'none\';l.style.display=open?\'none\':\'flex\';this.querySelector(\'span\').textContent=open?\'▸\':\'▾\'">🔄 Sync PRs (' + syncPrs.length + ') <span>▸</span></h4><div class="sync-list" style="display:none">';
     syncPrs.forEach(pr => {
       html += `<div class="sync-pr" style="cursor:pointer" onclick="openSidePanel(${pr.number})">
         <div class="sync-status" style="background:${pr.state === 'open' ? 'var(--blue)' : 'var(--green)'}"></div>
@@ -1935,10 +1978,11 @@ async function promotePrFromPanel(prNum) {
 
 async function promotePr(prNum, autoProp) {
   const repo = projectData.repo;
+  const mergeMethod = (projectData.mergeMethod) || 'merge';
   const mergeResult = await ghFetch('/repos/' + repo + '/pulls/' + prNum + '/merge', {
     method: 'PUT',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ merge_method: 'merge' })
+    body: JSON.stringify({ merge_method: mergeMethod })
   });
 
   if (autoProp) {
@@ -2624,6 +2668,17 @@ async function fetchMetadata() {
   const el = document.getElementById('metaContent');
   el.innerHTML = '<div class="loading"><div class="spinner"></div><p id="metaFetchProgress">Fetching metadata from Salesforce...</p></div>';
 
+  // Floating progress indicator (visible even when scrolled)
+  let floatingEl = document.getElementById('metaFetchFloating');
+  if (!floatingEl) {
+    floatingEl = document.createElement('div');
+    floatingEl.id = 'metaFetchFloating';
+    floatingEl.className = 'meta-fetch-floating';
+    document.body.appendChild(floatingEl);
+  }
+  floatingEl.innerHTML = '<div class="spinner"></div><span id="metaFetchFloatingText">Fetching metadata...</span>';
+  floatingEl.style.display = 'flex';
+
   try {
     const components = [];
     const dateSuffix = buildDateClause();
@@ -2634,24 +2689,30 @@ async function fetchMetadata() {
       done++;
       const prog = document.getElementById('metaFetchProgress');
       if (prog) prog.textContent = 'Fetching ' + q.type + ' (' + done + '/' + activeTypes.length + ')...';
+      const floatingText = document.getElementById('metaFetchFloatingText');
+      if (floatingText) floatingText.textContent = 'Fetching ' + q.type + ' (' + done + '/' + activeTypes.length + ')...';
       try {
         const soql = q.soql + dateSuffix + ' ORDER BY LastModifiedDate DESC';
-        const res = await sfApiFetch('/services/data/v59.0/tooling/query?q=' + encodeURIComponent(soql));
-        if (res.records) {
-          res.records.forEach(rec => {
-            const name = rec.Name || rec.DeveloperName;
-            const body = rec.Body || rec.Markup || '';
-            components.push({
-              type: q.type,
-              name: name,
-              fullName: q.path + '/' + name + q.ext,
-              body: body,
-              lastModified: rec.LastModifiedDate,
-              sfId: rec.Id,
-              change: 'new',
-              selected: false
+        let queryUrl = '/services/data/v59.0/tooling/query?q=' + encodeURIComponent(soql);
+        while (queryUrl) {
+          const res = await sfApiFetch(queryUrl);
+          if (res.records) {
+            res.records.forEach(rec => {
+              const name = rec.Name || rec.DeveloperName;
+              const body = rec.Body || rec.Markup || '';
+              components.push({
+                type: q.type,
+                name: name,
+                fullName: q.path + '/' + name + q.ext,
+                body: body,
+                lastModified: rec.LastModifiedDate,
+                sfId: rec.Id,
+                change: 'new',
+                selected: false
+              });
             });
-          });
+          }
+          queryUrl = res.nextRecordsUrl || null;
         }
       } catch (e) {
         console.warn('Skip ' + q.type + ': ' + e.message);
@@ -2666,6 +2727,9 @@ async function fetchMetadata() {
     renderMetadataView();
   } catch (e) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error fetching metadata: ' + esc(e.message) + '</p></div>';
+  } finally {
+    const f = document.getElementById('metaFetchFloating');
+    if (f) f.style.display = 'none';
   }
 }
 
@@ -2950,7 +3014,14 @@ async function doCommit() {
       body: JSON.stringify({ sha: newCommit.sha })
     });
 
-    resultEl.innerHTML = '<div class="meta-status ok">✓ Committed ' + selected.length + ' file(s) to <strong>' + esc(branch) + '</strong> — <a href="https://github.com/' + esc(repo) + '/commit/' + newCommit.sha + '" target="_blank">view commit</a></div>';
+    const branchUrl = 'https://github.com/' + esc(repo) + '/tree/' + encodeURIComponent(branch);
+    const commitUrl = 'https://github.com/' + esc(repo) + '/commit/' + newCommit.sha;
+    resultEl.innerHTML = '<div class="meta-status ok">✓ Committed ' + selected.length + ' file(s) to <strong>' + esc(branch) + '</strong> — <a href="' + commitUrl + '" target="_blank">view commit</a> · <a href="' + branchUrl + '" target="_blank">open branch</a></div>';
+    toast('Committed to <strong>' + esc(branch) + '</strong> — <a href="' + branchUrl + '" target="_blank" style="color:inherit;text-decoration:underline">open branch ↗</a>', 'ok', 10000);
+
+    // Add new branch to cached list & make it the default for next commit
+    if (!repoBranches.includes(branch)) repoBranches.push(branch);
+    metaCache.gitBranch = branch;
 
     // Refresh diff status
     await fetchGitTreeForDiff(metaCache.components);
