@@ -61,6 +61,27 @@ input,select{font-family:inherit}
 .header .conn-badge.ok{background:var(--green-dim);color:var(--green)}
 .header .conn-badge.off{background:var(--red-dim);color:var(--red)}
 .header .conn-badge.none{display:none}
+.header .proj-badge{font-size:12px;color:var(--muted);font-weight:500;max-width:180px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* ── TOAST NOTIFICATIONS ── */
+.toast-container{position:fixed;bottom:24px;right:24px;z-index:999;display:flex;flex-direction:column-reverse;gap:8px;pointer-events:none}
+.toast{padding:12px 20px;border-radius:10px;font-size:13px;font-weight:500;box-shadow:0 8px 24px rgba(0,0,0,.3);pointer-events:auto;animation:toastIn .3s ease;display:flex;align-items:center;gap:10px;max-width:380px}
+.toast.ok{background:var(--green-dim);color:var(--green);border:1px solid color-mix(in srgb,var(--green) 30%,transparent)}
+.toast.err{background:var(--red-dim);color:var(--red);border:1px solid color-mix(in srgb,var(--red) 30%,transparent)}
+.toast.warn{background:var(--yellow-dim);color:var(--yellow);border:1px solid color-mix(in srgb,var(--yellow) 30%,transparent)}
+.toast.info{background:var(--accent-dim);color:var(--accent);border:1px solid color-mix(in srgb,var(--accent) 30%,transparent)}
+.toast.out{animation:toastOut .3s ease forwards}
+@keyframes toastIn{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+@keyframes toastOut{from{opacity:1;transform:translateY(0)}to{opacity:0;transform:translateY(16px)}}
+
+/* ── HELP MODAL ── */
+.help-modal{position:fixed;inset:0;z-index:250;display:flex;align-items:center;justify-content:center;background:var(--overlay)}
+.help-content{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:28px 32px;width:480px;max-width:92vw;max-height:80vh;overflow-y:auto}
+.help-content h2{font-size:18px;margin-bottom:16px;display:flex;align-items:center;gap:10px}
+.help-content table{width:100%;font-size:13px;border-collapse:collapse}
+.help-content th{text-align:left;font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--muted);padding:8px 0;border-bottom:1px solid var(--border)}
+.help-content td{padding:6px 0}
+.help-content kbd{background:var(--surface2);border:1px solid var(--border);border-radius:4px;padding:2px 7px;font-size:12px;font-family:monospace;font-weight:600}
 
 /* ── VIEWS ── */
 .view{display:none;padding:24px;max-width:1400px;margin:0 auto}
@@ -101,6 +122,14 @@ input,select{font-family:inherit}
 .modal .secret-toggle:hover{color:var(--text)}
 .modal .modal-actions{display:flex;gap:8px;justify-content:flex-end;margin-top:24px}
 .modal .modal-error{color:var(--red);font-size:12px;margin-top:4px;min-height:18px}
+
+/* ── SKELETON LOADING ── */
+@keyframes skeleton{0%{background-position:-200px 0}100%{background-position:calc(200px + 100%) 0}}
+.skeleton{background:linear-gradient(90deg,var(--surface2) 25%,var(--border) 37%,var(--surface2) 63%);background-size:200px 100%;animation:skeleton 1.4s ease infinite;border-radius:6px}
+.skeleton-bar{height:14px;margin:8px 0}
+.skeleton-bar.w60{width:60%}
+.skeleton-bar.w80{width:80%}
+.skeleton-bar.w40{width:40%}
 
 /* ── BUTTONS ── */
 .btn{padding:8px 18px;border-radius:8px;border:1px solid var(--border);background:var(--surface);color:var(--text);font-size:13px;font-weight:500;transition:all .15s}
@@ -469,13 +498,15 @@ input,select{font-family:inherit}
     SF Pipeline
   </div>
   <nav id="mainNav" style="display:none">
-    <button onclick="showView('pipeline')" id="navPipeline">Pipeline</button>
-    <button onclick="showView('metadata')" id="navMetadata">Metadata</button>
-    <button onclick="showView('settings')" id="navSettings">Settings</button>
+    <button onclick="showView('pipeline')" id="navPipeline">📦 Pipeline</button>
+    <button onclick="showView('metadata')" id="navMetadata">☁️ Metadata</button>
+    <button onclick="showView('settings')" id="navSettings">⚙️ Settings</button>
   </nav>
+  <span id="projBadge" class="proj-badge" style="display:none"></span>
   <div class="spacer"></div>
   <span id="connBadge" class="conn-badge none"></span>
   <button class="hdr-btn" id="lockBtn" style="display:none" onclick="lockProject()" title="Lock project">🔒</button>
+  <button class="hdr-btn" onclick="showHelpModal()" title="Keyboard shortcuts & help" id="helpBtn" style="display:none">?</button>
   <button class="hdr-btn" onclick="toggleTheme()" title="Toggle theme" id="themeBtn">☀️</button>
 </div>
 
@@ -497,9 +528,9 @@ input,select{font-family:inherit}
   <h2 style="margin-bottom:20px">⚙️ Project Settings</h2>
 
   <div class="settings-section">
-    <h3>🔗 GitHub Connection</h3>
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">1/4</span>🔗 GitHub Connection</h3>
     <div class="field">
-      <label>Personal Access Token</label>
+      <label>Personal Access Token <span style="color:var(--red);font-weight:400">*</span></label>
       <div class="secret-wrap" style="position:relative">
         <input id="cfgPat" type="password" placeholder="ghp_xxxxxxxxxxxx" autocomplete="off" style="padding-right:44px">
         <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
@@ -507,7 +538,7 @@ input,select{font-family:inherit}
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Needs <code>repo</code> scope for private repos. Stored encrypted.</div>
     </div>
     <div class="field">
-      <label>Repository</label>
+      <label>Repository <span style="color:var(--red);font-weight:400">*</span></label>
       <input id="cfgRepo" placeholder="owner/repo-name">
     </div>
     <button class="btn btn-primary btn-sm" onclick="testConnection()">Test Connection</button>
@@ -515,7 +546,7 @@ input,select{font-family:inherit}
   </div>
 
   <div class="settings-section">
-    <h3>🎫 Salesforce Cases</h3>
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/4</span>🎫 Salesforce Cases</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Case numbers in PR titles/descriptions will link to the Case record in your org.</p>
     <div class="field">
       <label>Production Org URL</label>
@@ -525,7 +556,7 @@ input,select{font-family:inherit}
   </div>
 
   <div class="settings-section">
-    <h3>🔀 Pipeline Environments</h3>
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">3/4</span>🔀 Pipeline Environments</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Define your environment branches from left (earliest) to right (production).</p>
     <div class="presets">
       <button onclick="applyPreset('standard')">Standard (dev → staging → main)</button>
@@ -540,7 +571,7 @@ input,select{font-family:inherit}
   </div>
 
   <div class="settings-section">
-    <h3>🔐 Security</h3>
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">4/4</span>🔐 Security</h3>
     <button class="btn btn-sm" onclick="changePassword()">Change Password</button>
     <button class="btn btn-sm btn-danger" style="margin-left:8px" onclick="exportProject()">📤 Export Project</button>
     <button class="btn btn-sm btn-danger" style="margin-left:8px" onclick="deleteCurrentProject()">🗑 Delete Project</button>
@@ -575,12 +606,12 @@ input,select{font-family:inherit}
       <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Connect to a Salesforce org to retrieve metadata, compare with your git branch, and commit changes.</p>
 
       <div class="field">
-        <label>Instance URL</label>
+        <label>Instance URL <span style="color:var(--red);font-weight:400">*</span></label>
         <input id="sfInstance" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Sandbox or production org URL</div>
       </div>
       <div class="field">
-        <label>Consumer Key <span style="color:var(--muted);font-weight:normal">(from Connected App)</span></label>
+        <label>Consumer Key <span style="color:var(--red);font-weight:400">*</span> <span style="color:var(--muted);font-weight:normal">(from Connected App)</span></label>
         <div class="secret-wrap" style="position:relative">
           <input id="sfClientId" type="password" placeholder="3MVG9..." autocomplete="off" style="padding-right:44px">
           <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
@@ -588,7 +619,7 @@ input,select{font-family:inherit}
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Connected App → OAuth Settings → Consumer Key.<br>Callback URL must be: <code id="oauthCallback"></code></div>
       </div>
       <div class="field">
-        <label>CORS Proxy <span style="color:var(--muted);font-weight:normal">(optional — for API calls)</span></label>
+        <label>CORS Proxy <span style="color:var(--yellow);font-weight:600;font-size:10px;background:var(--yellow-dim);padding:1px 5px;border-radius:3px;margin-left:4px">REQUIRED</span> <span style="color:var(--muted);font-weight:normal">(for API calls)</span></label>
         <input id="sfCorsProxy" placeholder="https://your-worker.workers.dev">
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Cloudflare Worker for CORS. Required for API calls after OAuth login.</div>
       </div>
@@ -634,7 +665,7 @@ input,select{font-family:inherit}
 </div>
 
 <!-- ── CREATE PROJECT MODAL ── -->
-<div class="modal-overlay" id="createModal">
+<div class="modal-overlay" id="createModal" onclick="if(event.target===this)closeCreateModal()">
   <div class="modal">
     <h2>New Project</h2>
     <p class="modal-sub">Create a password-protected project.</p>
@@ -662,7 +693,7 @@ input,select{font-family:inherit}
 </div>
 
 <!-- ── UNLOCK PROJECT MODAL ── -->
-<div class="modal-overlay" id="unlockModal">
+<div class="modal-overlay" id="unlockModal" onclick="if(event.target===this)closeUnlockModal()">
   <div class="modal">
     <h2 id="unlockTitle">Unlock Project</h2>
     <p class="modal-sub">Enter the password to access this project.</p>
@@ -683,6 +714,38 @@ input,select{font-family:inherit}
 
 <!-- ── TOOLTIP ── -->
 <div class="tooltip" id="tooltip"></div>
+
+<!-- ── TOAST CONTAINER ── -->
+<div class="toast-container" id="toastContainer"></div>
+
+<!-- ── HELP MODAL ── -->
+<div class="help-modal" id="helpModal" style="display:none" onclick="if(event.target===this)closeHelpModal()">
+  <div class="help-content">
+    <h2>⌨️ Keyboard Shortcuts</h2>
+    <table>
+      <tr><th>Key</th><th>Action</th></tr>
+      <tr><td><kbd>R</kbd></td><td>Refresh pipeline data</td></tr>
+      <tr><td><kbd>T</kbd></td><td>Toggle dark/light theme</td></tr>
+      <tr><td><kbd>S</kbd></td><td>Go to Settings</td></tr>
+      <tr><td><kbd>M</kbd></td><td>Go to Metadata</td></tr>
+      <tr><td><kbd>P</kbd></td><td>Go to Pipeline</td></tr>
+      <tr><td><kbd>/</kbd></td><td>Focus search bar</td></tr>
+      <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
+      <tr><td><kbd>Esc</kbd></td><td>Close any modal or panel</td></tr>
+    </table>
+    <div style="margin-top:20px;font-size:12px;color:var(--muted)">
+      <h3 style="font-size:13px;margin-bottom:8px">Quick Tips</h3>
+      <ul style="padding-left:16px;line-height:2">
+        <li><strong>Pipeline:</strong> Click an environment node to view its PRs. Click again to return to overview.</li>
+        <li><strong>Batch select:</strong> Check multiple open PRs, then click ▶ Promote to merge them all.</li>
+        <li><strong>Side panel:</strong> Click any PR card to view details, reviewers, and promote actions.</li>
+        <li><strong>Metadata:</strong> Connect to Salesforce, select types & date range, fetch & compare with any git branch.</li>
+        <li><strong>Commit:</strong> Select changed components, then commit to an existing or new branch.</li>
+      </ul>
+    </div>
+    <div style="margin-top:16px;text-align:right"><button class="btn btn-sm" onclick="closeHelpModal()">Close</button></div>
+  </div>
+</div>
 
 <!-- ── FOOTER ── -->
 <div class="footer">
@@ -769,6 +832,25 @@ function toggleTheme() {
   applyTheme(c === 'dark' ? 'light' : 'dark');
 }
 applyTheme(localStorage.getItem('sfpt_theme') || 'dark');
+
+/* ═══════════════════════════════════════════════════════
+   TOAST NOTIFICATIONS
+   ═══════════════════════════════════════════════════════ */
+function toast(msg, type = 'info', ms = 3500) {
+  const c = document.getElementById('toastContainer');
+  const t = document.createElement('div');
+  t.className = 'toast ' + type;
+  const icon = { ok: '✓', err: '✗', warn: '⚠', info: 'ℹ' }[type] || '';
+  t.innerHTML = '<span style="font-size:16px">' + icon + '</span><span>' + msg + '</span>';
+  c.appendChild(t);
+  setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, ms);
+}
+
+/* ═══════════════════════════════════════════════════════
+   HELP MODAL
+   ═══════════════════════════════════════════════════════ */
+function showHelpModal() { document.getElementById('helpModal').style.display = 'flex'; }
+function closeHelpModal() { document.getElementById('helpModal').style.display = 'none'; }
 
 /* ═══════════════════════════════════════════════════════
    NAVIGATION
@@ -897,6 +979,12 @@ function deleteCurrentProject() {
 function enterProject() {
   document.getElementById('mainNav').style.display = 'flex';
   document.getElementById('lockBtn').style.display = 'flex';
+  document.getElementById('helpBtn').style.display = 'flex';
+  // Show project name
+  const projects = getProjects();
+  const projBadge = document.getElementById('projBadge');
+  projBadge.textContent = projects[currentProjectIndex] ? projects[currentProjectIndex].name : '';
+  projBadge.style.display = '';
   // populate settings from decrypted data
   document.getElementById('cfgPat').value = projectData.pat || '';
   document.getElementById('cfgRepo').value = projectData.repo || '';
@@ -928,6 +1016,8 @@ function lockProject() {
   batchSelected = new Set();
   document.getElementById('mainNav').style.display = 'none';
   document.getElementById('lockBtn').style.display = 'none';
+  document.getElementById('helpBtn').style.display = 'none';
+  document.getElementById('projBadge').style.display = 'none';
   document.getElementById('connBadge').className = 'conn-badge none';
   showView('projects');
   renderProjectList();
@@ -960,7 +1050,7 @@ function importProject() {
       projects.push(proj);
       saveProjects(projects);
       renderProjectList();
-    } catch { alert('Invalid project file'); }
+    } catch { toast('Invalid project file','err'); }
   };
   input.click();
 }
@@ -970,13 +1060,13 @@ function importProject() {
    ═══════════════════════════════════════════════════════ */
 async function changePassword() {
   const newPass = prompt('Enter new password (min 4 chars):');
-  if (!newPass || newPass.length < 4) { alert('Password too short'); return; }
+  if (!newPass || newPass.length < 4) { toast('Password too short (min 4 chars)','warn'); return; }
   const encrypted = await Crypto.encrypt(newPass, projectData);
   const projects = getProjects();
   projects[currentProjectIndex] = { name: projects[currentProjectIndex].name, ...encrypted };
   saveProjects(projects);
   currentPassword = newPass;
-  alert('Password changed');
+  toast('Password changed successfully','ok');
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -992,6 +1082,7 @@ async function saveSettings() {
   projects[currentProjectIndex] = { name: projects[currentProjectIndex].name, ...encrypted };
   saveProjects(projects);
   updateConnBadge();
+  toast('Settings saved','ok');
   if (projectData.pat && projectData.repo && projectData.envs.length) {
     showView('pipeline');
     refreshData();
@@ -1040,7 +1131,11 @@ async function ghFetch(path, opts = {}) {
     const el = document.getElementById('rateLimit');
     if (el) el.textContent = 'API: ' + rateLimitRemaining + ' calls remaining';
   }
-  if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+  if (!res.ok) {
+    let detail = res.status + ' ' + res.statusText;
+    try { const b = await res.json(); if (b.message) detail += ' — ' + b.message; } catch {}
+    throw new Error(detail);
+  }
   return res.json();
 }
 
@@ -1154,7 +1249,7 @@ function applyPreset(type) {
 }
 
 async function autoDetectEnvs() {
-  if (!projectData.pat || !projectData.repo) { alert('Connect to a repo first'); return; }
+  if (!projectData.pat || !projectData.repo) { toast('Connect to a repo first in Settings','warn'); return; }
   try {
     const branches = await ghFetchAll('/repos/' + projectData.repo + '/branches');
     const envSet = new Set();
@@ -1163,7 +1258,7 @@ async function autoDetectEnvs() {
       if (m) envSet.add(m[2]);
     });
     if (!envSet.size) {
-      alert('No gs-pipeline/* branches found. Configure manually.');
+      toast('No gs-pipeline/* branches found. Configure manually.','warn');
       return;
     }
     const detected = Array.from(envSet);
@@ -1171,7 +1266,7 @@ async function autoDetectEnvs() {
     if (!detected.includes('main') && branches.some(b => b.name === 'main')) detected.push('main');
     projectData.envs = detected.map(b => ({ branch: b, displayName: b.charAt(0).toUpperCase() + b.slice(1), orgLabel: '', orgUrl: '' }));
     renderEnvList();
-  } catch (e) { alert('Error: ' + e.message); }
+  } catch (e) { toast('Error: ' + e.message,'err'); }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1309,6 +1404,7 @@ function renderPipeline() {
           ${mergedCount ? '<span class="env-badge merged">✓ ' + mergedCount + '</span>' : ''}
           ${!openCount && !mergedCount ? '<span class="env-badge draft">—</span>' : ''}
         </div>
+        <div style="font-size:9px;color:var(--muted);margin-top:2px;opacity:.6">${isActive ? '▲ click to collapse' : '▼ click to expand'}</div>
       </div>
       ${i < envs.length - 1 ? '<div class="env-connector"><div class="conn-arrow"></div></div>' : ''}
       ${drift ? '<div class="env-drift ' + (drift.behind > 5 ? 'warn' : 'ok') + '">' + drift.behind + ' behind</div>' : ''}
@@ -1544,7 +1640,7 @@ async function batchPromote() {
   const fail = results.filter(r => !r.ok);
   let msg = ok + '/' + results.length + ' PR(s) promoted successfully.';
   if (fail.length) msg += '\n\nFailed:\n' + fail.map(r => '#' + r.num + ': ' + r.err).join('\n');
-  alert(msg);
+  if (fail.length) toast(msg,'warn',6000); else toast(msg,'ok');
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1615,11 +1711,14 @@ function renderSummary() {
     avgAge = Math.round(totalMs / totalOpenPrs / 86400000) + 'd';
   }
 
+  const ghLink = projectData.repo ? '<a href="https://github.com/' + esc(projectData.repo) + '" target="_blank" rel="noopener noreferrer" style="color:var(--muted);font-size:12px;text-decoration:none;display:flex;align-items:center;gap:4px;margin-left:auto" title="Open repository on GitHub">↗ GitHub</a>' : '';
+
   document.getElementById('summaryBar').innerHTML = `
     <div class="summary-stat"><span class="stat-icon">🔢</span><div><div class="stat-val">${openFeatures}</div><div class="stat-label">Features in flight</div></div></div>
     <div class="summary-stat"><span class="stat-icon">📋</span><div><div class="stat-val">${totalOpenPrs}</div><div class="stat-label">Open PRs</div></div></div>
     <div class="summary-stat"><span class="stat-icon">⏱️</span><div><div class="stat-val">${avgAge}</div><div class="stat-label">Avg PR age</div></div></div>
     <div class="summary-stat"><span class="stat-icon">🚨</span><div><div class="stat-val">${esc(bottleneck)}</div><div class="stat-label">Bottleneck</div></div></div>
+    ${ghLink}
   `;
 }
 
@@ -1735,8 +1834,11 @@ async function openSidePanel(prNumber) {
 
     // Description
     if (pr.body) {
-      const desc = pr.body.length > 300 ? pr.body.slice(0, 300) + '…' : pr.body;
-      html += `<div class="sp-section"><div class="sp-section-title">Description</div><div class="sp-description">${esc(desc)}</div></div>`;
+      const isTruncated = pr.body.length > 300;
+      const desc = isTruncated ? pr.body.slice(0, 300) + '…' : pr.body;
+      html += `<div class="sp-section"><div class="sp-section-title">Description</div><div class="sp-description" id="spDesc">${esc(desc)}</div>`;
+      if (isTruncated) html += `<button class="btn btn-sm" style="margin-top:4px" onclick="document.getElementById('spDesc').textContent=decodeURIComponent('${encodeURIComponent(pr.body)}');this.remove()">Show full description</button>`;
+      html += '</div>';
     }
 
     // Feature journey
@@ -2038,7 +2140,10 @@ document.addEventListener('keydown', e => {
   if (e.key === 't' || e.key === 'T') { e.preventDefault(); toggleTheme(); }
   if (e.key === 's' || e.key === 'S') { e.preventDefault(); if (projectData) showView('settings'); }
   if (e.key === 'm' || e.key === 'M') { e.preventDefault(); if (projectData) showView('metadata'); }
-  if (e.key === 'Escape') { closeSidePanel(); closeCreateModal(); closeUnlockModal(); closeDiffModal(); }
+  if (e.key === 'p' || e.key === 'P') { e.preventDefault(); if (projectData) showView('pipeline'); }
+  if (e.key === '/') { e.preventDefault(); const s = document.getElementById('filterSearch'); if (s) s.focus(); }
+  if (e.key === '?') { e.preventDefault(); showHelpModal(); }
+  if (e.key === 'Escape') { closeSidePanel(); closeCreateModal(); closeUnlockModal(); closeDiffModal(); closeHelpModal(); }
 });
 
 /* ═══════════════════════════════════════════════════════
@@ -2055,8 +2160,8 @@ function initOAuthCallbackUrls() {
 function sfOAuthLogin() {
   const instance = document.getElementById('sfInstance').value.trim().replace(/\/+$/, '');
   const clientId = document.getElementById('sfClientId').value.trim();
-  if (!instance) { alert('Enter your org Instance URL'); return; }
-  if (!clientId) { alert('Enter the Consumer Key from your Connected App'); return; }
+  if (!instance) { toast('Enter your org Instance URL','warn'); return; }
+  if (!clientId) { toast('Enter the Consumer Key from your Connected App','warn'); return; }
 
   // Save settings before redirect
   if (projectData) {
@@ -2102,6 +2207,7 @@ function handleSfOAuthCallback() {
   sessionStorage.setItem('sf_token', accessToken);
   sessionStorage.setItem('sf_instance', sfState.instance);
   sessionStorage.removeItem('sf_instance_pending');
+  toast('Connected to Salesforce','ok');
 }
 
 function restoreSfSession() {
@@ -2133,7 +2239,11 @@ async function sfApiFetch(path, opts = {}) {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   }
   const res = await fetch(url, { ...opts, method, headers });
-  if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+  if (!res.ok) {
+    let detail = res.status + ' ' + res.statusText;
+    try { const b = await res.json(); if (b[0] && b[0].message) detail += ' — ' + b[0].message; else if (b.message) detail += ' — ' + b.message; } catch {}
+    throw new Error(detail);
+  }
   return res.json();
 }
 
@@ -2249,12 +2359,12 @@ function buildMetaConnectHtml() {
     <h2 style="margin-bottom:16px">☁️ Salesforce Metadata</h2>
     <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Connect to a Salesforce org to retrieve metadata, compare with your git branch, and commit changes.</p>
     <div class="field">
-      <label>Instance URL</label>
+      <label>Instance URL <span style="color:var(--red);font-weight:400">*</span></label>
       <input id="sfInstance" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">
       <div style="font-size:11px;color:var(--muted);margin-top:3px">Sandbox or production org URL</div>
     </div>
     <div class="field">
-      <label>Consumer Key <span style="color:var(--muted);font-weight:normal">(from Connected App)</span></label>
+      <label>Consumer Key <span style="color:var(--red);font-weight:400">*</span> <span style="color:var(--muted);font-weight:normal">(from Connected App)</span></label>
       <div class="secret-wrap" style="position:relative">
         <input id="sfClientId" type="password" placeholder="3MVG9..." autocomplete="off" style="padding-right:44px">
         <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
@@ -2262,7 +2372,7 @@ function buildMetaConnectHtml() {
       <div style="font-size:11px;color:var(--muted);margin-top:3px">Connected App → OAuth Settings → Consumer Key.<br>Callback URL: <code id="oauthCallback"></code></div>
     </div>
     <div class="field">
-      <label>CORS Proxy <span style="color:var(--muted);font-weight:normal">(required for API calls)</span></label>
+      <label>CORS Proxy <span style="color:var(--yellow);font-weight:600;font-size:10px;background:var(--yellow-dim);padding:1px 5px;border-radius:3px;margin-left:4px">REQUIRED</span> <span style="color:var(--muted);font-weight:normal">(for API calls)</span></label>
       <input id="sfCorsProxy" placeholder="https://your-worker.workers.dev">
       <div style="font-size:11px;color:var(--muted);margin-top:3px">Cloudflare Worker URL. OAuth login works without it, but API calls need it for CORS.</div>
     </div>
@@ -2375,14 +2485,15 @@ const META_QUERIES = [
 
 function buildFetchConfigHtml() {
   let h = '<div class="meta-fetch-config">';
-  h += '<h3>Select Metadata Types</h3>';
+  h += '<h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">1/3</span>Select Metadata Types</h3>';
+  h += '<div style="margin-bottom:8px;display:flex;gap:8px"><button class="btn btn-sm" onclick="metaFetchConfig.types=META_QUERIES.map(q=>q.type);renderMetadataView()">Select All</button><button class="btn btn-sm" onclick="metaFetchConfig.types=[];renderMetadataView()">Deselect All</button></div>';
   h += '<div class="meta-type-grid">';
   META_QUERIES.forEach(q => {
     const chk = metaFetchConfig.types.includes(q.type) ? 'checked' : '';
     h += `<label class="meta-type-opt"><input type="checkbox" value="${q.type}" ${chk} onchange="toggleMetaType('${q.type}',this.checked)"><div><div class="lbl">${q.label}</div><div class="desc">${q.desc}</div></div></label>`;
   });
   h += '</div>';
-  h += '<h3>Date Range Filter</h3>';
+  h += '<h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/3</span>Date Range Filter</h3>';
   h += '<p style="font-size:12px;color:var(--muted);margin-bottom:10px">Only fetch components modified within this period</p>';
   h += '<div class="meta-date-row">';
   const presets = [['all','All time'],['today','Today'],['2d','Last 2 days'],['week','Last week'],['month','Last month'],['custom','Custom']];
@@ -2396,7 +2507,7 @@ function buildFetchConfigHtml() {
     h += `<label style="font-size:12px">To</label><input type="date" class="meta-date" id="metaDateTo" value="${metaFetchConfig.dateTo}" onchange="metaFetchConfig.dateTo=this.value">`;
     h += '</div>';
   }
-  h += '<h3>Compare with Git Branch</h3>';
+  h += '<h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">3/3</span>Compare with Git Branch</h3>';
   h += '<p style="font-size:12px;color:var(--muted);margin-bottom:10px">Select which branch to compare Salesforce metadata against</p>';
   h += '<div style="display:flex;gap:8px;align-items:center">';
   h += '<select id="metaCompareBranch" style="flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px" onchange="metaFetchConfig.compareBranch=this.value">';
@@ -2420,7 +2531,7 @@ function buildFetchConfigHtml() {
 }
 
 async function loadRepoBranches() {
-  if (!projectData || !projectData.pat || !projectData.repo) { alert('Configure GitHub PAT and repo first'); return; }
+  if (!projectData || !projectData.pat || !projectData.repo) { toast('Configure GitHub PAT and repo first','warn'); return; }
   try {
     const data = await ghFetch('/repos/' + projectData.repo + '/branches?per_page=100');
     repoBranches = data.map(b => b.name).sort((a,b) => {
@@ -2430,7 +2541,7 @@ async function loadRepoBranches() {
     });
     if (!metaFetchConfig.compareBranch && repoBranches.length) metaFetchConfig.compareBranch = repoBranches[0];
     renderMetadataView();
-  } catch (e) { alert('Failed to load branches: ' + e.message); }
+  } catch (e) { toast('Failed to load branches: ' + e.message,'err'); }
 }
 
 function toggleMetaType(type, on) {
@@ -2473,16 +2584,20 @@ function buildDateClause() {
 }
 
 async function fetchMetadata() {
-  if (!sfState.token) { alert('Connect to Salesforce first'); return; }
+  if (!sfState.token) { toast('Connect to Salesforce first','warn'); return; }
   const el = document.getElementById('metaContent');
-  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>Fetching metadata from Salesforce...</p></div>';
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p id="metaFetchProgress">Fetching metadata from Salesforce...</p></div>';
 
   try {
     const components = [];
     const dateSuffix = buildDateClause();
+    const activeTypes = META_QUERIES.filter(q => metaFetchConfig.types.includes(q.type));
+    let done = 0;
 
-    for (const q of META_QUERIES) {
-      if (!metaFetchConfig.types.includes(q.type)) continue;
+    for (const q of activeTypes) {
+      done++;
+      const prog = document.getElementById('metaFetchProgress');
+      if (prog) prog.textContent = 'Fetching ' + q.type + ' (' + done + '/' + activeTypes.length + ')...';
       try {
         const soql = q.soql + dateSuffix + ' ORDER BY LastModifiedDate DESC';
         const res = await sfApiFetch('/services/data/v59.0/tooling/query?q=' + encodeURIComponent(soql));
@@ -2675,13 +2790,13 @@ function toggleNewBranchField() {
 
 async function doCommit() {
   const selected = metaCache.components.filter(c => c.selected && c.body);
-  if (!selected.length) { alert('No components with content selected'); return; }
+  if (!selected.length) { toast('Select components with content first','warn'); return; }
 
   const mode = document.querySelector('input[name=commitMode]:checked').value;
   let branch;
   if (mode === 'new') {
     branch = document.getElementById('commitNewBranchName').value.trim();
-    if (!branch) { alert('Enter a name for the new branch'); return; }
+    if (!branch) { toast('Enter a name for the new branch','warn'); return; }
   } else {
     branch = document.getElementById('commitBranch').value.trim();
   }
@@ -2689,15 +2804,17 @@ async function doCommit() {
   const basePath = document.getElementById('commitBasePath').value.trim().replace(/\/+$/, '');
   const resultEl = document.getElementById('commitResult');
 
-  if (!branch || !msg) { alert('Branch and commit message required'); return; }
+  if (!branch || !msg) { toast('Branch and commit message are required','warn'); return; }
   if (!confirm('Commit ' + selected.length + ' file(s) to branch "' + branch + '"?')) return;
 
-  resultEl.innerHTML = '<div class="meta-status warn">⏳ Publishing to git...</div>';
+  resultEl.innerHTML = '<div class="meta-status warn">⏳ Publishing to git... <span id="commitProgress">(preparing)</span></div>';
 
   try {
     const repo = projectData.repo;
+    const updProg = t => { const p = document.getElementById('commitProgress'); if (p) p.textContent = t; };
 
     // 1. Get base branch SHA (for new branch, use compare branch as base)
+    updProg('(resolving branch...)');
     const baseBranch = (mode === 'new') ? (metaCache.gitBranch || 'main') : branch;
     const refData = await ghFetch('/repos/' + repo + '/git/ref/heads/' + baseBranch);
     const latestCommitSha = refData.object.sha;
@@ -2717,7 +2834,9 @@ async function doCommit() {
 
     // 3. Create blobs for each file
     const treeItems = [];
-    for (const comp of selected) {
+    for (let i = 0; i < selected.length; i++) {
+      const comp = selected[i];
+      updProg('(uploading ' + (i + 1) + '/' + selected.length + ' files...)');
       const filePath = basePath + '/' + comp.fullName;
       const blob = await ghFetch('/repos/' + repo + '/git/blobs', {
         method: 'POST',
@@ -2728,6 +2847,7 @@ async function doCommit() {
     }
 
     // 4. Create a new tree
+    updProg('(creating tree...)');
     const newTree = await ghFetch('/repos/' + repo + '/git/trees', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2735,6 +2855,7 @@ async function doCommit() {
     });
 
     // 5. Create a new commit
+    updProg('(committing...)');
     const newCommit = await ghFetch('/repos/' + repo + '/git/commits', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2742,6 +2863,7 @@ async function doCommit() {
     });
 
     // 6. Update the branch reference
+    updProg('(updating branch ref...)');
     await ghFetch('/repos/' + repo + '/git/refs/heads/' + branch, {
       method: 'PATCH',
       headers: { 'Content-Type': 'application/json' },
