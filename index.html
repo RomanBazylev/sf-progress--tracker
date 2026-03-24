@@ -377,6 +377,23 @@ input,select{font-family:inherit}
 .meta-row .meta-change.same{background:var(--surface2);color:var(--muted)}
 .meta-actions{display:flex;gap:8px;padding:12px 0;border-top:1px solid var(--border);margin-top:12px;flex-wrap:wrap;align-items:center}
 .meta-actions .meta-summary{font-size:12px;color:var(--muted);margin-right:auto}
+
+/* ── META FETCH CONFIG (type selector + date filter) ── */
+.meta-fetch-config{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:640px;margin:20px auto}
+.meta-fetch-config h3{font-size:15px;margin-bottom:14px}
+.meta-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
+.meta-type-opt{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;cursor:pointer;transition:background .15s}
+.meta-type-opt:hover{background:var(--bg)}
+.meta-type-opt input{margin-top:3px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0}
+.meta-type-opt .lbl{font-weight:600;font-size:13px}
+.meta-type-opt .desc{font-size:11px;color:var(--muted);margin-top:2px}
+.meta-date-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
+.date-preset{padding:5px 12px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s}
+.date-preset:hover{border-color:var(--accent)}
+.date-preset.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.meta-date{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px}
+.meta-row .meta-date-cell{font-size:11px;color:var(--muted);white-space:nowrap;min-width:80px}
+
 .meta-diff-modal{position:fixed;inset:0;z-index:250;display:flex;align-items:center;justify-content:center;background:var(--overlay)}
 .meta-diff-content{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:90vw;max-width:900px;max-height:80vh;display:flex;flex-direction:column}
 .meta-diff-header{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);gap:12px}
@@ -714,6 +731,7 @@ let batchSelected = new Set();
 // Salesforce metadata state
 let sfState = { token: null, instance: null, user: null };
 let metaCache = { components: [], gitTree: {}, gitBranch: '' };
+let metaFetchConfig = { types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'], datePreset: 'all', dateFrom: '', dateTo: '' };
 
 const ENV_COLORS = ['#58a6ff','#d29922','#3fb950','#bc8cff','#f85149','#db6d28'];
 const GS_REGEX = /^gs-pipeline\/(.+)_-_(.+)$/;
@@ -2136,6 +2154,18 @@ function renderMetadataView() {
     return;
   }
 
+  // Connected — show fetch config if no data yet
+  if (!metaCache.components.length) {
+    let html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
+    html += '<h2>☁️ Metadata Browser</h2>';
+    html += '<div class="meta-status ok">✓ Connected as ' + esc(sfState.user || 'OAuth') + ' — ' + esc(sfState.instance) + '</div>';
+    html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
+    html += '</div>';
+    html += buildFetchConfigHtml();
+    el.innerHTML = html;
+    return;
+  }
+
   // Connected — show metadata browser
   let html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
   html += '<h2>☁️ Metadata Browser</h2>';
@@ -2176,7 +2206,8 @@ function renderMetadataView() {
   html += '<div class="meta-summary">' + selCount + ' selected</div>';
   html += '<button class="btn btn-sm" onclick="metaSelectAll()">Select All Changed</button>';
   html += '<button class="btn btn-sm" onclick="metaDeselectAll()">Deselect All</button>';
-  html += '<button class="btn btn-sf" onclick="fetchMetadata()">↻ Fetch Metadata</button>';
+  html += '<button class="btn btn-sm" onclick="metaCache.components=[];renderMetadataView()">← Change Filters</button>';
+  html += '<button class="btn btn-sf" onclick="fetchMetadata()">↻ Re-fetch</button>';
   if (selCount > 0) {
     html += '<button class="btn btn-primary" onclick="showCommitForm()">Commit ' + selCount + ' to Git</button>';
   }
@@ -2259,6 +2290,7 @@ function renderMetaRow(c, idx) {
     <input type="checkbox" class="meta-cb" ${checked} onclick="event.stopPropagation();toggleMetaComponent(${idx})">
     <span class="meta-name" title="${esc(c.fullName)}">${esc(c.name)}</span>
     <span class="meta-type">${esc(c.type)}</span>
+    <span class="meta-date-cell">${c.lastModified ? new Date(c.lastModified).toLocaleDateString() : ''}</span>
     <span class="meta-change ${c.change}">${c.change}</span>
     ${c.change !== 'same' ? '<button class="btn btn-sm" onclick="event.stopPropagation();showDiff(' + idx + ')">Diff</button>' : ''}
   </div>`;
@@ -2295,13 +2327,82 @@ function metaDeselectAll() {
    FETCH METADATA FROM SALESFORCE
    ═══════════════════════════════════════════════════════ */
 const META_QUERIES = [
-  { type: 'ApexClass', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexClass WHERE NamespacePrefix = null AND Status = 'Active'", path: 'classes', ext: '.cls' },
-  { type: 'ApexTrigger', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexTrigger WHERE NamespacePrefix = null AND Status = 'Active'", path: 'triggers', ext: '.trigger' },
-  { type: 'ApexPage', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexPage WHERE NamespacePrefix = null", path: 'pages', ext: '.page' },
-  { type: 'ApexComponent', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexComponent WHERE NamespacePrefix = null", path: 'components', ext: '.component' },
-  { type: 'AuraBundle', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM AuraDefinitionBundle WHERE NamespacePrefix = null", path: 'aura', ext: '' },
-  { type: 'LWC', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM LightningComponentBundle WHERE NamespacePrefix = null", path: 'lwc', ext: '' },
+  { type: 'ApexClass', label: 'Apex Classes', desc: 'Custom Apex classes', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexClass WHERE NamespacePrefix = null AND Status = 'Active'", path: 'classes', ext: '.cls' },
+  { type: 'ApexTrigger', label: 'Apex Triggers', desc: 'Object triggers', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexTrigger WHERE NamespacePrefix = null AND Status = 'Active'", path: 'triggers', ext: '.trigger' },
+  { type: 'ApexPage', label: 'Visualforce Pages', desc: 'VF pages', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexPage WHERE NamespacePrefix = null", path: 'pages', ext: '.page' },
+  { type: 'ApexComponent', label: 'VF Components', desc: 'Visualforce components', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexComponent WHERE NamespacePrefix = null", path: 'components', ext: '.component' },
+  { type: 'AuraBundle', label: 'Aura Bundles', desc: 'Aura/Lightning components', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM AuraDefinitionBundle WHERE NamespacePrefix = null", path: 'aura', ext: '' },
+  { type: 'LWC', label: 'LWC Bundles', desc: 'Lightning Web Components', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM LightningComponentBundle WHERE NamespacePrefix = null", path: 'lwc', ext: '' },
 ];
+
+function buildFetchConfigHtml() {
+  let h = '<div class="meta-fetch-config">';
+  h += '<h3>Select Metadata Types</h3>';
+  h += '<div class="meta-type-grid">';
+  META_QUERIES.forEach(q => {
+    const chk = metaFetchConfig.types.includes(q.type) ? 'checked' : '';
+    h += `<label class="meta-type-opt"><input type="checkbox" value="${q.type}" ${chk} onchange="toggleMetaType('${q.type}',this.checked)"><div><div class="lbl">${q.label}</div><div class="desc">${q.desc}</div></div></label>`;
+  });
+  h += '</div>';
+  h += '<h3>Date Range Filter</h3>';
+  h += '<p style="font-size:12px;color:var(--muted);margin-bottom:10px">Only fetch components modified within this period</p>';
+  h += '<div class="meta-date-row">';
+  const presets = [['all','All time'],['today','Today'],['2d','Last 2 days'],['week','Last week'],['month','Last month'],['custom','Custom']];
+  presets.forEach(([k,lbl]) => {
+    h += `<button class="date-preset${metaFetchConfig.datePreset===k?' active':''}" onclick="setDatePreset('${k}')">${lbl}</button>`;
+  });
+  h += '</div>';
+  if (metaFetchConfig.datePreset === 'custom') {
+    h += '<div class="meta-date-row" style="margin-top:6px">';
+    h += `<label style="font-size:12px">From</label><input type="date" class="meta-date" id="metaDateFrom" value="${metaFetchConfig.dateFrom}" onchange="metaFetchConfig.dateFrom=this.value">`;
+    h += `<label style="font-size:12px">To</label><input type="date" class="meta-date" id="metaDateTo" value="${metaFetchConfig.dateTo}" onchange="metaFetchConfig.dateTo=this.value">`;
+    h += '</div>';
+  }
+  h += '<div style="margin-top:16px;display:flex;gap:8px;align-items:center">';
+  h += '<button class="btn btn-sf" onclick="fetchMetadata()">☁️ Fetch Metadata</button>';
+  h += '<span style="font-size:12px;color:var(--muted)">' + getDateFilterLabel() + '</span>';
+  h += '</div></div>';
+  return h;
+}
+
+function toggleMetaType(type, on) {
+  if (on && !metaFetchConfig.types.includes(type)) metaFetchConfig.types.push(type);
+  if (!on) metaFetchConfig.types = metaFetchConfig.types.filter(t => t !== type);
+}
+
+function setDatePreset(key) {
+  metaFetchConfig.datePreset = key;
+  const now = new Date();
+  switch(key) {
+    case 'today': metaFetchConfig.dateFrom = now.toISOString().slice(0,10); metaFetchConfig.dateTo = ''; break;
+    case '2d': { const d = new Date(now); d.setDate(d.getDate()-2); metaFetchConfig.dateFrom = d.toISOString().slice(0,10); metaFetchConfig.dateTo = ''; break; }
+    case 'week': { const d = new Date(now); d.setDate(d.getDate()-7); metaFetchConfig.dateFrom = d.toISOString().slice(0,10); metaFetchConfig.dateTo = ''; break; }
+    case 'month': { const d = new Date(now); d.setMonth(d.getMonth()-1); metaFetchConfig.dateFrom = d.toISOString().slice(0,10); metaFetchConfig.dateTo = ''; break; }
+    case 'all': metaFetchConfig.dateFrom = ''; metaFetchConfig.dateTo = ''; break;
+    case 'custom': break;
+  }
+  renderMetadataView();
+}
+
+function getDateFilterLabel() {
+  if (metaFetchConfig.datePreset === 'all') return 'Fetching all components (no date filter)';
+  if (metaFetchConfig.datePreset === 'custom') {
+    const parts = [];
+    if (metaFetchConfig.dateFrom) parts.push('from ' + metaFetchConfig.dateFrom);
+    if (metaFetchConfig.dateTo) parts.push('to ' + metaFetchConfig.dateTo);
+    return parts.length ? 'Filtering: ' + parts.join(' ') : 'Set custom dates above';
+  }
+  const labels = {today:'Modified today',  '2d':'Modified in last 2 days', week:'Modified in last week', month:'Modified in last month'};
+  return labels[metaFetchConfig.datePreset] || '';
+}
+
+function buildDateClause() {
+  if (metaFetchConfig.datePreset === 'all' && !metaFetchConfig.dateFrom) return '';
+  let clause = '';
+  if (metaFetchConfig.dateFrom) clause += " AND LastModifiedDate >= " + metaFetchConfig.dateFrom + "T00:00:00Z";
+  if (metaFetchConfig.dateTo) clause += " AND LastModifiedDate <= " + metaFetchConfig.dateTo + "T23:59:59Z";
+  return clause;
+}
 
 async function fetchMetadata() {
   if (!sfState.token) { alert('Connect to Salesforce first'); return; }
@@ -2310,10 +2411,13 @@ async function fetchMetadata() {
 
   try {
     const components = [];
+    const dateSuffix = buildDateClause();
 
     for (const q of META_QUERIES) {
+      if (!metaFetchConfig.types.includes(q.type)) continue;
       try {
-        const res = await sfApiFetch('/services/data/v59.0/tooling/query?q=' + encodeURIComponent(q.soql));
+        const soql = q.soql + dateSuffix + ' ORDER BY LastModifiedDate DESC';
+        const res = await sfApiFetch('/services/data/v59.0/tooling/query?q=' + encodeURIComponent(soql));
         if (res.records) {
           res.records.forEach(rec => {
             const name = rec.Name || rec.DeveloperName;
