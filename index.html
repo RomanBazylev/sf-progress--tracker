@@ -564,6 +564,12 @@ input,select{font-family:inherit}
       <select id="branchSelect"><option value="">— select branch —</option></select>
       <button class="btn btn-sm" onclick="addEnv()">+ Add Environment</button>
     </div>
+    <div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border)">
+      <label style="font-size:12px;font-weight:600;margin-bottom:6px;display:block">🔒 Protected Branches</label>
+      <p style="font-size:11px;color:var(--muted);margin-bottom:8px">Direct commits to these branches are blocked. Users must create a new branch + PR instead.</p>
+      <input id="cfgProtectedBranches" placeholder="master, main, develop, uat" style="width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Comma-separated, case-insensitive</div>
+    </div>
   </div>
 
   <div class="settings-section">
@@ -919,7 +925,7 @@ async function createProject() {
   if (pass.length < 4) { err.textContent = 'Password must be at least 4 characters'; return; }
   if (pass !== pass2) { err.textContent = 'Passwords do not match'; return; }
   err.textContent = '';
-  const data = { pat: '', repo: '', envs: [], prefs: {}, checklists: {}, mergeMethod: 'merge' };
+  const data = { pat: '', repo: '', envs: [], prefs: {}, checklists: {}, mergeMethod: 'merge', protectedBranches: ['master', 'main', 'develop', 'uat'] };
   const encrypted = await Crypto.encrypt(pass, data);
   const projects = getProjects();
   projects.push({ name, ...encrypted });
@@ -1003,6 +1009,7 @@ function enterProject() {
   document.getElementById('cfgRepo').value = projectData.repo || '';
   document.getElementById('cfgCaseUrl').value = projectData.caseBaseUrl || '';
   document.getElementById('cfgMergeMethod').value = projectData.mergeMethod || 'merge';
+  document.getElementById('cfgProtectedBranches').value = (projectData.protectedBranches || []).join(', ');
   updateConnBadge();
   renderEnvList();
   if (projectData.pat && projectData.repo && projectData.envs.length) {
@@ -1098,6 +1105,7 @@ async function saveSettings() {
   projectData.repo = document.getElementById('cfgRepo').value.trim();
   projectData.caseBaseUrl = document.getElementById('cfgCaseUrl').value.trim().replace(/\/+$/, '');
   projectData.mergeMethod = document.getElementById('cfgMergeMethod').value;
+  projectData.protectedBranches = document.getElementById('cfgProtectedBranches').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
   // envs already updated via renderEnvList interactions
   const encrypted = await Crypto.encrypt(currentPassword, projectData);
   const projects = getProjects();
@@ -2849,6 +2857,11 @@ function viewComponent(idx) {
 /* ═══════════════════════════════════════════════════════
    COMMIT TO GIT
    ═══════════════════════════════════════════════════════ */
+function isProtectedBranch(branchName) {
+  const protected_ = (projectData && projectData.protectedBranches) || [];
+  return protected_.includes(branchName.toLowerCase());
+}
+
 function showCommitForm() {
   const selected = metaCache.components.filter(c => c.selected);
   if (!selected.length) return;
@@ -2876,13 +2889,16 @@ function showCommitForm() {
   html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="radio" name="commitMode" value="new" onchange="toggleNewBranchField()"> New branch</label>';
   html += '</div>';
   html += '<div id="commitBranchExisting">';
-  html += '<select id="commitBranch" style="width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">';
+  html += '<select id="commitBranch" style="width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" onchange="onCommitBranchChange()">';
   const branches = repoBranches.length ? repoBranches : [branch];
   branches.forEach(b => {
     const sel = b === branch ? ' selected' : '';
-    html += '<option value="' + esc(b) + '"' + sel + '>' + esc(b) + '</option>';
+    const lock = isProtectedBranch(b) ? '🔒 ' : '';
+    html += '<option value="' + esc(b) + '"' + sel + '>' + lock + esc(b) + '</option>';
   });
-  html += '</select></div>';
+  html += '</select>';
+  html += '<div id="protectedBranchWarn" style="display:none;margin-top:6px;padding:8px 12px;background:var(--yellow-dim);color:var(--yellow);border-radius:8px;font-size:12px;font-weight:500">🔒 This is a protected branch. Direct commits are not allowed — please create a new branch instead.</div>';
+  html += '</div>';
   html += '<div id="commitBranchNew" style="display:none">';
   html += '<input id="commitNewBranchName" placeholder="feature/my-metadata-update" style="width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;margin-bottom:6px">';
   html += '<div style="font-size:12px;color:var(--muted)">Will branch from: <strong>' + esc(branch) + '</strong></div>';
@@ -2897,13 +2913,15 @@ function showCommitForm() {
 
   html += '<div id="commitResult"></div>';
   html += '<div style="display:flex;gap:8px;align-items:center">';
-  html += '<button class="btn btn-primary" onclick="doCommit()">📤 Commit &amp; Push</button>';
+  html += '<button class="btn btn-primary" onclick="doCommit()" id="commitBtn">📤 Commit &amp; Push</button>';
   html += '<span style="font-size:11px;color:var(--muted)">Files go to: <code>' + esc(detectedBase) + '/</code></span>';
   html += '</div>';
   html += '</div>';
 
   document.getElementById('commitFormArea').innerHTML = html;
   document.getElementById('commitFormArea').scrollIntoView({ behavior: 'smooth' });
+  // Check if default branch is protected → auto-switch to new branch
+  onCommitBranchChange();
 }
 
 function detectBasePath() {
@@ -2930,6 +2948,29 @@ function toggleNewBranchField() {
   const mode = document.querySelector('input[name=commitMode]:checked').value;
   document.getElementById('commitBranchExisting').style.display = mode === 'existing' ? '' : 'none';
   document.getElementById('commitBranchNew').style.display = mode === 'new' ? '' : 'none';
+  // Update commit button state
+  if (mode === 'new') {
+    document.getElementById('commitBtn').disabled = false;
+    document.getElementById('protectedBranchWarn').style.display = 'none';
+  } else {
+    onCommitBranchChange();
+  }
+}
+
+function onCommitBranchChange() {
+  const mode = document.querySelector('input[name=commitMode]:checked');
+  if (!mode || mode.value !== 'existing') return;
+  const sel = document.getElementById('commitBranch');
+  const warn = document.getElementById('protectedBranchWarn');
+  const btn = document.getElementById('commitBtn');
+  if (!sel || !warn || !btn) return;
+  if (isProtectedBranch(sel.value)) {
+    warn.style.display = '';
+    btn.disabled = true;
+  } else {
+    warn.style.display = 'none';
+    btn.disabled = false;
+  }
 }
 
 async function doCommit() {
@@ -2949,6 +2990,7 @@ async function doCommit() {
   const resultEl = document.getElementById('commitResult');
 
   if (!branch || !msg) { toast('Branch and commit message are required','warn'); return; }
+  if (isProtectedBranch(branch)) { toast('Cannot commit directly to protected branch "' + branch + '". Create a new branch instead.','err'); return; }
   if (!confirm('Commit ' + selected.length + ' file(s) to branch "' + branch + '"?')) return;
 
   resultEl.innerHTML = '<div class="meta-status warn">⏳ Publishing to git... <span id="commitProgress">(preparing)</span></div>';
