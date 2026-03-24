@@ -2244,6 +2244,7 @@ function sfOAuthLogin() {
   }
   sessionStorage.setItem('sf_instance_pending', instance);
   sessionStorage.setItem('sf_oauth_pending', '1');
+  sessionStorage.setItem('sf_oauth_project_idx', String(currentProjectIndex));
 
   const redirect = location.origin + location.pathname;
   const url = instance + '/services/oauth2/authorize'
@@ -3095,6 +3096,18 @@ showView = function(name) {
    ═══════════════════════════════════════════════════════ */
 handleSfOAuthCallback();
 renderProjectList();
+
+// Auto-open unlock modal if returning from SF OAuth redirect
+if (sessionStorage.getItem('sf_oauth_pending')) {
+  const idx = parseInt(sessionStorage.getItem('sf_oauth_project_idx'));
+  if (!isNaN(idx) && idx >= 0) {
+    const projects = getProjects();
+    if (projects[idx]) {
+      openUnlockModal(idx);
+    }
+  }
+  sessionStorage.removeItem('sf_oauth_project_idx');
+}
 </script>
 </body>
 </html>
