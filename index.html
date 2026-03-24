@@ -2728,6 +2728,46 @@ async function fetchMetadata() {
       }
     }
 
+    // Fetch bundle source for LWC and Aura (they don't have Body in the parent query)
+    const lwcComps = components.filter(c => c.type === 'LWC');
+    const auraComps = components.filter(c => c.type === 'AuraBundle');
+    const updFloating = t => { const f = document.getElementById('metaFetchFloatingText'); if (f) f.textContent = t; };
+
+    // LWC: fetch LightningComponentResource for each bundle
+    for (let i = 0; i < lwcComps.length; i++) {
+      const comp = lwcComps[i];
+      updFloating('Fetching LWC source (' + (i + 1) + '/' + lwcComps.length + ')...');
+      try {
+        const res = await sfApiFetch('/services/data/v59.0/tooling/query?q=' + encodeURIComponent(
+          "SELECT FilePath, Source FROM LightningComponentResource WHERE LightningComponentBundleId = '" + comp.sfId + "' ORDER BY FilePath"
+        ));
+        if (res.records && res.records.length) {
+          comp._bundleFiles = res.records.map(r => ({ path: r.FilePath, source: r.Source || '' }));
+          // Pick main JS file as primary body for diff
+          const jsFile = res.records.find(r => r.FilePath && r.FilePath.endsWith('.js') && !r.FilePath.endsWith('.test.js'));
+          const htmlFile = res.records.find(r => r.FilePath && r.FilePath.endsWith('.html'));
+          comp.body = (jsFile && jsFile.Source) || (htmlFile && htmlFile.Source) || (res.records[0].Source || '');
+          comp._primaryFile = (jsFile && jsFile.FilePath) || (htmlFile && htmlFile.FilePath) || res.records[0].FilePath || '';
+        }
+      } catch (e) { console.warn('LWC resources skip ' + comp.name + ': ' + e.message); }
+    }
+
+    // Aura: fetch AuraDefinition for each bundle
+    for (const comp of auraComps) {
+      try {
+        const res = await sfApiFetch('/services/data/v59.0/tooling/query?q=' + encodeURIComponent(
+          "SELECT DefType, Source FROM AuraDefinition WHERE AuraDefinitionBundleId = '" + comp.sfId + "' ORDER BY DefType"
+        ));
+        if (res.records && res.records.length) {
+          comp._bundleFiles = res.records.map(r => ({ defType: r.DefType, source: r.Source || '' }));
+          // Pick COMPONENT (markup) or CONTROLLER (JS) as primary
+          const cmp = res.records.find(r => r.DefType === 'COMPONENT');
+          const ctrl = res.records.find(r => r.DefType === 'CONTROLLER');
+          comp.body = (cmp && cmp.Source) || (ctrl && ctrl.Source) || (res.records[0].Source || '');
+        }
+      } catch (e) { console.warn('Aura resources skip ' + comp.name + ': ' + e.message); }
+    }
+
     // Fetch git tree for comparison
     await fetchGitTreeForDiff(components);
 
@@ -2781,6 +2821,29 @@ async function fetchGitTreeForDiff(components) {
         if (tree[withMeta]) { /* meta file exists, check body file */ }
       }
 
+      // For LWC/Aura bundles: match against directory contents
+      if (!gitPath && (comp.type === 'LWC' || comp.type === 'AuraBundle')) {
+        const bundlePaths = [
+          'force-app/main/default/' + comp.fullName + '/' + comp.name,
+          comp.fullName + '/' + comp.name,
+          'src/' + comp.fullName + '/' + comp.name,
+        ];
+        // LWC: look for .js then .html
+        if (comp.type === 'LWC') {
+          for (const bp of bundlePaths) {
+            if (tree[bp + '.js']) { gitPath = bp + '.js'; gitSha = tree[bp + '.js']; break; }
+            if (tree[bp + '.html']) { gitPath = bp + '.html'; gitSha = tree[bp + '.html']; break; }
+          }
+        }
+        // Aura: look for .cmp then Controller.js
+        if (comp.type === 'AuraBundle') {
+          for (const bp of bundlePaths) {
+            if (tree[bp + '.cmp']) { gitPath = bp + '.cmp'; gitSha = tree[bp + '.cmp']; break; }
+            if (tree[bp + 'Controller.js']) { gitPath = bp + 'Controller.js'; gitSha = tree[bp + 'Controller.js']; break; }
+          }
+        }
+      }
+
       if (!gitPath) {
         comp.change = 'new';
         comp.gitPath = null;
@@ -2798,7 +2861,7 @@ async function fetchGitTreeForDiff(components) {
             comp.change = 'modified';
           }
         } else {
-          comp.change = 'same'; // no body to compare (bundles)
+          comp.change = 'same'; // no body to compare
         }
       }
     }
@@ -2812,7 +2875,8 @@ async function fetchGitTreeForDiff(components) {
    ═══════════════════════════════════════════════════════ */
 function showDiff(idx) {
   const c = metaCache.components[idx];
-  document.getElementById('diffTitle').textContent = c.fullName + ' (' + c.change + ')';
+  const bundleLabel = c._primaryFile ? ' — ' + c._primaryFile : '';
+  document.getElementById('diffTitle').textContent = c.fullName + bundleLabel + ' (' + c.change + ')';
 
   const gitLines = (c.gitBody || '').split('\n');
   const sfLines = (c.body || '').split('\n');
