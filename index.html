@@ -347,6 +347,50 @@ input,select{font-family:inherit}
 .sp-issue .issue-type.sf{background:#00a1e020;color:#00a1e0}
 .sp-issue .issue-type.gh{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
 
+/* ── METADATA VIEW ── */
+.meta-connect{max-width:560px;margin:0 auto}
+.meta-connect .field{margin-bottom:14px}
+.meta-connect .field label{display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--muted)}
+.meta-connect .field input{width:100%;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px}
+.meta-connect .field input:focus{outline:none;border-color:var(--accent)}
+.meta-status{font-size:12px;padding:8px 12px;border-radius:8px;margin:8px 0}
+.meta-status.ok{background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green)}
+.meta-status.err{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
+.meta-status.warn{background:color-mix(in srgb,var(--yellow) 12%,transparent);color:var(--yellow)}
+.btn-sf{background:#00a1e0;color:#fff;border-color:#00a1e0;font-weight:600}
+.btn-sf:hover{opacity:.9}
+.meta-toolbar{display:flex;align-items:center;gap:12px;padding:12px 0;flex-wrap:wrap;border-bottom:1px solid var(--border);margin-bottom:12px}
+.meta-toolbar select,.meta-toolbar input{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:6px 10px}
+.meta-toolbar input{flex:1;min-width:160px}
+.meta-toolbar .meta-info{font-size:11px;color:var(--muted);margin-left:auto}
+.meta-grid{display:flex;flex-direction:column;gap:4px;max-height:calc(100vh - 300px);overflow-y:auto}
+.meta-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;font-size:13px;cursor:pointer;transition:all .15s}
+.meta-row:hover{border-color:var(--accent);background:var(--surface2)}
+.meta-row.selected{border-color:var(--accent);background:var(--accent-dim)}
+.meta-row .meta-cb{width:16px;height:16px;accent-color:var(--accent);flex-shrink:0}
+.meta-row .meta-name{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta-row .meta-type{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--muted);font-weight:500}
+.meta-row .meta-change{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px}
+.meta-row .meta-change.new{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
+.meta-row .meta-change.modified{background:color-mix(in srgb,var(--yellow) 15%,transparent);color:var(--yellow)}
+.meta-row .meta-change.deleted{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
+.meta-row .meta-change.same{background:var(--surface2);color:var(--muted)}
+.meta-actions{display:flex;gap:8px;padding:12px 0;border-top:1px solid var(--border);margin-top:12px;flex-wrap:wrap;align-items:center}
+.meta-actions .meta-summary{font-size:12px;color:var(--muted);margin-right:auto}
+.meta-diff-modal{position:fixed;inset:0;z-index:250;display:flex;align-items:center;justify-content:center;background:var(--overlay)}
+.meta-diff-content{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:90vw;max-width:900px;max-height:80vh;display:flex;flex-direction:column}
+.meta-diff-header{display:flex;align-items:center;padding:14px 18px;border-bottom:1px solid var(--border);gap:12px}
+.meta-diff-header h3{flex:1;font-size:14px}
+.meta-diff-body{overflow:auto;padding:0;flex:1}
+.meta-diff-body pre{padding:16px;margin:0;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+.diff-add{background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green)}
+.diff-del{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
+.diff-hdr{color:var(--accent);font-weight:600}
+.meta-commit-form{display:flex;flex-direction:column;gap:10px;max-width:500px}
+.meta-commit-form input,.meta-commit-form textarea{background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:8px 12px}
+.meta-commit-form textarea{min-height:60px;resize:vertical}
+.meta-commit-result{font-size:12px;padding:8px 12px;border-radius:8px;margin-top:8px}
+
 /* ── POST-DEPLOY CHECKLIST ── */
 .sp-checklist{display:flex;flex-direction:column;gap:4px}
 .sp-check-item{display:flex;align-items:center;gap:8px;font-size:12px;padding:6px 8px;background:var(--surface2);border-radius:6px;cursor:pointer;transition:all .15s}
@@ -400,6 +444,7 @@ input,select{font-family:inherit}
   </div>
   <nav id="mainNav" style="display:none">
     <button onclick="showView('pipeline')" id="navPipeline">Pipeline</button>
+    <button onclick="showView('metadata')" id="navMetadata">Metadata</button>
     <button onclick="showView('settings')" id="navSettings">Settings</button>
   </nav>
   <div class="spacer"></div>
@@ -493,6 +538,65 @@ input,select{font-family:inherit}
   </div>
   <div id="pipelineContent">
     <div class="loading"><div class="spinner"></div><p>Loading pipeline...</p></div>
+  </div>
+</div>
+
+<!-- ── METADATA VIEW ── -->
+<div class="view" id="metadataView">
+  <div id="metaContent">
+    <div class="meta-connect">
+      <h2 style="margin-bottom:16px">☁️ Salesforce Metadata</h2>
+      <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Connect to a Salesforce org to retrieve metadata, compare with your git branch, and commit changes.</p>
+
+      <div class="field">
+        <label>Instance URL</label>
+        <input id="sfInstance" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Sandbox or production org URL</div>
+      </div>
+      <div class="field">
+        <label>Consumer Key <span style="color:var(--muted);font-weight:normal">(from Connected App)</span></label>
+        <div class="secret-wrap" style="position:relative">
+          <input id="sfClientId" type="password" placeholder="3MVG9..." autocomplete="off" style="padding-right:44px">
+          <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
+        </div>
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Connected App → OAuth Settings → Consumer Key.<br>Callback URL must be: <code id="oauthCallback"></code></div>
+      </div>
+      <div class="field">
+        <label>CORS Proxy <span style="color:var(--muted);font-weight:normal">(optional — for API calls)</span></label>
+        <input id="sfCorsProxy" placeholder="https://your-worker.workers.dev">
+        <div style="font-size:11px;color:var(--muted);margin-top:3px">Cloudflare Worker for CORS. Required for API calls after OAuth login.</div>
+      </div>
+
+      <div id="sfConnStatus"></div>
+      <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+        <button class="btn btn-sf" onclick="sfOAuthLogin()">☁️ Login with Salesforce</button>
+        <button class="btn btn-sm" id="sfDisconnectBtn" style="display:none" onclick="sfDisconnect()">Disconnect</button>
+      </div>
+
+      <details style="margin-top:20px;font-size:12px;color:var(--muted)">
+        <summary style="cursor:pointer;font-weight:600">Setup Instructions</summary>
+        <ol style="margin-top:8px;padding-left:20px;line-height:2">
+          <li>In Salesforce: Setup → App Manager → New Connected App</li>
+          <li>Enable OAuth Settings</li>
+          <li>Callback URL: <code id="oauthCallback2"></code></li>
+          <li>Selected OAuth Scopes: <strong>Manage user data via APIs (api)</strong></li>
+          <li>Save and wait ~10 min for activation</li>
+          <li>Copy the Consumer Key into the field above</li>
+          <li>For CORS Proxy: deploy a Cloudflare Worker that forwards requests and adds CORS headers</li>
+        </ol>
+      </details>
+    </div>
+  </div>
+</div>
+
+<!-- ── METADATA DIFF MODAL ── -->
+<div class="meta-diff-modal" id="diffModal" style="display:none" onclick="if(event.target===this)closeDiffModal()">
+  <div class="meta-diff-content">
+    <div class="meta-diff-header">
+      <h3 id="diffTitle">Diff</h3>
+      <button class="btn btn-sm" onclick="closeDiffModal()">Close</button>
+    </div>
+    <div class="meta-diff-body"><pre id="diffBody"></pre></div>
   </div>
 </div>
 
@@ -606,6 +710,10 @@ let detailCache = {};
 let refreshTimer = null;
 let rateLimitRemaining = null;
 let batchSelected = new Set();
+
+// Salesforce metadata state
+let sfState = { token: null, instance: null, user: null };
+let metaCache = { components: [], gitTree: {}, gitBranch: '' };
 
 const ENV_COLORS = ['#58a6ff','#d29922','#3fb950','#bc8cff','#f85149','#db6d28'];
 const GS_REGEX = /^gs-pipeline\/(.+)_-_(.+)$/;
@@ -1896,12 +2004,558 @@ document.addEventListener('keydown', e => {
   if (e.key === 'r' || e.key === 'R') { e.preventDefault(); refreshData(); }
   if (e.key === 't' || e.key === 'T') { e.preventDefault(); toggleTheme(); }
   if (e.key === 's' || e.key === 'S') { e.preventDefault(); if (projectData) showView('settings'); }
-  if (e.key === 'Escape') { closeSidePanel(); closeCreateModal(); closeUnlockModal(); }
+  if (e.key === 'm' || e.key === 'M') { e.preventDefault(); if (projectData) showView('metadata'); }
+  if (e.key === 'Escape') { closeSidePanel(); closeCreateModal(); closeUnlockModal(); closeDiffModal(); }
 });
+
+/* ═══════════════════════════════════════════════════════
+   SALESFORCE OAUTH
+   ═══════════════════════════════════════════════════════ */
+function initOAuthCallbackUrls() {
+  const cb = location.origin + location.pathname;
+  const el1 = document.getElementById('oauthCallback');
+  const el2 = document.getElementById('oauthCallback2');
+  if (el1) el1.textContent = cb;
+  if (el2) el2.textContent = cb;
+}
+
+function sfOAuthLogin() {
+  const instance = document.getElementById('sfInstance').value.trim().replace(/\/+$/, '');
+  const clientId = document.getElementById('sfClientId').value.trim();
+  if (!instance) { alert('Enter your org Instance URL'); return; }
+  if (!clientId) { alert('Enter the Consumer Key from your Connected App'); return; }
+
+  // Save settings before redirect
+  if (projectData) {
+    projectData.sfInstance = instance;
+    projectData.sfClientId = clientId;
+    projectData.sfCorsProxy = document.getElementById('sfCorsProxy').value.trim().replace(/\/+$/, '');
+    persistProject();
+  }
+  sessionStorage.setItem('sf_instance_pending', instance);
+
+  const redirect = location.origin + location.pathname;
+  const url = instance + '/services/oauth2/authorize'
+    + '?response_type=token'
+    + '&client_id=' + encodeURIComponent(clientId)
+    + '&redirect_uri=' + encodeURIComponent(redirect)
+    + '&scope=' + encodeURIComponent('api');
+
+  document.getElementById('sfConnStatus').innerHTML = '<div class="meta-status warn">⏳ Redirecting to Salesforce…</div>';
+  location.href = url;
+}
+
+function handleSfOAuthCallback() {
+  const hash = location.hash.substring(1);
+  if (!hash) return;
+  const params = new URLSearchParams(hash);
+  const accessToken = params.get('access_token');
+  const instanceUrl = params.get('instance_url');
+  const pendingInstance = sessionStorage.getItem('sf_instance_pending');
+
+  history.replaceState({}, '', location.pathname);
+
+  if (params.get('error')) {
+    const desc = decodeURIComponent(params.get('error_description') || params.get('error'));
+    sessionStorage.setItem('sf_oauth_error', desc);
+    return;
+  }
+
+  if (!accessToken) return;
+
+  sfState.token = accessToken;
+  sfState.instance = instanceUrl || pendingInstance || '';
+  sessionStorage.setItem('sf_token', accessToken);
+  sessionStorage.setItem('sf_instance', sfState.instance);
+  sessionStorage.removeItem('sf_instance_pending');
+}
+
+function restoreSfSession() {
+  const token = sessionStorage.getItem('sf_token');
+  const instance = sessionStorage.getItem('sf_instance');
+  if (token && instance) {
+    sfState.token = token;
+    sfState.instance = instance;
+    return true;
+  }
+  return false;
+}
+
+function sfDisconnect() {
+  sfState = { token: null, instance: null, user: null };
+  metaCache = { components: [], gitTree: {}, gitBranch: '' };
+  sessionStorage.removeItem('sf_token');
+  sessionStorage.removeItem('sf_instance');
+  renderMetadataView();
+}
+
+async function sfApiFetch(path, opts = {}) {
+  const baseUrl = sfState.instance + path;
+  const proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.replace(/\/+$/, '') : '';
+  const url = proxy ? proxy + '/' + baseUrl : baseUrl;
+  const method = (opts.method || 'GET').toUpperCase();
+  const headers = { Authorization: 'Bearer ' + sfState.token, ...(opts.headers || {}) };
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'DELETE') {
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+  }
+  const res = await fetch(url, { ...opts, method, headers });
+  if (!res.ok) throw new Error(res.status + ' ' + res.statusText);
+  return res.json();
+}
+
+async function fetchSfUser() {
+  try {
+    const info = await sfApiFetch('/services/oauth2/userinfo');
+    sfState.user = info.preferred_username || info.name || 'Connected';
+  } catch {
+    sfState.user = '(OAuth)';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   METADATA VIEW RENDERING
+   ═══════════════════════════════════════════════════════ */
+function renderMetadataView() {
+  const el = document.getElementById('metaContent');
+  if (!sfState.token) {
+    // Show connect form
+    el.innerHTML = buildMetaConnectHtml();
+    initOAuthCallbackUrls();
+    // Restore saved values
+    if (projectData) {
+      if (projectData.sfInstance) document.getElementById('sfInstance').value = projectData.sfInstance;
+      if (projectData.sfClientId) document.getElementById('sfClientId').value = projectData.sfClientId;
+      if (projectData.sfCorsProxy) document.getElementById('sfCorsProxy').value = projectData.sfCorsProxy;
+    }
+    // Show stored error from OAuth redirect
+    const err = sessionStorage.getItem('sf_oauth_error');
+    if (err) {
+      document.getElementById('sfConnStatus').innerHTML = '<div class="meta-status err">✕ ' + esc(err) + '</div>';
+      sessionStorage.removeItem('sf_oauth_error');
+    }
+    return;
+  }
+
+  // Connected — show metadata browser
+  let html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
+  html += '<h2>☁️ Metadata Browser</h2>';
+  html += '<div class="meta-status ok">✓ Connected as ' + esc(sfState.user || 'OAuth') + ' — ' + esc(sfState.instance) + '</div>';
+  html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
+  html += '</div>';
+
+  // Toolbar
+  html += '<div class="meta-toolbar">';
+  html += '<select id="metaTypeFilter" onchange="filterMetaRows()">';
+  html += '<option value="">All types</option>';
+  const types = [...new Set(metaCache.components.map(c => c.type))].sort();
+  types.forEach(t => { html += '<option>' + esc(t) + '</option>'; });
+  html += '</select>';
+  html += '<select id="metaChangeFilter" onchange="filterMetaRows()">';
+  html += '<option value="">All statuses</option><option value="new">New</option><option value="modified">Modified</option><option value="same">Unchanged</option>';
+  html += '</select>';
+  html += '<input id="metaSearch" placeholder="🔍 Search components..." oninput="filterMetaRows()">';
+  const total = metaCache.components.length;
+  const newC = metaCache.components.filter(c => c.change === 'new').length;
+  const modC = metaCache.components.filter(c => c.change === 'modified').length;
+  html += '<div class="meta-info">' + total + ' components &middot; ' + newC + ' new &middot; ' + modC + ' modified</div>';
+  html += '</div>';
+
+  // Grid
+  html += '<div class="meta-grid" id="metaGrid">';
+  metaCache.components.forEach((c, i) => {
+    html += renderMetaRow(c, i);
+  });
+  if (!metaCache.components.length) {
+    html += '<div class="empty-state" style="padding:40px 0"><div class="empty-icon">📦</div><p>No metadata loaded yet. Click "Fetch Metadata" to start.</p></div>';
+  }
+  html += '</div>';
+
+  // Actions
+  html += '<div class="meta-actions">';
+  const selCount = metaCache.components.filter(c => c.selected).length;
+  html += '<div class="meta-summary">' + selCount + ' selected</div>';
+  html += '<button class="btn btn-sm" onclick="metaSelectAll()">Select All Changed</button>';
+  html += '<button class="btn btn-sm" onclick="metaDeselectAll()">Deselect All</button>';
+  html += '<button class="btn btn-sf" onclick="fetchMetadata()">↻ Fetch Metadata</button>';
+  if (selCount > 0) {
+    html += '<button class="btn btn-primary" onclick="showCommitForm()">Commit ' + selCount + ' to Git</button>';
+  }
+  html += '</div>';
+
+  // Commit form area
+  html += '<div id="commitFormArea"></div>';
+
+  el.innerHTML = html;
+}
+
+function buildMetaConnectHtml() {
+  return `<div class="meta-connect">
+    <h2 style="margin-bottom:16px">☁️ Salesforce Metadata</h2>
+    <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Connect to a Salesforce org to retrieve metadata, compare with your git branch, and commit changes.</p>
+    <div class="field">
+      <label>Instance URL</label>
+      <input id="sfInstance" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Sandbox or production org URL</div>
+    </div>
+    <div class="field">
+      <label>Consumer Key <span style="color:var(--muted);font-weight:normal">(from Connected App)</span></label>
+      <div class="secret-wrap" style="position:relative">
+        <input id="sfClientId" type="password" placeholder="3MVG9..." autocomplete="off" style="padding-right:44px">
+        <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
+      </div>
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Connected App → OAuth Settings → Consumer Key.<br>Callback URL: <code id="oauthCallback"></code></div>
+    </div>
+    <div class="field">
+      <label>CORS Proxy <span style="color:var(--muted);font-weight:normal">(required for API calls)</span></label>
+      <input id="sfCorsProxy" placeholder="https://your-worker.workers.dev">
+      <div style="font-size:11px;color:var(--muted);margin-top:3px">Cloudflare Worker URL. OAuth login works without it, but API calls need it for CORS.</div>
+    </div>
+    <div id="sfConnStatus"></div>
+    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-sf" onclick="sfOAuthLogin()">☁️ Login with Salesforce</button>
+    </div>
+    <details style="margin-top:20px;font-size:12px;color:var(--muted)">
+      <summary style="cursor:pointer;font-weight:600">Setup Instructions</summary>
+      <ol style="margin-top:8px;padding-left:20px;line-height:2">
+        <li>In Salesforce: Setup → App Manager → New Connected App</li>
+        <li>Enable OAuth Settings</li>
+        <li>Callback URL: <code id="oauthCallback2"></code></li>
+        <li>Selected OAuth Scopes: <strong>Manage user data via APIs (api)</strong></li>
+        <li>Save, wait ~10 min for activation</li>
+        <li>Copy the Consumer Key into the field above</li>
+        <li>Deploy a Cloudflare Worker as CORS proxy (see below)</li>
+      </ol>
+      <details style="margin-top:10px">
+        <summary style="cursor:pointer">Cloudflare Worker code (copy &amp; paste)</summary>
+        <pre style="background:var(--surface);padding:12px;border-radius:8px;margin-top:8px;font-size:11px;overflow-x:auto">export default {
+  async fetch(request) {
+    const cors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': '*',
+      'Access-Control-Allow-Methods': '*',
+    };
+    if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+    const url = new URL(request.url);
+    const target = url.pathname.substring(1) + url.search;
+    if (!target.startsWith('https://')) return new Response('Bad URL', { status: 400 });
+    const resp = await fetch(target, {
+      method: request.method,
+      headers: request.headers,
+      body: request.method !== 'GET' ? await request.text() : undefined,
+    });
+    const newHeaders = new Headers(resp.headers);
+    Object.entries(cors).forEach(([k,v]) => newHeaders.set(k, v));
+    return new Response(resp.body, { status: resp.status, headers: newHeaders });
+  }
+}</pre>
+      </details>
+    </details>
+  </div>`;
+}
+
+function renderMetaRow(c, idx) {
+  const checked = c.selected ? 'checked' : '';
+  return `<div class="meta-row${c.selected ? ' selected' : ''}" data-type="${esc(c.type)}" data-change="${c.change}" onclick="toggleMetaComponent(${idx})">
+    <input type="checkbox" class="meta-cb" ${checked} onclick="event.stopPropagation();toggleMetaComponent(${idx})">
+    <span class="meta-name" title="${esc(c.fullName)}">${esc(c.name)}</span>
+    <span class="meta-type">${esc(c.type)}</span>
+    <span class="meta-change ${c.change}">${c.change}</span>
+    ${c.change !== 'same' ? '<button class="btn btn-sm" onclick="event.stopPropagation();showDiff(' + idx + ')">Diff</button>' : ''}
+  </div>`;
+}
+
+function filterMetaRows() {
+  const typeF = document.getElementById('metaTypeFilter').value;
+  const changeF = document.getElementById('metaChangeFilter').value;
+  const search = document.getElementById('metaSearch').value.toLowerCase();
+  document.querySelectorAll('#metaGrid .meta-row').forEach(row => {
+    const matchType = !typeF || row.dataset.type === typeF;
+    const matchChange = !changeF || row.dataset.change === changeF;
+    const matchSearch = !search || row.querySelector('.meta-name').textContent.toLowerCase().includes(search);
+    row.style.display = (matchType && matchChange && matchSearch) ? '' : 'none';
+  });
+}
+
+function toggleMetaComponent(idx) {
+  metaCache.components[idx].selected = !metaCache.components[idx].selected;
+  renderMetadataView();
+}
+
+function metaSelectAll() {
+  metaCache.components.forEach(c => { if (c.change !== 'same') c.selected = true; });
+  renderMetadataView();
+}
+
+function metaDeselectAll() {
+  metaCache.components.forEach(c => { c.selected = false; });
+  renderMetadataView();
+}
+
+/* ═══════════════════════════════════════════════════════
+   FETCH METADATA FROM SALESFORCE
+   ═══════════════════════════════════════════════════════ */
+const META_QUERIES = [
+  { type: 'ApexClass', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexClass WHERE NamespacePrefix = null AND Status = 'Active'", path: 'classes', ext: '.cls' },
+  { type: 'ApexTrigger', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexTrigger WHERE NamespacePrefix = null AND Status = 'Active'", path: 'triggers', ext: '.trigger' },
+  { type: 'ApexPage', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexPage WHERE NamespacePrefix = null", path: 'pages', ext: '.page' },
+  { type: 'ApexComponent', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexComponent WHERE NamespacePrefix = null", path: 'components', ext: '.component' },
+  { type: 'AuraBundle', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM AuraDefinitionBundle WHERE NamespacePrefix = null", path: 'aura', ext: '' },
+  { type: 'LWC', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM LightningComponentBundle WHERE NamespacePrefix = null", path: 'lwc', ext: '' },
+];
+
+async function fetchMetadata() {
+  if (!sfState.token) { alert('Connect to Salesforce first'); return; }
+  const el = document.getElementById('metaContent');
+  el.innerHTML = '<div class="loading"><div class="spinner"></div><p>Fetching metadata from Salesforce...</p></div>';
+
+  try {
+    const components = [];
+
+    for (const q of META_QUERIES) {
+      try {
+        const res = await sfApiFetch('/services/data/v59.0/tooling/query?q=' + encodeURIComponent(q.soql));
+        if (res.records) {
+          res.records.forEach(rec => {
+            const name = rec.Name || rec.DeveloperName;
+            const body = rec.Body || rec.Markup || '';
+            components.push({
+              type: q.type,
+              name: name,
+              fullName: q.path + '/' + name + q.ext,
+              body: body,
+              lastModified: rec.LastModifiedDate,
+              sfId: rec.Id,
+              change: 'new',
+              selected: false
+            });
+          });
+        }
+      } catch (e) {
+        console.warn('Skip ' + q.type + ': ' + e.message);
+      }
+    }
+
+    // Fetch git tree for comparison
+    await fetchGitTreeForDiff(components);
+
+    metaCache.components = components;
+    renderMetadataView();
+  } catch (e) {
+    el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error fetching metadata: ' + esc(e.message) + '</p></div>';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   GIT TREE COMPARISON
+   ═══════════════════════════════════════════════════════ */
+async function fetchGitTreeForDiff(components) {
+  if (!projectData || !projectData.pat || !projectData.repo) return;
+
+  try {
+    // Get default branch or first env branch
+    const branch = (projectData.envs && projectData.envs[0]) ? projectData.envs[0].branch : 'main';
+    metaCache.gitBranch = branch;
+
+    // Fetch full tree
+    const treeData = await ghFetch('/repos/' + projectData.repo + '/git/trees/' + branch + '?recursive=1');
+    const tree = {};
+    if (treeData.tree) {
+      treeData.tree.forEach(item => {
+        if (item.type === 'blob') tree[item.path] = item.sha;
+      });
+    }
+    metaCache.gitTree = tree;
+
+    // For each SF component, check if it exists in git and compare
+    for (const comp of components) {
+      // Try common SFDX paths
+      const possiblePaths = [
+        'force-app/main/default/' + comp.fullName,
+        comp.fullName,
+        'src/' + comp.fullName,
+      ];
+
+      let gitPath = null;
+      let gitSha = null;
+      for (const p of possiblePaths) {
+        if (tree[p]) { gitPath = p; gitSha = tree[p]; break; }
+        // For Apex: also check with -meta.xml
+        const withMeta = p.replace(/(\.[^.]+)$/, '$1-meta.xml');
+        if (tree[withMeta]) { /* meta file exists, check body file */ }
+      }
+
+      if (!gitPath) {
+        comp.change = 'new';
+        comp.gitPath = null;
+      } else {
+        comp.gitPath = gitPath;
+        comp.gitSha = gitSha;
+        // Fetch git content to compare
+        if (comp.body) {
+          try {
+            const blob = await ghFetch('/repos/' + projectData.repo + '/git/blobs/' + gitSha);
+            const gitContent = atob(blob.content.replace(/\n/g, ''));
+            comp.gitBody = gitContent;
+            comp.change = (comp.body.trim() === gitContent.trim()) ? 'same' : 'modified';
+          } catch {
+            comp.change = 'modified';
+          }
+        } else {
+          comp.change = 'same'; // no body to compare (bundles)
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Git tree fetch failed: ' + e.message);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   DIFF VIEW
+   ═══════════════════════════════════════════════════════ */
+function showDiff(idx) {
+  const c = metaCache.components[idx];
+  document.getElementById('diffTitle').textContent = c.fullName + ' (' + c.change + ')';
+
+  const gitLines = (c.gitBody || '').split('\n');
+  const sfLines = (c.body || '').split('\n');
+
+  // Simple line-by-line diff
+  let html = '';
+  const maxLen = Math.max(gitLines.length, sfLines.length);
+  for (let i = 0; i < maxLen; i++) {
+    const gl = gitLines[i];
+    const sl = sfLines[i];
+    if (gl === undefined) {
+      html += '<div class="diff-add">+ ' + esc(sl) + '</div>';
+    } else if (sl === undefined) {
+      html += '<div class="diff-del">- ' + esc(gl) + '</div>';
+    } else if (gl !== sl) {
+      html += '<div class="diff-del">- ' + esc(gl) + '</div>';
+      html += '<div class="diff-add">+ ' + esc(sl) + '</div>';
+    } else {
+      html += '<div>  ' + esc(gl) + '</div>';
+    }
+  }
+
+  document.getElementById('diffBody').innerHTML = html;
+  document.getElementById('diffModal').style.display = '';
+}
+
+function closeDiffModal() {
+  document.getElementById('diffModal').style.display = 'none';
+}
+
+/* ═══════════════════════════════════════════════════════
+   COMMIT TO GIT
+   ═══════════════════════════════════════════════════════ */
+function showCommitForm() {
+  const selected = metaCache.components.filter(c => c.selected);
+  if (!selected.length) return;
+
+  const branch = metaCache.gitBranch || 'main';
+  let html = '<div class="meta-commit-form">';
+  html += '<h3>Commit ' + selected.length + ' component(s) to Git</h3>';
+  html += '<div class="field"><label>Target Branch</label><input id="commitBranch" value="' + esc(branch) + '"></div>';
+  html += '<div class="field"><label>Commit Message</label><textarea id="commitMsg" placeholder="Update metadata from Salesforce">Update ' + selected.length + ' component(s) from SF org</textarea></div>';
+  html += '<div class="field"><label>Base Path in Repo</label><input id="commitBasePath" value="force-app/main/default/" placeholder="force-app/main/default/"></div>';
+  html += '<div id="commitResult"></div>';
+  html += '<button class="btn btn-primary" onclick="doCommit()">Commit &amp; Push</button>';
+  html += '</div>';
+
+  document.getElementById('commitFormArea').innerHTML = html;
+  document.getElementById('commitFormArea').scrollIntoView({ behavior: 'smooth' });
+}
+
+async function doCommit() {
+  const selected = metaCache.components.filter(c => c.selected && c.body);
+  if (!selected.length) { alert('No components with content selected'); return; }
+
+  const branch = document.getElementById('commitBranch').value.trim();
+  const msg = document.getElementById('commitMsg').value.trim();
+  const basePath = document.getElementById('commitBasePath').value.trim().replace(/\/+$/, '');
+  const resultEl = document.getElementById('commitResult');
+
+  if (!branch || !msg) { alert('Branch and commit message required'); return; }
+  if (!confirm('Commit ' + selected.length + ' file(s) to branch "' + branch + '"?')) return;
+
+  resultEl.innerHTML = '<div class="meta-status warn">⏳ Publishing to git...</div>';
+
+  try {
+    const repo = projectData.repo;
+
+    // 1. Get the current commit SHA for the branch
+    const refData = await ghFetch('/repos/' + repo + '/git/ref/heads/' + branch);
+    const latestCommitSha = refData.object.sha;
+
+    // 2. Get the tree of the latest commit
+    const commitData = await ghFetch('/repos/' + repo + '/git/commits/' + latestCommitSha);
+    const baseTreeSha = commitData.tree.sha;
+
+    // 3. Create blobs for each file
+    const treeItems = [];
+    for (const comp of selected) {
+      const filePath = basePath + '/' + comp.fullName;
+      const blob = await ghFetch('/repos/' + repo + '/git/blobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ content: comp.body, encoding: 'utf-8' })
+      });
+      treeItems.push({ path: filePath, mode: '100644', type: 'blob', sha: blob.sha });
+    }
+
+    // 4. Create a new tree
+    const newTree = await ghFetch('/repos/' + repo + '/git/trees', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems })
+    });
+
+    // 5. Create a new commit
+    const newCommit = await ghFetch('/repos/' + repo + '/git/commits', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: msg, tree: newTree.sha, parents: [latestCommitSha] })
+    });
+
+    // 6. Update the branch reference
+    await ghFetch('/repos/' + repo + '/git/refs/heads/' + branch, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sha: newCommit.sha })
+    });
+
+    resultEl.innerHTML = '<div class="meta-status ok">✓ Committed ' + selected.length + ' file(s) to <strong>' + esc(branch) + '</strong> — <a href="https://github.com/' + esc(repo) + '/commit/' + newCommit.sha + '" target="_blank">view commit</a></div>';
+
+    // Refresh diff status
+    await fetchGitTreeForDiff(metaCache.components);
+    metaCache.components.forEach(c => { c.selected = false; });
+    renderMetadataView();
+  } catch (e) {
+    resultEl.innerHTML = '<div class="meta-status err">✕ Commit failed: ' + esc(e.message) + '</div>';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   METADATA VIEW INIT HOOK
+   ═══════════════════════════════════════════════════════ */
+const origShowView = showView;
+showView = function(name) {
+  origShowView(name);
+  if (name === 'metadata') {
+    restoreSfSession();
+    if (sfState.token && !sfState.user) {
+      fetchSfUser().then(() => renderMetadataView());
+    } else {
+      renderMetadataView();
+    }
+  }
+};
 
 /* ═══════════════════════════════════════════════════════
    INIT
    ═══════════════════════════════════════════════════════ */
+handleSfOAuthCallback();
 renderProjectList();
 </script>
 </body>
