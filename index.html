@@ -894,7 +894,12 @@ function enterProject() {
   updateConnBadge();
   renderEnvList();
   if (projectData.pat && projectData.repo && projectData.envs.length) {
-    showView('pipeline');
+    if (sessionStorage.getItem('sf_oauth_pending')) {
+      sessionStorage.removeItem('sf_oauth_pending');
+      showView('metadata');
+    } else {
+      showView('pipeline');
+    }
     refreshData();
   } else {
     showView('settings');
@@ -2051,6 +2056,7 @@ function sfOAuthLogin() {
     persistProject();
   }
   sessionStorage.setItem('sf_instance_pending', instance);
+  sessionStorage.setItem('sf_oauth_pending', '1');
 
   const redirect = location.origin + location.pathname;
   const url = instance + '/services/oauth2/authorize'
