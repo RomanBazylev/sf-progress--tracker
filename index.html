@@ -344,7 +344,7 @@ input,select{font-family:inherit}
 .sp-issue{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 8px;background:var(--surface2);border-radius:6px}
 .sp-issue a{color:var(--accent);font-weight:500}
 .sp-issue .issue-type{font-size:11px;padding:1px 6px;border-radius:4px;font-weight:600}
-.sp-issue .issue-type.jira{background:#0052cc20;color:#0052cc}
+.sp-issue .issue-type.sf{background:#00a1e020;color:#00a1e0}
 .sp-issue .issue-type.gh{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
 
 /* ── POST-DEPLOY CHECKLIST ── */
@@ -441,6 +441,16 @@ input,select{font-family:inherit}
     </div>
     <button class="btn btn-primary btn-sm" onclick="testConnection()">Test Connection</button>
     <div id="connStatus"></div>
+  </div>
+
+  <div class="settings-section">
+    <h3>🎫 Salesforce Cases</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Case numbers in PR titles/descriptions will link to the Case record in your org.</p>
+    <div class="field">
+      <label>Production Org URL</label>
+      <input id="cfgCaseUrl" placeholder="https://mycompany.lightning.force.com">
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Case numbers like <code>00012345</code> will open as <code>.../lightning/r/Case/00012345/view</code></div>
+    </div>
   </div>
 
   <div class="settings-section">
@@ -754,6 +764,7 @@ function enterProject() {
   // populate settings from decrypted data
   document.getElementById('cfgPat').value = projectData.pat || '';
   document.getElementById('cfgRepo').value = projectData.repo || '';
+  document.getElementById('cfgCaseUrl').value = projectData.caseBaseUrl || '';
   updateConnBadge();
   renderEnvList();
   if (projectData.pat && projectData.repo && projectData.envs.length) {
@@ -833,6 +844,7 @@ async function changePassword() {
 async function saveSettings() {
   projectData.pat = document.getElementById('cfgPat').value.trim();
   projectData.repo = document.getElementById('cfgRepo').value.trim();
+  projectData.caseBaseUrl = document.getElementById('cfgCaseUrl').value.trim().replace(/\/+$/, '');
   // envs already updated via renderEnvList interactions
   const encrypted = await Crypto.encrypt(currentPassword, projectData);
   const projects = getProjects();
@@ -1733,15 +1745,15 @@ async function autoPropagate(prNum) {
 }
 
 /* ═══════════════════════════════════════════════════════
-   LINKED ISSUES (Jira / GitHub Issues)
+   LINKED ISSUES (Salesforce Cases / GitHub Issues)
    ═══════════════════════════════════════════════════════ */
 function renderLinkedIssues(pr) {
   const issues = extractIssues(pr);
   if (!issues.length) return '';
   let html = '<div class="sp-section"><div class="sp-section-title">Linked Issues</div><div class="sp-issues">';
   issues.forEach(iss => {
-    const typeCls = iss.type === 'jira' ? 'jira' : 'gh';
-    const typeLabel = iss.type === 'jira' ? 'JIRA' : 'GH';
+    const typeCls = iss.type === 'sf' ? 'sf' : 'gh';
+    const typeLabel = iss.type === 'sf' ? 'CASE' : 'GH';
     html += `<div class="sp-issue"><span class="issue-type ${typeCls}">${typeLabel}</span><a href="${esc(iss.url)}" target="_blank" rel="noopener noreferrer" onclick="event.stopPropagation()">${esc(iss.key)}</a></div>`;
   });
   html += '</div></div>';
@@ -1752,13 +1764,27 @@ function extractIssues(pr) {
   const issues = [];
   const text = (pr.title || '') + ' ' + (pr.body || '') + ' ' + (pr.head.ref || '');
   const seen = new Set();
-  // Jira pattern: PROJECT-123
-  const jiraRe = /\b([A-Z][A-Z0-9]+-\d+)\b/g;
+  // Salesforce Case numbers: "Case 00012345", "case-12345", "CASE#00012345", or standalone 5-8 digit numbers starting with 0
+  const caseRe = /\bcase[- #:]*?(\d{5,8})\b/gi;
   let m;
-  while ((m = jiraRe.exec(text)) !== null) {
-    if (!seen.has(m[1])) {
-      seen.add(m[1]);
-      issues.push({ type: 'jira', key: m[1], url: 'https://jira.atlassian.com/browse/' + encodeURIComponent(m[1]) });
+  while ((m = caseRe.exec(text)) !== null) {
+    const caseNum = m[1];
+    if (!seen.has(caseNum) && caseNum !== String(pr.number)) {
+      seen.add(caseNum);
+      const baseUrl = (projectData.caseBaseUrl || '').replace(/\/+$/, '');
+      const url = baseUrl ? baseUrl + '/lightning/r/Case/' + caseNum + '/view' : '#';
+      issues.push({ type: 'sf', key: 'Case ' + caseNum, url });
+    }
+  }
+  // Also catch standalone 0-prefixed 8-digit numbers (SF case IDs)
+  const zeroRe = /\b(0\d{7})\b/g;
+  while ((m = zeroRe.exec(text)) !== null) {
+    const caseNum = m[1];
+    if (!seen.has(caseNum) && caseNum !== String(pr.number)) {
+      seen.add(caseNum);
+      const baseUrl = (projectData.caseBaseUrl || '').replace(/\/+$/, '');
+      const url = baseUrl ? baseUrl + '/lightning/r/Case/' + caseNum + '/view' : '#';
+      issues.push({ type: 'sf', key: 'Case ' + caseNum, url });
     }
   }
   // GitHub issue references: #123
