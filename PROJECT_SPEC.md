@@ -35,7 +35,7 @@
 ### 2.3 Pipeline View
 - **Gearset-style horizontal flow** — environments shown as connected stage cards with colored accent bars and arrow connectors
 - **Stage cards** show: display name, branch, open PR count, merged PR count, org label/link
-- **Drift badges** between stages showing ahead/behind commit count
+- **Drift badges** between stages showing ahead/behind commit count (overflow-visible for proper positioning)
 - **Click to expand** — clicking a stage shows an env panel below with tabs:
   - **Open** tab: PR cards (clickable → side panel)
   - **Merged** tab: recently merged PRs
@@ -85,7 +85,9 @@
   - Empty state with "Modify Filters" button when 0 results
 - **Fetch Progress** — live indicator showing "Fetching ApexClass 2/6..."
 - **Diff Modal** — shows code differences between SF and git versions
-- **Commit to Git** — select changed components, choose existing or create new branch, commit message, base path
+- **Commit to Git** — select changed components, choose existing or create new branch, commit message
+  - Base path auto-detected from existing repo structure via `detectBasePath()`
+  - Expandable file preview showing full paths before commit
   - Commit progress steps: resolving branch → uploading files → creating tree → committing → updating ref
   - Creates blobs, tree, commit via GitHub Git Data API
 
@@ -94,6 +96,7 @@
 - **Help modal** (press `?`) — keyboard shortcuts table + quick tips
 - **Keyboard shortcuts**: R=refresh, T=theme, S=settings, M=metadata, P=pipeline, /=search, ?=help, Esc=close
 - **Project name badge** in header when unlocked
+- **⬅ Switch project button** — returns to project selector from any view
 - **Nav icons** — 📦 Pipeline, ☁️ Metadata, ⚙️ Settings
 - **Step numbers** on Settings sections (1/4 → 4/4) and Fetch Config (1/3 → 3/3)
 - **Required field indicators** — red `*` on mandatory fields
@@ -147,7 +150,7 @@ Salesforce ──┐
 |----------|---------|
 | `showView(name)` | Switch between pipeline/metadata/settings views |
 | `enterProject()` | After unlock: show nav, populate settings, load data |
-| `lockProject()` | Return to project selector |
+| `lockProject()` | Return to project selector; fully resets sfState, metaCache, metaFetchConfig, repoBranches & sessionStorage to prevent cross-project bleed |
 | `toast(msg, type, ms)` | Show notification (types: ok, err, warn, info) |
 | `showHelpModal()` / `closeHelpModal()` | Help modal with shortcuts |
 
@@ -175,7 +178,8 @@ Salesforce ──┐
 | `fetchMetadata()` | SOQL queries for selected types + date range via Tooling API |
 | `fetchGitTreeForDiff(components)` | Load git tree for selected branch, compare with SF |
 | `showDiff(idx)` | Show side-by-side diff modal |
-| `showCommitForm()` | Commit selected components to git |
+| `detectBasePath()` | Scan git tree for existing SFDX paths (classes/triggers/pages) → auto-detect base path (fallback: `force-app/main/default`) |
+| `showCommitForm()` | Commit selected components to git; auto-populated base path, expandable file preview |
 | `doCommit()` | Create blobs → tree → commit → update ref via GitHub API |
 
 ### Crypto
@@ -244,7 +248,9 @@ sf-progress-tracker/
 | `1521d8c` | Branch selector + create-new-branch on commit |
 | `450d9b7` | UX overhaul: toasts, help modal, step numbers, progress |
 | `6f516f1` | Fix duplicate skeleton CSS |
+| `3b3302c` | Fix merge status, case link extraction, metadata fetch loop, Gearset pipeline redesign |
+| *(pending)* | Fix cross-project bleed, project switcher, drift overflow, commit form UX, auto base path |
 
 ---
 
-*Last updated: 2026-03-24*
+*Last updated: 2025-07-24*

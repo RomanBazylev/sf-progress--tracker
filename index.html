@@ -182,7 +182,7 @@ input,select{font-family:inherit}
 .filter-bar .refresh-info{margin-left:auto;font-size:11px;color:var(--muted);display:flex;align-items:center;gap:6px}
 
 /* Pipeline header (env nodes row) — Gearset-style horizontal flow */
-.pipeline-header{display:flex;align-items:stretch;margin-bottom:24px;overflow-x:auto;padding:4px 0 20px 0;position:relative;gap:0}
+.pipeline-header{display:flex;align-items:stretch;margin-bottom:24px;overflow:visible;padding:4px 0 24px 0;position:relative;gap:0}
 .pipeline-stage{flex:1;min-width:140px;display:flex;align-items:stretch;position:relative;z-index:1}
 .pipeline-stage-card{flex:1;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px;cursor:pointer;transition:all .2s;position:relative;display:flex;flex-direction:column;gap:4px}
 .pipeline-stage-card:hover{border-color:var(--accent);box-shadow:0 4px 16px rgba(0,0,0,.12);transform:translateY(-1px)}
@@ -209,7 +209,7 @@ input,select{font-family:inherit}
 .stage-arrow::before{content:'';position:absolute;top:50%;left:0;right:0;height:2px;background:var(--stg-color,var(--border));transform:translateY(-50%)}
 .stage-arrow::after{content:'';position:absolute;right:4px;top:50%;width:8px;height:8px;border-top:2px solid var(--stg-color,var(--border));border-right:2px solid var(--stg-color,var(--border));transform:translateY(-50%) rotate(45deg)}
 /* Drift badge under arrow */
-.stage-drift{position:absolute;bottom:-14px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:9px;padding:1px 6px;border-radius:6px;font-weight:600;z-index:3}
+.stage-drift{position:absolute;bottom:-18px;left:50%;transform:translateX(-50%);white-space:nowrap;font-size:9px;padding:2px 8px;border-radius:6px;font-weight:600;z-index:3;line-height:1}
 .stage-drift.warn{background:var(--yellow-dim);color:var(--yellow)}
 .stage-drift.ok{background:var(--green-dim);color:var(--green)}
 
@@ -497,7 +497,7 @@ input,select{font-family:inherit}
   <span id="projBadge" class="proj-badge" style="display:none"></span>
   <div class="spacer"></div>
   <span id="connBadge" class="conn-badge none"></span>
-  <button class="hdr-btn" id="lockBtn" style="display:none" onclick="lockProject()" title="Lock project">🔒</button>
+  <button class="hdr-btn" id="lockBtn" style="display:none" onclick="lockProject()" title="Switch project / Lock">⬅</button>
   <button class="hdr-btn" onclick="showHelpModal()" title="Keyboard shortcuts & help" id="helpBtn" style="display:none">?</button>
   <button class="hdr-btn" onclick="toggleTheme()" title="Toggle theme" id="themeBtn">☀️</button>
 </div>
@@ -1006,6 +1006,13 @@ function lockProject() {
   activeEnvIndex = -1;
   activeEnvTab = 'open';
   batchSelected = new Set();
+  // Reset Salesforce & metadata state to prevent cross-project bleed
+  sfState = { token: null, instance: null, user: null };
+  metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
+  metaFetchConfig = { types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'], datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' };
+  repoBranches = [];
+  sessionStorage.removeItem('sf_token');
+  sessionStorage.removeItem('sf_instance');
   document.getElementById('mainNav').style.display = 'none';
   document.getElementById('lockBtn').style.display = 'none';
   document.getElementById('helpBtn').style.display = 'none';
@@ -2782,13 +2789,27 @@ function showCommitForm() {
   const selected = metaCache.components.filter(c => c.selected);
   if (!selected.length) return;
 
+  // Auto-detect base path from git tree
+  const detectedBase = detectBasePath();
   const branch = metaCache.gitBranch || 'main';
+
   let html = '<div class="meta-commit-form">';
-  html += '<h3>Commit ' + selected.length + ' component(s) to Git</h3>';
-  html += '<div class="field"><label>Commit Target</label>';
-  html += '<div style="display:flex;gap:8px;margin-bottom:8px">';
-  html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="radio" name="commitMode" value="existing" checked onchange="toggleNewBranchField()"> Existing branch</label>';
-  html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="radio" name="commitMode" value="new" onchange="toggleNewBranchField()"> Create new branch</label>';
+  html += '<h3>📤 Commit to Git</h3>';
+  html += '<p style="font-size:12px;color:var(--muted);margin-bottom:16px">' + selected.length + ' component(s) selected. Files will be placed in their standard SFDX paths (e.g. <code>classes/</code>, <code>triggers/</code>).</p>';
+
+  // Selected files preview
+  html += '<details style="margin-bottom:16px"><summary style="font-size:12px;font-weight:600;cursor:pointer;color:var(--muted)">Selected files (' + selected.length + ')</summary>';
+  html += '<div style="margin-top:8px;max-height:160px;overflow-y:auto;font-size:12px;font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px">';
+  selected.forEach(c => {
+    html += '<div style="padding:2px 0;color:var(--text)">' + esc(detectedBase + '/' + c.fullName) + '</div>';
+  });
+  html += '</div></details>';
+
+  // Branch selection
+  html += '<div class="field"><label>Target Branch</label>';
+  html += '<div style="display:flex;gap:12px;margin-bottom:8px">';
+  html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="radio" name="commitMode" value="existing" checked onchange="toggleNewBranchField()"> Existing</label>';
+  html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="radio" name="commitMode" value="new" onchange="toggleNewBranchField()"> New branch</label>';
   html += '</div>';
   html += '<div id="commitBranchExisting">';
   html += '<select id="commitBranch" style="width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">';
@@ -2800,16 +2821,45 @@ function showCommitForm() {
   html += '</select></div>';
   html += '<div id="commitBranchNew" style="display:none">';
   html += '<input id="commitNewBranchName" placeholder="feature/my-metadata-update" style="width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;margin-bottom:6px">';
-  html += '<div style="font-size:12px;color:var(--muted)">Base: <strong>' + esc(branch) + '</strong> (current compare branch)</div>';
+  html += '<div style="font-size:12px;color:var(--muted)">Will branch from: <strong>' + esc(branch) + '</strong></div>';
   html += '</div></div>';
-  html += '<div class="field"><label>Commit Message</label><textarea id="commitMsg" placeholder="Update metadata from Salesforce">Update ' + selected.length + ' component(s) from SF org</textarea></div>';
-  html += '<div class="field"><label>Base Path in Repo</label><input id="commitBasePath" value="force-app/main/default/" placeholder="force-app/main/default/"></div>';
+
+  // Commit message
+  html += '<div class="field"><label>Commit Message</label>';
+  html += '<textarea id="commitMsg" rows="2" style="resize:vertical" placeholder="Describe your changes">Update ' + selected.length + ' component(s) from Salesforce</textarea></div>';
+
+  // Hidden base path (auto-detected)
+  html += '<input type="hidden" id="commitBasePath" value="' + esc(detectedBase) + '">';
+
   html += '<div id="commitResult"></div>';
-  html += '<button class="btn btn-primary" onclick="doCommit()">Commit &amp; Push</button>';
+  html += '<div style="display:flex;gap:8px;align-items:center">';
+  html += '<button class="btn btn-primary" onclick="doCommit()">📤 Commit &amp; Push</button>';
+  html += '<span style="font-size:11px;color:var(--muted)">Files go to: <code>' + esc(detectedBase) + '/</code></span>';
+  html += '</div>';
   html += '</div>';
 
   document.getElementById('commitFormArea').innerHTML = html;
   document.getElementById('commitFormArea').scrollIntoView({ behavior: 'smooth' });
+}
+
+function detectBasePath() {
+  // Try to detect base path from existing git tree
+  const tree = metaCache.gitTree || {};
+  const paths = Object.keys(tree);
+  // Look for common SFDX paths
+  for (const p of paths) {
+    const m = p.match(/^(.+?)\/classes\//);
+    if (m) return m[1];
+  }
+  for (const p of paths) {
+    const m = p.match(/^(.+?)\/triggers\//);
+    if (m) return m[1];
+  }
+  for (const p of paths) {
+    const m = p.match(/^(.+?)\/pages\//);
+    if (m) return m[1];
+  }
+  return 'force-app/main/default';
 }
 
 function toggleNewBranchField() {
