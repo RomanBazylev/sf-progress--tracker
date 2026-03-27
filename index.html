@@ -2942,11 +2942,10 @@ const META_QUERIES = [
   { type: 'CustomField', label: 'Custom Fields', desc: 'Custom fields on objects', api: 'tooling', soql: "SELECT Id, DeveloperName, TableEnumOrId, LastModifiedDate FROM CustomField WHERE NamespacePrefix = null", path: 'fields', ext: '.field-meta.xml' },
   { type: 'EmailTemplate', label: 'Email Templates', desc: 'Email templates', api: 'tooling', soql: "SELECT Id, DeveloperName, Subject, LastModifiedDate FROM EmailTemplate WHERE NamespacePrefix = null", path: 'email', ext: '.email-meta.xml' },
   { type: 'StaticResource', label: 'Static Resources', desc: 'JS, CSS, images, zips', api: 'tooling', soql: "SELECT Id, Name, ContentType, LastModifiedDate FROM StaticResource WHERE NamespacePrefix = null", path: 'staticresources', ext: '.resource-meta.xml' },
-  // ── Metadata REST API ──
-  { type: 'AssignmentRule', label: 'Assignment Rules', desc: 'Lead & Case assignment rules', api: 'metadata', metadataType: 'AssignmentRule', path: 'assignmentRules', ext: '.assignmentRules-meta.xml' },
-  { type: 'AutoResponseRule', label: 'Auto-Response Rules', desc: 'Auto-response email rules', api: 'metadata', metadataType: 'AutoResponseRules', path: 'autoResponseRules', ext: '.autoResponseRules-meta.xml' },
-  { type: 'EscalationRule', label: 'Escalation Rules', desc: 'Case escalation rules', api: 'metadata', metadataType: 'EscalationRules', path: 'escalationRules', ext: '.escalationRules-meta.xml' },
-  { type: 'SharingRule', label: 'Sharing Rules', desc: 'Record sharing rules', api: 'metadata', metadataType: 'SharingRules', path: 'sharingRules', ext: '.sharingRules-meta.xml' },
+  // ── Standard SOQL (setup objects) ──
+  { type: 'AssignmentRule', label: 'Assignment Rules', desc: 'Lead & Case assignment rules', api: 'soql', soql: "SELECT Id, Name, SobjectType, Active, LastModifiedDate FROM AssignmentRule", path: 'assignmentRules', ext: '.assignmentRules-meta.xml' },
+  { type: 'AutoResponseRule', label: 'Auto-Response Rules', desc: 'Auto-response email rules', api: 'soql', soql: "SELECT Id, Name, SobjectType, Active, LastModifiedDate FROM AutoResponseRule", path: 'autoResponseRules', ext: '.autoResponseRules-meta.xml' },
+  { type: 'EscalationRule', label: 'Escalation Rules', desc: 'Case escalation rules', api: 'soql', soql: "SELECT Id, Name, SobjectType, Active, LastModifiedDate FROM EscalationRule", path: 'escalationRules', ext: '.escalationRules-meta.xml' },
   { type: 'MatchingRule', label: 'Matching Rules', desc: 'Duplicate matching rules', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM MatchingRule WHERE NamespacePrefix = null", path: 'matchingRules', ext: '.matchingRule-meta.xml' },
   { type: 'DuplicateRule', label: 'Duplicate Rules', desc: 'Duplicate management rules', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM DuplicateRule WHERE NamespacePrefix = null", path: 'duplicateRules', ext: '.duplicateRule-meta.xml' },
 ];
@@ -2961,7 +2960,7 @@ function buildFetchConfigHtml() {
   const typeGroups = [
     { label: 'Code', types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'] },
     { label: 'Configuration', types: ['ValidationRule','WorkflowRule','Flow','CustomObject','CustomField'] },
-    { label: 'Rules', types: ['AssignmentRule','AutoResponseRule','EscalationRule','SharingRule','MatchingRule','DuplicateRule'] },
+    { label: 'Rules', types: ['AssignmentRule','AutoResponseRule','EscalationRule','MatchingRule','DuplicateRule'] },
     { label: 'Other', types: ['EmailTemplate','StaticResource'] },
   ];
   typeGroups.forEach(grp => {
@@ -3094,38 +3093,33 @@ async function fetchMetadata() {
       const floatingText = document.getElementById('metaFetchFloatingText');
       if (floatingText) floatingText.textContent = 'Fetching ' + q.type + ' (' + done + '/' + activeTypes.length + ')...';
       try {
-        if (q.api === 'metadata') {
-          // Metadata REST API — list members then fetch each
-          const listUrl = '/services/data/v59.0/tooling/query?q=' + encodeURIComponent(
-            "SELECT Id, DeveloperName, LastModifiedDate FROM " + q.metadataType + " WHERE NamespacePrefix = null" + dateSuffix + " ORDER BY LastModifiedDate DESC"
-          );
+        if (q.api === 'soql') {
+          // Standard REST API SOQL (setup objects like AssignmentRule, etc.)
+          const soql = q.soql + dateSuffix + ' ORDER BY LastModifiedDate DESC';
+          let queryUrl = '/services/data/v59.0/query?q=' + encodeURIComponent(soql);
           try {
-            const res = await sfApiFetch(listUrl);
-            if (res.records) {
-              res.records.forEach(rec => {
-                const name = rec.DeveloperName || rec.Name || rec.Id;
-                components.push({
-                  type: q.type,
-                  name: name,
-                  fullName: q.path + '/' + name + q.ext,
-                  body: rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '',
-                  lastModified: rec.LastModifiedDate,
-                  sfId: rec.Id,
-                  change: 'new',
-                  selected: false
+            while (queryUrl) {
+              const res = await sfApiFetch(queryUrl);
+              if (res.records) {
+                res.records.forEach(rec => {
+                  const name = rec.Name || rec.DeveloperName || rec.Id;
+                  const displayName = rec.SobjectType ? (rec.SobjectType + '.' + name) : name;
+                  components.push({
+                    type: q.type,
+                    name: displayName,
+                    fullName: q.path + '/' + displayName.replace(/\./g, '/') + q.ext,
+                    body: '',
+                    lastModified: rec.LastModifiedDate,
+                    sfId: rec.Id,
+                    change: 'new',
+                    selected: false
+                  });
                 });
-              });
+              }
+              queryUrl = res.nextRecordsUrl || null;
             }
-          } catch (toolingErr) {
-            // Fallback: try Metadata REST endpoint to list components
-            try {
-              const descUrl = '/services/data/v59.0/tooling/sobjects/' + q.metadataType + '/describe';
-              await sfApiFetch(descUrl);
-              // If describe works, just log that no records came through
-              console.warn(q.type + ': describe succeeded but query failed — ' + toolingErr.message);
-            } catch {
-              console.warn(q.type + ': not available in this org — ' + toolingErr.message);
-            }
+          } catch (e) {
+            console.warn(q.type + ': standard SOQL failed — ' + e.message);
           }
         } else {
           // Tooling API SOQL
