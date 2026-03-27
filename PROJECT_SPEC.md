@@ -69,7 +69,25 @@
 - **Batch Promote** — merge all selected PRs sequentially
 - Progress toast showing success/failure count
 
-### 2.6 Metadata Tab (Salesforce Integration)
+### 2.6 Release Tab (Cherry-pick to Next Environment)
+- **Release tab** appears on env panel for non-last environments with releasable merged PRs
+- **Releasable PR detection** — merged PRs in env X whose feature has no open/merged PR targeting env X+1
+- **Selectable PR cards** — checkboxes to pick specific PRs to include; if none selected, all releasable are included
+- **Release form** with:
+  - **Target environment** (read-only) — next env in pipeline
+  - **Branch name** (editable) — auto-generated: `release/<head-ref>` for single PR, `release/YYYY-MM-DD` for multiple
+  - **PR title** (editable) — auto-generated: `Release: <title> → <env>` or `Release: N changes → <env>`
+  - **Included PRs summary** — list of PRs that will be cherry-picked
+- **Create Release PR** workflow:
+  1. Get target branch HEAD SHA
+  2. Create release branch from target (e.g., master)
+  3. Merge each selected feature's commit SHA into release branch via GitHub Merges API
+  4. Create PR from release branch to target env branch
+- **Progress indicators** — step-by-step: creating branch → merging 1/N → creating PR → done
+- **Error handling** — branch already exists (422), merge conflicts (409 per-PR), protected branch check
+- **Post-release** — clears selection, refreshes data so released PRs no longer appear in Release tab
+
+### 2.7 Metadata Tab (Salesforce Integration)
 - **Connect screen** — Instance URL, Consumer Key, CORS Proxy fields
 - **OAuth Implicit Flow** — redirects to SF login, captures token from URL hash
 - **Smart redirect recovery** — `sf_oauth_pending` flag in `sessionStorage` auto-navigates back to Metadata tab after OAuth redirect
@@ -91,7 +109,7 @@
   - Commit progress steps: resolving branch → uploading files → creating tree → committing → updating ref
   - Creates blobs, tree, commit via GitHub Git Data API
 
-### 2.7 UX System
+### 2.8 UX System
 - **Toast notifications** — all user feedback via animated toasts (ok/err/warn/info), no browser alerts
 - **Help modal** (press `?`) — keyboard shortcuts table + quick tips
 - **Keyboard shortcuts**: R=refresh, T=theme, S=settings, M=metadata, P=pipeline, /=search, ?=help, Esc=close
@@ -131,15 +149,17 @@ Salesforce ──┐
 | `currentProjectIndex` | number | Index into localStorage projects array |
 | `currentPassword` | string | Password for active project (in memory only) |
 | `projectData` | object | Decrypted project: `{ pat, repo, envs[], caseBaseUrl, sfInstance, sfClientId, sfCorsProxy, prefs, checklists }` |
-| `pipelineCache` | object | `{ prs[], mergedPrs[], branches[], drifts{}, features[], syncPrs[], lastFetch }` |
+| `pipelineCache` | object | `{ prs[], mergedPrs[], branches[], drifts{}, features[], syncPrs[], releasablePrs{}, lastFetch }` |
 | `detailCache` | object | PR detail/review cache by PR number |
 | `sfState` | object | `{ token, instance, user }` (session-scoped via sessionStorage) |
 | `metaCache` | object | `{ components[], gitTree{}, gitBranch, hasFetched }` |
 | `metaFetchConfig` | object | `{ types[], datePreset, dateFrom, dateTo, compareBranch }` |
 | `repoBranches` | array | All branch names from repo (for metadata comparison) |
 | `activeEnvIndex` | number | Selected pipeline stage (-1 = overview) |
-| `activeEnvTab` | string | 'open' / 'merged' / 'sync' |
+| `activeEnvTab` | string | 'open' / 'merged' / 'sync' / 'release' |
 | `batchSelected` | Set | PR numbers selected for batch promote |
+| `releaseSelected` | Set | PR numbers selected for release to next env |
+| `isCreatingRelease` | boolean | Lock flag during release PR creation |
 
 ---
 
@@ -166,6 +186,17 @@ Salesforce ──┐
 | `openSidePanel(prNum)` | Fetch PR detail + reviews + checks → panel |
 | `promotePr(prNum)` / `batchPromote()` | Merge PRs via GitHub API |
 | `extractIssues(pr)` | Extract SF URLs + case patterns + GH issues from body |
+
+### Release
+| Function | Purpose |
+|----------|---------|
+| `renderReleasePrCard(pr)` | PR card with checkbox for release selection |
+| `toggleReleasePr(prNum)` / `releaseClear()` | Manage release selection set |
+| `getReleaseBranchSuggestion()` | Auto-generate branch name: `release/<head-ref>` or `release/YYYY-MM-DD` |
+| `getReleaseTitleSuggestion(envIdx)` | Auto-generate PR title based on selection |
+| `getReleaseBodySuggestion(envIdx)` | Auto-generate PR body with included changes list |
+| `renderReleaseForm(envIdx)` | Release form: target env, branch name, title, included PRs, create button |
+| `createReleasePr(envIdx)` | Create branch from target → merge feature SHAs → create PR via GitHub API |
 
 ### Metadata
 | Function | Purpose |

@@ -369,6 +369,29 @@ input,select{font-family:inherit}
 .pr-card-selectable .pr-checkbox{position:absolute;top:12px;left:12px;width:18px;height:18px;accent-color:var(--accent);cursor:pointer;z-index:2}
 .pr-card-selectable .pr-card{padding-left:40px}
 
+/* ── RELEASE TAB ── */
+.release-form{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-top:16px;display:flex;flex-direction:column;gap:14px;max-width:600px}
+.release-form h4{font-size:14px;margin:0;display:flex;align-items:center;gap:8px}
+.release-form .field{display:flex;flex-direction:column;gap:4px}
+.release-form .field label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px}
+.release-form .field input,.release-form .field textarea{padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px}
+.release-form .field input:focus,.release-form .field textarea:focus{outline:none;border-color:var(--accent)}
+.release-form .field textarea{min-height:80px;resize:vertical;font-family:inherit}
+.release-form .field .field-hint{font-size:11px;color:var(--muted)}
+.release-form .field .field-readonly{padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;font-size:13px;color:var(--muted)}
+.release-form .release-actions{display:flex;gap:8px;margin-top:4px}
+.release-progress{font-size:12px;padding:10px 14px;border-radius:8px;margin-top:8px}
+.release-progress.loading{background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue)}
+.release-progress.success{background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green)}
+.release-progress.error{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
+.release-progress.warn{background:color-mix(in srgb,var(--yellow) 12%,transparent);color:var(--yellow)}
+.release-included{font-size:12px;color:var(--muted);margin-top:4px}
+.release-included ul{margin:4px 0 0 16px;list-style:disc}
+.release-included li{margin:2px 0}
+.btn-release{background:var(--purple);color:#fff;border-color:var(--purple);font-weight:600}
+.btn-release:hover{opacity:.9}
+.btn-release:disabled{opacity:.4;cursor:not-allowed}
+
 /* ── LINKED ISSUES ── */
 .sp-issues{display:flex;flex-direction:column;gap:4px}
 .sp-issue{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 8px;background:var(--surface2);border-radius:6px}
@@ -809,12 +832,14 @@ const Crypto = {
 let currentProjectIndex = -1;
 let currentPassword = '';
 let projectData = null; // decrypted: { pat, repo, envs:[], prefs:{} }
-let pipelineCache = { prs: [], mergedPrs: [], branches: [], drifts: {}, features: [], lastFetch: 0 };
+let pipelineCache = { prs: [], mergedPrs: [], branches: [], drifts: {}, features: [], releasablePrs: {}, lastFetch: 0 };
 let detailCache = {};
 let refreshTimer = null;
 let rateLimitRemaining = null;
 let batchSelected = new Set();
 let isPromoting = false;
+let releaseSelected = new Set();
+let isCreatingRelease = false;
 
 // Salesforce metadata state
 let sfState = { token: null, instance: null, user: null };
@@ -1030,11 +1055,13 @@ function lockProject() {
   currentProjectIndex = -1;
   currentPassword = '';
   projectData = null;
-  pipelineCache = { prs: [], mergedPrs: [], branches: [], drifts: {}, features: [], lastFetch: 0 };
+  pipelineCache = { prs: [], mergedPrs: [], branches: [], drifts: {}, features: [], releasablePrs: {}, lastFetch: 0 };
   detailCache = {};
   activeEnvIndex = -1;
   activeEnvTab = 'open';
   batchSelected = new Set();
+  releaseSelected = new Set();
+  isCreatingRelease = false;
   // Reset Salesforce & metadata state to prevent cross-project bleed
   sfState = { token: null, instance: null, user: null };
   metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
@@ -1413,6 +1440,24 @@ function buildFeatures() {
 
   // Sort by last updated
   pipelineCache.features = Array.from(featureMap.values()).sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated));
+
+  // Build releasable PRs per environment
+  // A merged PR in env X is "releasable" to env X+1 if its feature has no open/merged PR targeting env X+1
+  const releasable = {};
+  for (let i = 0; i < envBranches.length - 1; i++) {
+    const envBranch = envBranches[i];
+    const nextEnvBranch = envBranches[i + 1];
+    const eligible = [];
+    pipelineCache.features.forEach(feat => {
+      const prInCurrent = feat.prs.get(envBranch);
+      const prInNext = feat.prs.get(nextEnvBranch);
+      if (prInCurrent && prInCurrent.merged_at && !prInNext) {
+        eligible.push(prInCurrent);
+      }
+    });
+    if (eligible.length) releasable[envBranch] = eligible;
+  }
+  pipelineCache.releasablePrs = releasable;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1504,6 +1549,8 @@ function renderEnvPanel(envIndex) {
   const openPrs = filterPrList(pipelineCache.prs.filter(pr => pr.base.ref === env.branch), search, author);
   const mergedPrs = filterPrList(pipelineCache.mergedPrs.filter(pr => pr.base.ref === env.branch), search, author);
   const syncPrs = filterPrList((pipelineCache.syncPrs || []).filter(pr => pr.base.ref === env.branch), search, author);
+  const releasablePrs = (pipelineCache.releasablePrs && pipelineCache.releasablePrs[env.branch]) || [];
+  const isNotLastEnv = envIndex < projectData.envs.length - 1;
 
   const openCount = openPrs.length;
   const mergedCount = mergedPrs.length;
@@ -1517,6 +1564,9 @@ function renderEnvPanel(envIndex) {
   html += `<button class="env-tab${tab === 'merged' ? ' active' : ''}" onclick="switchEnvTab('merged')">Recently Merged<span class="tab-count">${mergedCount}</span></button>`;
   if (syncPrs.length) {
     html += `<button class="env-tab${tab === 'sync' ? ' active' : ''}" onclick="switchEnvTab('sync')">🔄 Sync<span class="tab-count">${syncPrs.length}</span></button>`;
+  }
+  if (isNotLastEnv && releasablePrs.length) {
+    html += `<button class="env-tab${tab === 'release' ? ' active' : ''}" onclick="switchEnvTab('release')">🚀 Release<span class="tab-count">${releasablePrs.length}</span></button>`;
   }
   html += '</div>';
 
@@ -1533,14 +1583,36 @@ function renderEnvPanel(envIndex) {
     </div>`;
   }
 
+  // Release selection bar
+  if (tab === 'release' && releaseSelected.size > 0) {
+    html += `<div class="batch-bar">
+      <span class="batch-count">${releaseSelected.size} PR${releaseSelected.size > 1 ? 's' : ''} selected for release</span>
+      <div class="batch-actions">
+        <button class="btn btn-sm" onclick="releaseClear()">Clear</button>
+      </div>
+    </div>`;
+  }
+
   // Tab body
   html += '<div class="env-panel-body">';
   let prsToShow;
   if (tab === 'merged') prsToShow = mergedPrs;
   else if (tab === 'sync') prsToShow = syncPrs;
+  else if (tab === 'release') prsToShow = releasablePrs;
   else prsToShow = openPrs;
 
-  if (!prsToShow.length) {
+  if (tab === 'release') {
+    // Release tab: show releasable PRs with checkboxes + release form below
+    if (!prsToShow.length) {
+      html += `<div class="env-panel-empty">No releasable PRs for ${esc(env.displayName)}</div>`;
+    } else {
+      prsToShow.forEach(pr => { html += renderReleasePrCard(pr); });
+    }
+    // Release form (always show if there are releasable PRs)
+    if (prsToShow.length) {
+      html += renderReleaseForm(envIndex);
+    }
+  } else if (!prsToShow.length) {
     const label = tab === 'merged' ? 'merged PRs' : tab === 'sync' ? 'sync PRs' : 'open PRs';
     html += `<div class="env-panel-empty">No ${label} for ${esc(env.displayName)}</div>`;
   } else {
@@ -1696,6 +1768,248 @@ async function batchPromote() {
   let msg = ok + '/' + results.length + ' PR(s) promoted successfully.';
   if (fail.length) msg += '\n\nFailed:\n' + fail.map(r => '#' + r.num + ': ' + r.err).join('\n');
   if (fail.length) toast(msg,'warn',6000); else toast(msg,'ok');
+}
+
+/* ═══════════════════════════════════════════════════════
+   RELEASE TAB — Cherry-pick merged PRs to next env
+   ═══════════════════════════════════════════════════════ */
+function renderReleasePrCard(pr) {
+  const checked = releaseSelected.has(pr.number) ? 'checked' : '';
+  return `<div class="pr-card-selectable">
+    <input type="checkbox" class="pr-checkbox" ${checked}
+      onclick="event.stopPropagation();toggleReleasePr(${pr.number})"
+      title="Select for release">
+    ${renderPrCard(pr)}
+  </div>`;
+}
+
+function toggleReleasePr(prNum) {
+  if (releaseSelected.has(prNum)) releaseSelected.delete(prNum);
+  else releaseSelected.add(prNum);
+  renderPipeline();
+}
+
+function releaseClear() {
+  releaseSelected.clear();
+  renderPipeline();
+}
+
+function getReleaseBranchSuggestion() {
+  const releasable = (pipelineCache.releasablePrs && pipelineCache.releasablePrs[projectData.envs[activeEnvIndex].branch]) || [];
+  const selected = releasable.filter(pr => releaseSelected.has(pr.number));
+  if (selected.length === 1) {
+    return 'release/' + selected[0].head.ref;
+  }
+  const today = new Date().toISOString().slice(0, 10);
+  return 'release/' + today;
+}
+
+function getReleaseTitleSuggestion(envIndex) {
+  const nextEnv = projectData.envs[envIndex + 1];
+  const releasable = (pipelineCache.releasablePrs && pipelineCache.releasablePrs[projectData.envs[envIndex].branch]) || [];
+  const selected = releasable.filter(pr => releaseSelected.has(pr.number));
+  if (selected.length === 1) {
+    return 'Release: ' + selected[0].title + ' → ' + nextEnv.displayName;
+  }
+  return 'Release: ' + (selected.length || releasable.length) + ' changes → ' + nextEnv.displayName;
+}
+
+function getReleaseBodySuggestion(envIndex) {
+  const env = projectData.envs[envIndex];
+  const nextEnv = projectData.envs[envIndex + 1];
+  const releasable = (pipelineCache.releasablePrs && pipelineCache.releasablePrs[env.branch]) || [];
+  const selected = releasable.filter(pr => releaseSelected.has(pr.number));
+  const prs = selected.length ? selected : releasable;
+  let body = 'Release from **' + env.displayName + '** to **' + nextEnv.displayName + '**\n\n';
+  body += '### Included changes\n';
+  prs.forEach(pr => {
+    body += '- #' + pr.number + ' ' + pr.title + ' (@' + pr.user.login + ')\n';
+  });
+  return body;
+}
+
+function renderReleaseForm(envIndex) {
+  const nextEnv = projectData.envs[envIndex + 1];
+  const env = projectData.envs[envIndex];
+  const releasable = (pipelineCache.releasablePrs && pipelineCache.releasablePrs[env.branch]) || [];
+  const selected = releasable.filter(pr => releaseSelected.has(pr.number));
+  const branchSuggestion = getReleaseBranchSuggestion();
+  const titleSuggestion = getReleaseTitleSuggestion(envIndex);
+  const hasSelection = selected.length > 0;
+  const prsForRelease = hasSelection ? selected : releasable;
+
+  let html = '<div class="release-form">';
+  html += '<h4>🚀 Create Release PR</h4>';
+
+  // Target env (read-only)
+  html += '<div class="field">';
+  html += '<label>Target Environment</label>';
+  html += `<div class="field-readonly">🎯 ${esc(nextEnv.displayName)} <code style="margin-left:8px;font-size:11px;color:var(--muted)">${esc(nextEnv.branch)}</code></div>`;
+  html += '</div>';
+
+  // Branch name
+  html += '<div class="field">';
+  html += '<label>Release Branch Name <span style="color:var(--red)">*</span></label>';
+  html += `<input type="text" id="releaseBranchName" value="${esc(branchSuggestion)}" placeholder="release/feature/TICKET-123">`;
+  html += `<div class="field-hint">Branch will be created from <code>${esc(nextEnv.branch)}</code></div>`;
+  html += '</div>';
+
+  // PR title
+  html += '<div class="field">';
+  html += '<label>PR Title <span style="color:var(--red)">*</span></label>';
+  html += `<input type="text" id="releaseTitle" value="${esc(titleSuggestion)}">`;
+  html += '</div>';
+
+  // Included PRs summary
+  html += '<div class="release-included">';
+  if (!hasSelection) {
+    html += '<strong>⚠️ No PRs selected — select PRs above, or all ' + releasable.length + ' will be included:</strong>';
+  } else {
+    html += '<strong>' + selected.length + ' PR(s) will be cherry-picked:</strong>';
+  }
+  html += '<ul>';
+  prsForRelease.forEach(pr => {
+    html += `<li>#${pr.number} ${esc(pr.title)} <span style="color:var(--muted)">by ${esc(pr.user.login)}</span></li>`;
+  });
+  html += '</ul></div>';
+
+  // Actions
+  const btnDisabled = isCreatingRelease ? ' disabled' : '';
+  const btnLabel = isCreatingRelease ? '⏳ Creating...' : '🚀 Create Release PR';
+  html += '<div class="release-actions">';
+  html += `<button class="btn btn-release" id="releaseBtn" onclick="createReleasePr(${envIndex})"${btnDisabled}>${btnLabel}</button>`;
+  html += `<button class="btn" onclick="releaseClear()">Clear Selection</button>`;
+  html += '</div>';
+
+  // Progress area
+  html += '<div id="releaseProgress"></div>';
+
+  html += '</div>';
+  return html;
+}
+
+/* ═══════════════════════════════════════════════════════
+   CREATE RELEASE PR (cherry-pick via Merge API)
+   ═══════════════════════════════════════════════════════ */
+async function createReleasePr(envIndex) {
+  const env = projectData.envs[envIndex];
+  const nextEnv = projectData.envs[envIndex + 1];
+  const releasable = (pipelineCache.releasablePrs && pipelineCache.releasablePrs[env.branch]) || [];
+  const selected = releasable.filter(pr => releaseSelected.has(pr.number));
+  const prsToRelease = selected.length ? selected : releasable;
+
+  const branchName = document.getElementById('releaseBranchName').value.trim();
+  const prTitle = document.getElementById('releaseTitle').value.trim();
+  const progressEl = document.getElementById('releaseProgress');
+  const btn = document.getElementById('releaseBtn');
+
+  if (!branchName) { toast('Enter a branch name', 'warn'); return; }
+  if (!prTitle) { toast('Enter a PR title', 'warn'); return; }
+  if (isProtectedBranch(branchName)) { toast('Cannot use protected branch "' + branchName + '"', 'err'); return; }
+  if (!prsToRelease.length) { toast('No PRs to release', 'warn'); return; }
+
+  isCreatingRelease = true;
+  btn.disabled = true;
+  btn.textContent = '⏳ Creating...';
+  const updProg = (text, cls) => { progressEl.innerHTML = '<div class="release-progress ' + cls + '">' + text + '</div>'; };
+  const repo = projectData.repo;
+  const prBody = getReleaseBodySuggestion(envIndex);
+
+  const mergeResults = [];
+
+  try {
+    // Step 1: Get target branch HEAD SHA
+    updProg('🔍 Resolving ' + esc(nextEnv.branch) + ' branch...', 'loading');
+    const refData = await ghFetch('/repos/' + repo + '/git/ref/heads/' + encodeURIComponent(nextEnv.branch));
+    const targetSha = refData.object.sha;
+
+    // Step 2: Create release branch from target
+    updProg('🌿 Creating branch ' + esc(branchName) + '...', 'loading');
+    try {
+      await ghFetch('/repos/' + repo + '/git/refs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ ref: 'refs/heads/' + branchName, sha: targetSha })
+      });
+    } catch (e) {
+      if (e.message && e.message.includes('422')) {
+        updProg('✕ Branch "' + esc(branchName) + '" already exists. Choose a different name.', 'error');
+        isCreatingRelease = false;
+        btn.disabled = false;
+        btn.textContent = '🚀 Create Release PR';
+        return;
+      }
+      throw e;
+    }
+
+    // Step 3: Merge each feature's commit SHA into release branch
+    for (let i = 0; i < prsToRelease.length; i++) {
+      const pr = prsToRelease[i];
+      updProg('🔀 Merging ' + (i + 1) + '/' + prsToRelease.length + ': #' + pr.number + ' ' + esc(pr.title) + '...', 'loading');
+      try {
+        await ghFetch('/repos/' + repo + '/merges', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            base: branchName,
+            head: pr.head.sha,
+            commit_message: 'Cherry-pick: #' + pr.number + ' ' + pr.title
+          })
+        });
+        mergeResults.push({ num: pr.number, ok: true });
+      } catch (e) {
+        mergeResults.push({ num: pr.number, ok: false, err: e.message });
+      }
+    }
+
+    // Check if any merges failed
+    const failedMerges = mergeResults.filter(r => !r.ok);
+    if (failedMerges.length === prsToRelease.length) {
+      updProg('✕ All merges failed. Branch "' + esc(branchName) + '" was created but has no changes.<br>' +
+        failedMerges.map(r => '#' + r.num + ': ' + esc(r.err)).join('<br>'), 'error');
+      isCreatingRelease = false;
+      btn.disabled = false;
+      btn.textContent = '🚀 Create Release PR';
+      return;
+    }
+
+    // Step 4: Create PR from release branch to target env
+    updProg('📝 Creating pull request...', 'loading');
+    const newPr = await ghFetch('/repos/' + repo + '/pulls', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        title: prTitle,
+        head: branchName,
+        base: nextEnv.branch,
+        body: prBody
+      })
+    });
+
+    // Success
+    const okCount = mergeResults.filter(r => r.ok).length;
+    let successMsg = '✓ Release PR <a href="' + esc(newPr.html_url) + '" target="_blank" rel="noopener noreferrer">#' + newPr.number + '</a> created! ' +
+      okCount + '/' + prsToRelease.length + ' changes merged into <code>' + esc(branchName) + '</code>.';
+    if (failedMerges.length) {
+      successMsg += '<br>⚠️ Failed merges: ' + failedMerges.map(r => '#' + r.num + ' (' + esc(r.err) + ')').join(', ');
+      updProg(successMsg, 'warn');
+    } else {
+      updProg(successMsg, 'success');
+    }
+
+    toast('Release PR #' + newPr.number + ' created — <a href="' + esc(newPr.html_url) + '" target="_blank" style="color:inherit;text-decoration:underline">open PR ↗</a>', 'ok', 10000);
+    releaseSelected.clear();
+    btn.textContent = '✓ Created';
+
+    // Refresh data so the released PRs disappear from the Release tab
+    setTimeout(() => refreshData(), 2000);
+
+  } catch (e) {
+    updProg('✕ Release failed: ' + esc(e.message), 'error');
+    btn.disabled = false;
+    btn.textContent = '🚀 Create Release PR';
+  }
+  isCreatingRelease = false;
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -2969,6 +3283,25 @@ function showCommitForm() {
   html += '<div style="font-size:12px;color:var(--muted)">Will branch from: <strong>' + esc(branch) + '</strong></div>';
   html += '</div></div>';
 
+  // Create PR option (only for new branch mode)
+  html += '<div id="commitPrSection" style="display:none;margin-bottom:16px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">';
+  html += '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px;text-transform:none;letter-spacing:0">';
+  html += '<input type="checkbox" id="commitCreatePr" checked onchange="togglePrFields()">';
+  html += '<strong>Create Pull Request</strong> <span style="color:var(--muted);font-weight:normal">after commit</span>';
+  html += '</label>';
+  html += '<div id="commitPrFields">';
+  html += '<div class="field" style="margin-bottom:8px"><label style="font-size:12px">PR Title</label>';
+  html += '<input id="commitPrTitle" placeholder="" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"></div>';
+  html += '<div class="field"><label style="font-size:12px">Target Branch (base)</label>';
+  html += '<select id="commitPrBase" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">';
+  const prBaseBranches = repoBranches.length ? repoBranches : [branch];
+  prBaseBranches.forEach(b => {
+    const sel = b === branch ? ' selected' : '';
+    html += '<option value="' + esc(b) + '"' + sel + '>' + esc(b) + '</option>';
+  });
+  html += '</select></div>';
+  html += '</div></div>';
+
   // Commit message
   html += '<div class="field"><label>Commit Message</label>';
   html += '<textarea id="commitMsg" rows="2" style="resize:vertical" placeholder="Describe your changes">Update ' + selected.length + ' component(s) from Salesforce</textarea></div>';
@@ -3013,12 +3346,27 @@ function toggleNewBranchField() {
   const mode = document.querySelector('input[name=commitMode]:checked').value;
   document.getElementById('commitBranchExisting').style.display = mode === 'existing' ? '' : 'none';
   document.getElementById('commitBranchNew').style.display = mode === 'new' ? '' : 'none';
+  document.getElementById('commitPrSection').style.display = mode === 'new' ? '' : 'none';
   // Update commit button state
   if (mode === 'new') {
     document.getElementById('commitBtn').disabled = false;
     document.getElementById('protectedBranchWarn').style.display = 'none';
+    syncPrTitle();
   } else {
     onCommitBranchChange();
+  }
+}
+
+function togglePrFields() {
+  const on = document.getElementById('commitCreatePr').checked;
+  document.getElementById('commitPrFields').style.display = on ? '' : 'none';
+}
+
+function syncPrTitle() {
+  const prTitle = document.getElementById('commitPrTitle');
+  const commitMsg = document.getElementById('commitMsg');
+  if (prTitle && commitMsg && !prTitle.value) {
+    prTitle.value = commitMsg.value;
   }
 }
 
