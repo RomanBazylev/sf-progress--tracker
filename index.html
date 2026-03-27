@@ -2937,7 +2937,7 @@ const META_QUERIES = [
   // ── Tooling API (SOQL) — additional types ──
   { type: 'ValidationRule', label: 'Validation Rules', desc: 'Field validation rules', api: 'tooling', soql: "SELECT Id, ValidationName, EntityDefinition.DeveloperName, Metadata, LastModifiedDate FROM ValidationRule WHERE NamespacePrefix = null", path: 'validationRules', ext: '.validationRule-meta.xml', bodyField: '_metadata' },
   { type: 'WorkflowRule', label: 'Workflow Rules', desc: 'Workflow automation rules', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM WorkflowRule WHERE NamespacePrefix = null", path: 'workflowRules', ext: '.rule-meta.xml' },
-  { type: 'Flow', label: 'Flows', desc: 'Flows & autolaunched flows', api: 'tooling', soql: "SELECT Id, DeveloperName, ProcessType, LastModifiedDate FROM Flow WHERE Status = 'Active' AND NamespacePrefix = null", path: 'flows', ext: '.flow-meta.xml' },
+  { type: 'Flow', label: 'Flows', desc: 'Flows & autolaunched flows', api: 'tooling', soql: "SELECT Id, Definition.DeveloperName, ProcessType, LastModifiedDate FROM Flow WHERE Status = 'Active' AND NamespacePrefix = null", path: 'flows', ext: '.flow-meta.xml' },
   { type: 'CustomObject', label: 'Custom Objects', desc: 'Custom object definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM CustomObject WHERE NamespacePrefix = null AND DeveloperName != null", path: 'objects', ext: '.object-meta.xml' },
   { type: 'CustomField', label: 'Custom Fields', desc: 'Custom fields on objects', api: 'tooling', soql: "SELECT Id, DeveloperName, TableEnumOrId, LastModifiedDate FROM CustomField WHERE NamespacePrefix = null", path: 'fields', ext: '.field-meta.xml' },
   { type: 'EmailTemplate', label: 'Email Templates', desc: 'Email templates', api: 'tooling', soql: "SELECT Id, DeveloperName, Subject, LastModifiedDate FROM EmailTemplate WHERE NamespacePrefix = null", path: 'email', ext: '.email-meta.xml' },
@@ -3135,7 +3135,7 @@ async function fetchMetadata() {
             const res = await sfApiFetch(queryUrl);
             if (res.records) {
               res.records.forEach(rec => {
-                const name = rec.Name || rec.DeveloperName || rec.ValidationName;
+                const name = rec.Name || rec.DeveloperName || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
                 const body = rec.Body || rec.Markup || (rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '') || '';
                 const displayName = rec.EntityDefinition ? (rec.EntityDefinition.DeveloperName + '.' + name) : (rec.TableEnumOrId ? (rec.TableEnumOrId + '.' + name) : name);
                 components.push({
