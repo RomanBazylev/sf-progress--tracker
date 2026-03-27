@@ -844,7 +844,7 @@ let isCreatingRelease = false;
 // Salesforce metadata state
 let sfState = { token: null, instance: null, user: null };
 let metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
-let metaFetchConfig = { types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'], datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' };
+let metaFetchConfig = { types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'], datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' }; // updated by META_DEFAULT_TYPES after load
 let repoBranches = [];
 
 const ENV_COLORS = ['#58a6ff','#d29922','#3fb950','#bc8cff','#f85149','#db6d28'];
@@ -1065,7 +1065,7 @@ function lockProject() {
   // Reset Salesforce & metadata state to prevent cross-project bleed
   sfState = { token: null, instance: null, user: null };
   metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
-  metaFetchConfig = { types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'], datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' };
+  metaFetchConfig = { types: META_DEFAULT_TYPES.slice(), datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' };
   repoBranches = [];
   sessionStorage.removeItem('sf_token');
   sessionStorage.removeItem('sf_instance');
@@ -2927,24 +2927,54 @@ function metaToggleAllCb(on) {
    FETCH METADATA FROM SALESFORCE
    ═══════════════════════════════════════════════════════ */
 const META_QUERIES = [
-  { type: 'ApexClass', label: 'Apex Classes', desc: 'Custom Apex classes', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexClass WHERE NamespacePrefix = null AND Status = 'Active'", path: 'classes', ext: '.cls' },
-  { type: 'ApexTrigger', label: 'Apex Triggers', desc: 'Object triggers', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexTrigger WHERE NamespacePrefix = null AND Status = 'Active'", path: 'triggers', ext: '.trigger' },
-  { type: 'ApexPage', label: 'Visualforce Pages', desc: 'VF pages', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexPage WHERE NamespacePrefix = null", path: 'pages', ext: '.page' },
-  { type: 'ApexComponent', label: 'VF Components', desc: 'Visualforce components', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexComponent WHERE NamespacePrefix = null", path: 'components', ext: '.component' },
-  { type: 'AuraBundle', label: 'Aura Bundles', desc: 'Aura/Lightning components', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM AuraDefinitionBundle WHERE NamespacePrefix = null", path: 'aura', ext: '' },
-  { type: 'LWC', label: 'LWC Bundles', desc: 'Lightning Web Components', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM LightningComponentBundle WHERE NamespacePrefix = null", path: 'lwc', ext: '' },
+  // ── Tooling API (SOQL) ──
+  { type: 'ApexClass', label: 'Apex Classes', desc: 'Custom Apex classes', api: 'tooling', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexClass WHERE NamespacePrefix = null AND Status = 'Active'", path: 'classes', ext: '.cls' },
+  { type: 'ApexTrigger', label: 'Apex Triggers', desc: 'Object triggers', api: 'tooling', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexTrigger WHERE NamespacePrefix = null AND Status = 'Active'", path: 'triggers', ext: '.trigger' },
+  { type: 'ApexPage', label: 'Visualforce Pages', desc: 'VF pages', api: 'tooling', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexPage WHERE NamespacePrefix = null", path: 'pages', ext: '.page' },
+  { type: 'ApexComponent', label: 'VF Components', desc: 'Visualforce components', api: 'tooling', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexComponent WHERE NamespacePrefix = null", path: 'components', ext: '.component' },
+  { type: 'AuraBundle', label: 'Aura Bundles', desc: 'Aura/Lightning components', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM AuraDefinitionBundle WHERE NamespacePrefix = null", path: 'aura', ext: '' },
+  { type: 'LWC', label: 'LWC Bundles', desc: 'Lightning Web Components', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM LightningComponentBundle WHERE NamespacePrefix = null", path: 'lwc', ext: '' },
+  // ── Tooling API (SOQL) — additional types ──
+  { type: 'ValidationRule', label: 'Validation Rules', desc: 'Field validation rules', api: 'tooling', soql: "SELECT Id, ValidationName, EntityDefinition.DeveloperName, Metadata, LastModifiedDate FROM ValidationRule WHERE NamespacePrefix = null", path: 'validationRules', ext: '.validationRule-meta.xml', bodyField: '_metadata' },
+  { type: 'WorkflowRule', label: 'Workflow Rules', desc: 'Workflow automation rules', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM WorkflowRule WHERE NamespacePrefix = null", path: 'workflowRules', ext: '.rule-meta.xml' },
+  { type: 'Flow', label: 'Flows', desc: 'Flows & autolaunched flows', api: 'tooling', soql: "SELECT Id, DeveloperName, ProcessType, LastModifiedDate FROM Flow WHERE Status = 'Active' AND NamespacePrefix = null", path: 'flows', ext: '.flow-meta.xml' },
+  { type: 'CustomObject', label: 'Custom Objects', desc: 'Custom object definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM CustomObject WHERE NamespacePrefix = null AND DeveloperName != null", path: 'objects', ext: '.object-meta.xml' },
+  { type: 'CustomField', label: 'Custom Fields', desc: 'Custom fields on objects', api: 'tooling', soql: "SELECT Id, DeveloperName, TableEnumOrId, LastModifiedDate FROM CustomField WHERE NamespacePrefix = null", path: 'fields', ext: '.field-meta.xml' },
+  { type: 'EmailTemplate', label: 'Email Templates', desc: 'Email templates', api: 'tooling', soql: "SELECT Id, DeveloperName, Subject, LastModifiedDate FROM EmailTemplate WHERE NamespacePrefix = null", path: 'email', ext: '.email-meta.xml' },
+  { type: 'StaticResource', label: 'Static Resources', desc: 'JS, CSS, images, zips', api: 'tooling', soql: "SELECT Id, Name, ContentType, LastModifiedDate FROM StaticResource WHERE NamespacePrefix = null", path: 'staticresources', ext: '.resource-meta.xml' },
+  // ── Metadata REST API ──
+  { type: 'AssignmentRule', label: 'Assignment Rules', desc: 'Lead & Case assignment rules', api: 'metadata', metadataType: 'AssignmentRule', path: 'assignmentRules', ext: '.assignmentRules-meta.xml' },
+  { type: 'AutoResponseRule', label: 'Auto-Response Rules', desc: 'Auto-response email rules', api: 'metadata', metadataType: 'AutoResponseRules', path: 'autoResponseRules', ext: '.autoResponseRules-meta.xml' },
+  { type: 'EscalationRule', label: 'Escalation Rules', desc: 'Case escalation rules', api: 'metadata', metadataType: 'EscalationRules', path: 'escalationRules', ext: '.escalationRules-meta.xml' },
+  { type: 'SharingRule', label: 'Sharing Rules', desc: 'Record sharing rules', api: 'metadata', metadataType: 'SharingRules', path: 'sharingRules', ext: '.sharingRules-meta.xml' },
+  { type: 'MatchingRule', label: 'Matching Rules', desc: 'Duplicate matching rules', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM MatchingRule WHERE NamespacePrefix = null", path: 'matchingRules', ext: '.matchingRule-meta.xml' },
+  { type: 'DuplicateRule', label: 'Duplicate Rules', desc: 'Duplicate management rules', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM DuplicateRule WHERE NamespacePrefix = null", path: 'duplicateRules', ext: '.duplicateRule-meta.xml' },
 ];
+
+const META_DEFAULT_TYPES = ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'];
 
 function buildFetchConfigHtml() {
   let h = '<div class="meta-fetch-config">';
   h += '<h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">1/3</span>Select Metadata Types</h3>';
-  h += '<div style="margin-bottom:8px;display:flex;gap:8px"><button class="btn btn-sm" onclick="metaFetchConfig.types=META_QUERIES.map(q=>q.type);renderMetadataView()">Select All</button><button class="btn btn-sm" onclick="metaFetchConfig.types=[];renderMetadataView()">Deselect All</button></div>';
-  h += '<div class="meta-type-grid">';
-  META_QUERIES.forEach(q => {
-    const chk = metaFetchConfig.types.includes(q.type) ? 'checked' : '';
-    h += `<label class="meta-type-opt"><input type="checkbox" value="${q.type}" ${chk} onchange="toggleMetaType('${q.type}',this.checked)"><div><div class="lbl">${q.label}</div><div class="desc">${q.desc}</div></div></label>`;
+  h += '<div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="metaFetchConfig.types=META_QUERIES.map(q=>q.type);renderMetadataView()">Select All</button><button class="btn btn-sm" onclick="metaFetchConfig.types=[];renderMetadataView()">Deselect All</button><button class="btn btn-sm" onclick="metaFetchConfig.types=META_DEFAULT_TYPES.slice();renderMetadataView()">Reset to Defaults</button></div>';
+  // Group types by category
+  const typeGroups = [
+    { label: 'Code', types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'] },
+    { label: 'Configuration', types: ['ValidationRule','WorkflowRule','Flow','CustomObject','CustomField'] },
+    { label: 'Rules', types: ['AssignmentRule','AutoResponseRule','EscalationRule','SharingRule','MatchingRule','DuplicateRule'] },
+    { label: 'Other', types: ['EmailTemplate','StaticResource'] },
+  ];
+  typeGroups.forEach(grp => {
+    const grpQueries = META_QUERIES.filter(q => grp.types.includes(q.type));
+    if (!grpQueries.length) return;
+    h += `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">${grp.label}</div>`;
+    h += '<div class="meta-type-grid">';
+    grpQueries.forEach(q => {
+      const chk = metaFetchConfig.types.includes(q.type) ? 'checked' : '';
+      h += `<label class="meta-type-opt"><input type="checkbox" value="${q.type}" ${chk} onchange="toggleMetaType('${q.type}',this.checked)"><div><div class="lbl">${q.label}</div><div class="desc">${q.desc}</div></div></label>`;
+    });
+    h += '</div>';
   });
-  h += '</div>';
   h += '<h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/3</span>Date Range Filter</h3>';
   h += '<p style="font-size:12px;color:var(--muted);margin-bottom:10px">Only fetch components modified within this period</p>';
   h += '<div class="meta-date-row">';
@@ -3064,27 +3094,64 @@ async function fetchMetadata() {
       const floatingText = document.getElementById('metaFetchFloatingText');
       if (floatingText) floatingText.textContent = 'Fetching ' + q.type + ' (' + done + '/' + activeTypes.length + ')...';
       try {
-        const soql = q.soql + dateSuffix + ' ORDER BY LastModifiedDate DESC';
-        let queryUrl = '/services/data/v59.0/tooling/query?q=' + encodeURIComponent(soql);
-        while (queryUrl) {
-          const res = await sfApiFetch(queryUrl);
-          if (res.records) {
-            res.records.forEach(rec => {
-              const name = rec.Name || rec.DeveloperName;
-              const body = rec.Body || rec.Markup || '';
-              components.push({
-                type: q.type,
-                name: name,
-                fullName: q.path + '/' + name + q.ext,
-                body: body,
-                lastModified: rec.LastModifiedDate,
-                sfId: rec.Id,
-                change: 'new',
-                selected: false
+        if (q.api === 'metadata') {
+          // Metadata REST API — list members then fetch each
+          const listUrl = '/services/data/v59.0/tooling/query?q=' + encodeURIComponent(
+            "SELECT Id, DeveloperName, LastModifiedDate FROM " + q.metadataType + " WHERE NamespacePrefix = null" + dateSuffix + " ORDER BY LastModifiedDate DESC"
+          );
+          try {
+            const res = await sfApiFetch(listUrl);
+            if (res.records) {
+              res.records.forEach(rec => {
+                const name = rec.DeveloperName || rec.Name || rec.Id;
+                components.push({
+                  type: q.type,
+                  name: name,
+                  fullName: q.path + '/' + name + q.ext,
+                  body: rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '',
+                  lastModified: rec.LastModifiedDate,
+                  sfId: rec.Id,
+                  change: 'new',
+                  selected: false
+                });
               });
-            });
+            }
+          } catch (toolingErr) {
+            // Fallback: try Metadata REST endpoint to list components
+            try {
+              const descUrl = '/services/data/v59.0/tooling/sobjects/' + q.metadataType + '/describe';
+              await sfApiFetch(descUrl);
+              // If describe works, just log that no records came through
+              console.warn(q.type + ': describe succeeded but query failed — ' + toolingErr.message);
+            } catch {
+              console.warn(q.type + ': not available in this org — ' + toolingErr.message);
+            }
           }
-          queryUrl = res.nextRecordsUrl || null;
+        } else {
+          // Tooling API SOQL
+          const soql = q.soql + dateSuffix + ' ORDER BY LastModifiedDate DESC';
+          let queryUrl = '/services/data/v59.0/tooling/query?q=' + encodeURIComponent(soql);
+          while (queryUrl) {
+            const res = await sfApiFetch(queryUrl);
+            if (res.records) {
+              res.records.forEach(rec => {
+                const name = rec.Name || rec.DeveloperName || rec.ValidationName;
+                const body = rec.Body || rec.Markup || (rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '') || '';
+                const displayName = rec.EntityDefinition ? (rec.EntityDefinition.DeveloperName + '.' + name) : (rec.TableEnumOrId ? (rec.TableEnumOrId + '.' + name) : name);
+                components.push({
+                  type: q.type,
+                  name: displayName,
+                  fullName: q.path + '/' + (displayName.replace(/\./g, '/')) + q.ext,
+                  body: body,
+                  lastModified: rec.LastModifiedDate,
+                  sfId: rec.Id,
+                  change: 'new',
+                  selected: false
+                });
+              });
+            }
+            queryUrl = res.nextRecordsUrl || null;
+          }
         }
       } catch (e) {
         console.warn('Skip ' + q.type + ': ' + e.message);
