@@ -1915,8 +1915,6 @@ async function createReleasePr(envIndex) {
   const repo = projectData.repo;
   const prBody = getReleaseBodySuggestion(envIndex);
 
-  const mergeResults = [];
-
   try {
     // Step 1: Get target branch HEAD SHA
     updProg('🔍 Resolving ' + esc(nextEnv.branch) + ' branch...', 'loading');
@@ -1942,31 +1940,82 @@ async function createReleasePr(envIndex) {
       throw e;
     }
 
-    // Step 3: Merge each feature's commit SHA into release branch
+    // Step 3: Cherry-pick each PR using Git Data API
+    // For each PR: fetch changed files, get their content from source env branch,
+    // and commit them onto the release branch (blob → tree → commit)
+    const cherryResults = [];
+    let currentBranchSha = targetSha;
+
     for (let i = 0; i < prsToRelease.length; i++) {
       const pr = prsToRelease[i];
-      updProg('🔀 Merging ' + (i + 1) + '/' + prsToRelease.length + ': #' + pr.number + ' ' + esc(pr.title) + '...', 'loading');
+      updProg('🍒 Cherry-picking ' + (i + 1) + '/' + prsToRelease.length + ': #' + pr.number + ' ' + esc(pr.title) + '...', 'loading');
       try {
-        await ghFetch('/repos/' + repo + '/merges', {
+        // 3a: Get files changed in this PR
+        const prFiles = await ghFetchAll('/repos/' + repo + '/pulls/' + pr.number + '/files');
+        if (!prFiles.length) { cherryResults.push({ num: pr.number, ok: true, note: 'no files' }); continue; }
+
+        // 3b: Get current commit's tree on release branch
+        const currentCommit = await ghFetch('/repos/' + repo + '/git/commits/' + currentBranchSha);
+        const baseTreeSha = currentCommit.tree.sha;
+
+        // 3c: For each file, get content from source env branch
+        const treeItems = [];
+        for (const file of prFiles) {
+          if (file.status === 'removed') {
+            treeItems.push({ path: file.filename, mode: '100644', type: 'blob', sha: null });
+          } else {
+            try {
+              const content = await ghFetch('/repos/' + repo + '/contents/' + encodeURIComponent(file.filename) + '?ref=' + encodeURIComponent(env.branch));
+              treeItems.push({ path: file.filename, mode: file.mode || '100644', type: 'blob', sha: content.sha });
+            } catch (fileErr) {
+              if (pr.merge_commit_sha) {
+                try {
+                  const content = await ghFetch('/repos/' + repo + '/contents/' + encodeURIComponent(file.filename) + '?ref=' + pr.merge_commit_sha);
+                  treeItems.push({ path: file.filename, mode: file.mode || '100644', type: 'blob', sha: content.sha });
+                } catch { /* skip file */ }
+              }
+            }
+          }
+        }
+        if (!treeItems.length) { cherryResults.push({ num: pr.number, ok: true, note: 'no applicable files' }); continue; }
+
+        // 3d: Create new tree
+        const newTree = await ghFetch('/repos/' + repo + '/git/trees', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems })
+        });
+
+        // 3e: Create commit
+        const newCommit = await ghFetch('/repos/' + repo + '/git/commits', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
-            base: branchName,
-            head: pr.head.sha,
-            commit_message: 'Cherry-pick: #' + pr.number + ' ' + pr.title
+            message: 'Cherry-pick: #' + pr.number + ' ' + pr.title,
+            tree: newTree.sha,
+            parents: [currentBranchSha]
           })
         });
-        mergeResults.push({ num: pr.number, ok: true });
+
+        // 3f: Update release branch ref
+        await ghFetch('/repos/' + repo + '/git/refs/heads/' + encodeURIComponent(branchName), {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ sha: newCommit.sha })
+        });
+
+        currentBranchSha = newCommit.sha;
+        cherryResults.push({ num: pr.number, ok: true });
       } catch (e) {
-        mergeResults.push({ num: pr.number, ok: false, err: e.message });
+        cherryResults.push({ num: pr.number, ok: false, err: e.message });
       }
     }
 
-    // Check if any merges failed
-    const failedMerges = mergeResults.filter(r => !r.ok);
-    if (failedMerges.length === prsToRelease.length) {
-      updProg('✕ All merges failed. Branch "' + esc(branchName) + '" was created but has no changes.<br>' +
-        failedMerges.map(r => '#' + r.num + ': ' + esc(r.err)).join('<br>'), 'error');
+    // Check results
+    const failedPicks = cherryResults.filter(r => !r.ok);
+    if (failedPicks.length === prsToRelease.length) {
+      updProg('✕ All cherry-picks failed. Branch "' + esc(branchName) + '" was created but has no changes.<br>' +
+        failedPicks.map(r => '#' + r.num + ': ' + esc(r.err)).join('<br>'), 'error');
       isCreatingRelease = false;
       btn.disabled = false;
       btn.textContent = '🚀 Create Release PR';
@@ -1987,11 +2036,11 @@ async function createReleasePr(envIndex) {
     });
 
     // Success
-    const okCount = mergeResults.filter(r => r.ok).length;
+    const okCount = cherryResults.filter(r => r.ok).length;
     let successMsg = '✓ Release PR <a href="' + esc(newPr.html_url) + '" target="_blank" rel="noopener noreferrer">#' + newPr.number + '</a> created! ' +
-      okCount + '/' + prsToRelease.length + ' changes merged into <code>' + esc(branchName) + '</code>.';
-    if (failedMerges.length) {
-      successMsg += '<br>⚠️ Failed merges: ' + failedMerges.map(r => '#' + r.num + ' (' + esc(r.err) + ')').join(', ');
+      okCount + '/' + prsToRelease.length + ' changes cherry-picked into <code>' + esc(branchName) + '</code>.';
+    if (failedPicks.length) {
+      successMsg += '<br>⚠️ Failed: ' + failedPicks.map(r => '#' + r.num + ' (' + esc(r.err) + ')').join(', ');
       updProg(successMsg, 'warn');
     } else {
       updProg(successMsg, 'success');
