@@ -842,7 +842,7 @@ let releaseSelected = new Set();
 let isCreatingRelease = false;
 
 // Salesforce metadata state
-let sfState = { token: null, instance: null, user: null };
+let sfState = { token: null, instance: null, user: null, envIndex: -1 };
 let metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
 let metaFetchConfig = { types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'], datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' }; // updated by META_DEFAULT_TYPES after load
 let repoBranches = [];
@@ -1258,6 +1258,7 @@ function renderEnvList() {
         <span class="env-branch">${esc(env.branch)}</span>
         <input value="${esc(env.orgLabel || '')}" onchange="updateEnv(${i},'orgLabel',this.value)" placeholder="SF Org label" style="width:110px">
         <input class="env-url" value="${esc(env.orgUrl || '')}" onchange="updateEnv(${i},'orgUrl',this.value)" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">
+        <input value="${esc(env.sfClientId || '')}" onchange="updateEnv(${i},'sfClientId',this.value)" placeholder="Client ID override (optional)" style="width:170px;font-size:11px">
       </div>
       <div class="env-actions">
         <button onclick="moveEnv(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
@@ -2593,22 +2594,33 @@ function initOAuthCallbackUrls() {
   if (el2) el2.textContent = cb;
 }
 
-function sfOAuthLogin() {
-  const instance = document.getElementById('sfInstance').value.trim().replace(/\/+$/, '');
-  const clientId = document.getElementById('sfClientId').value.trim();
+function sfOAuthLogin(envIdx) {
+  // If called from env selector, use env config; otherwise fall back to manual fields
+  let instance, clientId;
+  if (envIdx !== undefined && projectData && projectData.envs[envIdx]) {
+    const env = projectData.envs[envIdx];
+    instance = (env.orgUrl || '').replace(/\/+$/, '');
+    clientId = env.sfClientId || (projectData.sfClientId || '');
+    if (!instance) { toast('Set the Org URL for ' + (env.displayName || env.branch) + ' in Settings → Environments','warn'); return; }
+  } else {
+    instance = document.getElementById('sfInstance').value.trim().replace(/\/+$/, '');
+    clientId = document.getElementById('sfClientId').value.trim();
+  }
   if (!instance) { toast('Enter your org Instance URL','warn'); return; }
   if (!clientId) { toast('Enter the Consumer Key from your Connected App','warn'); return; }
 
-  // Save settings before redirect
+  // Save CORS proxy from field if present
   if (projectData) {
+    const proxyEl = document.getElementById('sfCorsProxy');
+    if (proxyEl) projectData.sfCorsProxy = proxyEl.value.trim().replace(/\/+$/, '');
     projectData.sfInstance = instance;
     projectData.sfClientId = clientId;
-    projectData.sfCorsProxy = document.getElementById('sfCorsProxy').value.trim().replace(/\/+$/, '');
     persistProject();
   }
   sessionStorage.setItem('sf_instance_pending', instance);
   sessionStorage.setItem('sf_oauth_pending', '1');
   sessionStorage.setItem('sf_oauth_project_idx', String(currentProjectIndex));
+  if (envIdx !== undefined) sessionStorage.setItem('sf_oauth_env_idx', String(envIdx));
 
   const redirect = location.origin + location.pathname;
   const url = instance + '/services/oauth2/authorize'
@@ -2617,7 +2629,8 @@ function sfOAuthLogin() {
     + '&redirect_uri=' + encodeURIComponent(redirect)
     + '&scope=' + encodeURIComponent('api');
 
-  document.getElementById('sfConnStatus').innerHTML = '<div class="meta-status warn">⏳ Redirecting to Salesforce…</div>';
+  const statusEl = document.getElementById('sfConnStatus');
+  if (statusEl) statusEl.innerHTML = '<div class="meta-status warn">⏳ Redirecting to Salesforce…</div>';
   location.href = url;
 }
 
@@ -2641,9 +2654,13 @@ function handleSfOAuthCallback() {
 
   sfState.token = accessToken;
   sfState.instance = instanceUrl || pendingInstance || '';
+  const envIdx = sessionStorage.getItem('sf_oauth_env_idx');
+  sfState.envIndex = envIdx !== null ? parseInt(envIdx) : -1;
   sessionStorage.setItem('sf_token', accessToken);
   sessionStorage.setItem('sf_instance', sfState.instance);
+  sessionStorage.setItem('sf_env_index', String(sfState.envIndex));
   sessionStorage.removeItem('sf_instance_pending');
+  sessionStorage.removeItem('sf_oauth_env_idx');
   toast('Connected to Salesforce','ok');
 }
 
@@ -2653,16 +2670,19 @@ function restoreSfSession() {
   if (token && instance) {
     sfState.token = token;
     sfState.instance = instance;
+    const envIdx = sessionStorage.getItem('sf_env_index');
+    sfState.envIndex = envIdx !== null ? parseInt(envIdx) : -1;
     return true;
   }
   return false;
 }
 
 function sfDisconnect() {
-  sfState = { token: null, instance: null, user: null };
+  sfState = { token: null, instance: null, user: null, envIndex: -1 };
   metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
   sessionStorage.removeItem('sf_token');
   sessionStorage.removeItem('sf_instance');
+  sessionStorage.removeItem('sf_env_index');
   renderMetadataView();
 }
 
@@ -2696,22 +2716,33 @@ async function fetchSfUser() {
 /* ═══════════════════════════════════════════════════════
    METADATA VIEW RENDERING
    ═══════════════════════════════════════════════════════ */
+function sfConnectedLabel() {
+  const env = (sfState.envIndex >= 0 && projectData && projectData.envs[sfState.envIndex]) ? projectData.envs[sfState.envIndex] : null;
+  const envName = env ? (env.displayName || env.branch) : '';
+  const user = sfState.user || 'OAuth';
+  return envName ? (user + ' — ' + envName) : (user + ' — ' + sfState.instance);
+}
+
 function renderMetadataView() {
   const el = document.getElementById('metaContent');
   if (!sfState.token) {
     // Show connect form
     el.innerHTML = buildMetaConnectHtml();
     initOAuthCallbackUrls();
-    // Restore saved values
+    // Restore saved values (fields may be inside collapsed details)
     if (projectData) {
-      if (projectData.sfInstance) document.getElementById('sfInstance').value = projectData.sfInstance;
-      if (projectData.sfClientId) document.getElementById('sfClientId').value = projectData.sfClientId;
-      if (projectData.sfCorsProxy) document.getElementById('sfCorsProxy').value = projectData.sfCorsProxy;
+      const elInst = document.getElementById('sfInstance');
+      const elCid = document.getElementById('sfClientId');
+      const elProxy = document.getElementById('sfCorsProxy');
+      if (elInst && projectData.sfInstance) elInst.value = projectData.sfInstance;
+      if (elCid && projectData.sfClientId) elCid.value = projectData.sfClientId;
+      if (elProxy && projectData.sfCorsProxy) elProxy.value = projectData.sfCorsProxy;
     }
     // Show stored error from OAuth redirect
     const err = sessionStorage.getItem('sf_oauth_error');
     if (err) {
-      document.getElementById('sfConnStatus').innerHTML = '<div class="meta-status err">✕ ' + esc(err) + '</div>';
+      const statusEl = document.getElementById('sfConnStatus');
+      if (statusEl) statusEl.innerHTML = '<div class="meta-status err">✕ ' + esc(err) + '</div>';
       sessionStorage.removeItem('sf_oauth_error');
     }
     return;
@@ -2722,7 +2753,7 @@ function renderMetadataView() {
     if (!repoBranches.length && projectData && projectData.pat) loadRepoBranches();
     let html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
     html += '<h2>☁️ Metadata Browser</h2>';
-    html += '<div class="meta-status ok">✓ Connected as ' + esc(sfState.user || 'OAuth') + ' — ' + esc(sfState.instance) + '</div>';
+    html += '<div class="meta-status ok">✓ Connected as ' + esc(sfConnectedLabel()) + '</div>';
     html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
     html += '</div>';
     html += buildFetchConfigHtml();
@@ -2734,7 +2765,7 @@ function renderMetadataView() {
   if (!metaCache.components.length) {
     let html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
     html += '<h2>☁️ Metadata Browser</h2>';
-    html += '<div class="meta-status ok">✓ Connected as ' + esc(sfState.user || 'OAuth') + ' — ' + esc(sfState.instance) + '</div>';
+    html += '<div class="meta-status ok">✓ Connected as ' + esc(sfConnectedLabel()) + '</div>';
     html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
     html += '</div>';
     html += '<div class="empty-state" style="padding:40px"><div class="empty-icon">🔍</div>';
@@ -2749,7 +2780,7 @@ function renderMetadataView() {
   // Connected — show metadata browser
   let html = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
   html += '<h2>☁️ Metadata Browser</h2>';
-  html += '<div class="meta-status ok">✓ Connected as ' + esc(sfState.user || 'OAuth') + ' — ' + esc(sfState.instance) + '</div>';
+  html += '<div class="meta-status ok">✓ Connected as ' + esc(sfConnectedLabel()) + '</div>';
   html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
   html += '</div>';
 
@@ -2808,45 +2839,76 @@ function renderMetadataView() {
 }
 
 function buildMetaConnectHtml() {
-  return `<div class="meta-connect">
-    <h2 style="margin-bottom:16px">☁️ Salesforce Metadata</h2>
-    <p style="font-size:13px;color:var(--muted);margin-bottom:20px">Connect to a Salesforce org to retrieve metadata, compare with your git branch, and commit changes.</p>
-    <div class="field">
-      <label>Instance URL <span style="color:var(--red);font-weight:400">*</span></label>
-      <input id="sfInstance" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Sandbox or production org URL</div>
-    </div>
-    <div class="field">
-      <label>Consumer Key <span style="color:var(--red);font-weight:400">*</span> <span style="color:var(--muted);font-weight:normal">(from Connected App)</span></label>
-      <div class="secret-wrap" style="position:relative">
-        <input id="sfClientId" type="password" placeholder="3MVG9..." autocomplete="off" style="padding-right:44px">
-        <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
-      </div>
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Connected App → OAuth Settings → Consumer Key.<br>Callback URL: <code id="oauthCallback"></code></div>
-    </div>
-    <div class="field">
-      <label>CORS Proxy <span style="color:var(--yellow);font-weight:600;font-size:10px;background:var(--yellow-dim);padding:1px 5px;border-radius:3px;margin-left:4px">REQUIRED</span> <span style="color:var(--muted);font-weight:normal">(for API calls)</span></label>
-      <input id="sfCorsProxy" placeholder="https://your-worker.workers.dev">
-      <div style="font-size:11px;color:var(--muted);margin-top:3px">Cloudflare Worker URL. OAuth login works without it, but API calls need it for CORS.</div>
-    </div>
-    <div id="sfConnStatus"></div>
-    <div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">
-      <button class="btn btn-sf" onclick="sfOAuthLogin()">☁️ Login with Salesforce</button>
-    </div>
-    <details style="margin-top:20px;font-size:12px;color:var(--muted)">
-      <summary style="cursor:pointer;font-weight:600">Setup Instructions</summary>
-      <ol style="margin-top:8px;padding-left:20px;line-height:2">
-        <li>In Salesforce: Setup → App Manager → New Connected App</li>
-        <li>Enable OAuth Settings</li>
-        <li>Callback URL: <code id="oauthCallback2"></code></li>
-        <li>Selected OAuth Scopes: <strong>Manage user data via APIs (api)</strong></li>
-        <li>Save, wait ~10 min for activation</li>
-        <li>Copy the Consumer Key into the field above</li>
-        <li>Deploy a Cloudflare Worker as CORS proxy (see below)</li>
-      </ol>
-      <details style="margin-top:10px">
-        <summary style="cursor:pointer">Cloudflare Worker code (copy &amp; paste)</summary>
-        <pre style="background:var(--surface);padding:12px;border-radius:8px;margin-top:8px;font-size:11px;overflow-x:auto">export default {
+  const envs = (projectData && projectData.envs) || [];
+  const hasEnvs = envs.some(e => e.orgUrl);
+  let h = '<div class="meta-connect">';
+  h += '<h2 style="margin-bottom:16px">☁️ Salesforce Metadata</h2>';
+  h += '<p style="font-size:13px;color:var(--muted);margin-bottom:20px">Connect to a Salesforce org to retrieve metadata, compare with your git branch, and commit changes.</p>';
+
+  // ── Environment quick-connect cards ──
+  if (hasEnvs) {
+    h += '<div style="margin-bottom:20px">';
+    h += '<h3 style="font-size:13px;margin-bottom:10px">🚀 Quick Connect — select an environment</h3>';
+    h += '<div style="display:flex;gap:10px;flex-wrap:wrap">';
+    envs.forEach((env, i) => {
+      if (!env.orgUrl) return;
+      const color = ENV_COLORS[i % ENV_COLORS.length];
+      const cid = env.sfClientId || (projectData && projectData.sfClientId) || '';
+      const disabled = !cid;
+      h += '<button class="btn" onclick="sfOAuthLogin(' + i + ')" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 16px;border-left:3px solid ' + color + ';min-width:160px;text-align:left' + (disabled ? ';opacity:0.5;cursor:not-allowed' : '') + '"' + (disabled ? ' disabled title="No Client ID configured — set it in project settings or per-env"' : '') + '>';
+      h += '<span style="font-weight:600;font-size:13px">' + esc(env.displayName || env.branch) + '</span>';
+      h += '<span style="font-size:11px;color:var(--muted)">' + esc(env.orgLabel || env.orgUrl.replace(/^https?:\/\//, '').split('.')[0]) + '</span>';
+      h += '</button>';
+    });
+    h += '</div>';
+    if (!envs.some(e => e.sfClientId) && !(projectData && projectData.sfClientId)) {
+      h += '<div style="font-size:11px;color:var(--yellow);margin-top:8px">⚠ No Consumer Key configured. Set it below or per-env in Settings → Environments.</div>';
+    }
+    h += '</div>';
+    h += '<hr style="border:none;border-top:1px solid var(--border);margin:16px 0">';
+    h += '<details style="margin-bottom:12px"><summary style="cursor:pointer;font-weight:600;font-size:13px;color:var(--muted)">Manual Connection & Settings</summary>';
+    h += '<div style="margin-top:12px">';
+  }
+
+  // ── Manual connection form (always shown if no envs, collapsible if envs exist) ──
+  h += '<div class="field">';
+  h += '<label>Instance URL <span style="color:var(--red);font-weight:400">*</span></label>';
+  h += '<input id="sfInstance" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">';
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px">Sandbox or production org URL</div>';
+  h += '</div>';
+  h += '<div class="field">';
+  h += '<label>Consumer Key <span style="color:var(--red);font-weight:400">*</span> <span style="color:var(--muted);font-weight:normal">(from Connected App)</span></label>';
+  h += '<div class="secret-wrap" style="position:relative">';
+  h += '<input id="sfClientId" type="password" placeholder="3MVG9..." autocomplete="off" style="padding-right:44px">';
+  h += '<button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>';
+  h += '</div>';
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px">Connected App → OAuth Settings → Consumer Key.<br>Callback URL: <code id="oauthCallback"></code></div>';
+  h += '</div>';
+  h += '<div class="field">';
+  h += '<label>CORS Proxy <span style="color:var(--yellow);font-weight:600;font-size:10px;background:var(--yellow-dim);padding:1px 5px;border-radius:3px;margin-left:4px">REQUIRED</span> <span style="color:var(--muted);font-weight:normal">(for API calls)</span></label>';
+  h += '<input id="sfCorsProxy" placeholder="https://your-worker.workers.dev">';
+  h += '<div style="font-size:11px;color:var(--muted);margin-top:3px">Cloudflare Worker URL. OAuth login works without it, but API calls need it for CORS.</div>';
+  h += '</div>';
+  h += '<div id="sfConnStatus"></div>';
+  h += '<div style="margin-top:12px;display:flex;gap:8px;flex-wrap:wrap">';
+  h += '<button class="btn btn-sf" onclick="sfOAuthLogin()">☁️ Login with Salesforce</button>';
+  h += '</div>';
+
+  // Setup instructions
+  h += '<details style="margin-top:20px;font-size:12px;color:var(--muted)">';
+  h += '<summary style="cursor:pointer;font-weight:600">Setup Instructions</summary>';
+  h += '<ol style="margin-top:8px;padding-left:20px;line-height:2">';
+  h += '<li>In Salesforce: Setup → App Manager → New Connected App</li>';
+  h += '<li>Enable OAuth Settings</li>';
+  h += '<li>Callback URL: <code id="oauthCallback2"></code></li>';
+  h += '<li>Selected OAuth Scopes: <strong>Manage user data via APIs (api)</strong></li>';
+  h += '<li>Save, wait ~10 min for activation</li>';
+  h += '<li>Copy the Consumer Key into the field above</li>';
+  h += '<li>Deploy a Cloudflare Worker as CORS proxy (see below)</li>';
+  h += '</ol>';
+  h += '<details style="margin-top:10px">';
+  h += '<summary style="cursor:pointer">Cloudflare Worker code (copy &amp; paste)</summary>';
+  h += `<pre style="background:var(--surface);padding:12px;border-radius:8px;margin-top:8px;font-size:11px;overflow-x:auto">export default {
   async fetch(request) {
     const cors = {
       'Access-Control-Allow-Origin': '*',
@@ -2866,10 +2928,15 @@ function buildMetaConnectHtml() {
     Object.entries(cors).forEach(([k,v]) => newHeaders.set(k, v));
     return new Response(resp.body, { status: resp.status, headers: newHeaders });
   }
-}</pre>
-      </details>
-    </details>
-  </div>`;
+}</pre>`;
+  h += '</details></details>';
+
+  if (hasEnvs) {
+    h += '</div></details>';
+  }
+
+  h += '</div>';
+  return h;
 }
 
 const META_CHANGE_LABELS = { 'new': 'New in SF', 'modified': 'Modified', 'same': 'In Sync', 'deleted': 'Deleted' };
