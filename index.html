@@ -1415,8 +1415,9 @@ function buildFeatures() {
       featureBranch = gsMatch[1];
     } else {
       // Non-Gearset: use head branch as feature name
-      featureName = headRef;
-      featureBranch = headRef;
+      // Strip release/ prefix so release PRs group with the original feature
+      featureName = headRef.replace(/^release\//, '');
+      featureBranch = headRef.replace(/^release\//, '');
     }
     // Skip sync PRs
     if (pr.title && pr.title.startsWith('Sync:')) return;
