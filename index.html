@@ -2787,11 +2787,14 @@ async function fetchDescribeMetadata() {
       mf[xmlName] = hasMetaFile;
     }
 
-    // Collect child types (e.g. CustomObject → CustomField, RecordType, ...)
+    // Collect child types ONLY from CustomObject (these go under objects/{Obj}/)
+    // Other parents (Workflow, SharingRules, etc.) have children too but different path logic
     const childNodes = obj.getElementsByTagName('childXmlNames');
-    for (let j = 0; j < childNodes.length; j++) {
-      const childName = childNodes[j].textContent;
-      if (childName) children.push(childName);
+    if (xmlName === 'CustomObject') {
+      for (let j = 0; j < childNodes.length; j++) {
+        const childName = childNodes[j].textContent;
+        if (childName) children.push(childName);
+      }
     }
   }
 
