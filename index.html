@@ -3264,6 +3264,48 @@ const SFDX_XML_ROOT = {
   AuraBundle: 'AuraDefinitionBundle', LWC: 'LightningComponentBundle'
 };
 
+// Types that are children of objects → go under objects/{ObjName}/{childFolder}/
+const OBJECT_CHILD_FOLDERS = {
+  CustomField: 'fields', RecordType: 'recordTypes', CompactLayout: 'compactLayouts',
+  FieldSet: 'fieldSets', ValidationRule: 'validationRules', ListView: 'listViews',
+  WebLink: 'webLinks', BusinessProcess: 'businessProcesses'
+};
+
+function buildSfdxPath(typeName, displayName, qPath, ext) {
+  const dotIdx = displayName.indexOf('.');
+  const hasObject = dotIdx > 0;
+  const objName = hasObject ? displayName.substring(0, dotIdx) : '';
+  const compName = hasObject ? displayName.substring(dotIdx + 1) : displayName;
+
+  // Object-child types → objects/{Obj}/{childFolder}/{Name}{ext}
+  const childFolder = OBJECT_CHILD_FOLDERS[typeName];
+  if (childFolder && hasObject) {
+    return 'objects/' + objName + '/' + childFolder + '/' + compName + ext;
+  }
+
+  // Layout → layouts/{Obj}-{Name}{ext}  (dash-separated, no subdirectory)
+  if (typeName === 'Layout' && hasObject) {
+    return 'layouts/' + objName + '-' + compName + ext;
+  }
+
+  // QuickAction → quickActions/{Obj}.{Name}{ext} or quickActions/{Name}{ext}
+  if (typeName === 'QuickAction') {
+    return 'quickActions/' + displayName + ext;
+  }
+
+  // Report / Dashboard with folder → {path}/{FolderName}/{Name}{ext}
+  if (displayName.includes('/')) {
+    return qPath + '/' + displayName + ext;
+  }
+
+  // Other dot-separated types (workflow, assignment, etc.) → {path}/{Obj}/{Name}{ext}
+  if (hasObject) {
+    return qPath + '/' + objName + '/' + compName + ext;
+  }
+
+  return qPath + '/' + compName + ext;
+}
+
 function buildMetaXmlBody(rec, typeName) {
   const skip = new Set(['Id','attributes','Body','Markup','Metadata','LastModifiedDate','LastModifiedById','CreatedDate','CreatedById','SystemModstamp']);
   const root = SFDX_XML_ROOT[typeName] || typeName;
@@ -3350,6 +3392,82 @@ async function ensureFullMetadata(comp) {
   if (q.api === 'soql') {
     const sObj = getToolingSObject(q);
     if (!sObj) { comp._metadataLoaded = true; return; }
+
+    // Special handling for Queue — fetch related QueueSobject + GroupMember
+    if (comp.type === 'Queue') {
+      try {
+        const rec = await sfApiFetch('/services/data/v59.0/sobjects/Group/' + comp.sfId);
+        const queueData = {
+          doesSendEmailToMembers: rec.DoesIncludeBosses || false,
+          name: rec.Name,
+          email: rec.Email || undefined,
+          queueSobject: [],
+          queueMembers: { users: [], roles: [], publicGroups: [] }
+        };
+        // Fetch supported objects
+        try {
+          const sObjects = await sfApiFetch('/services/data/v59.0/query?q=' + encodeURIComponent(
+            "SELECT SobjectType FROM QueueSobject WHERE QueueId = '" + comp.sfId + "'"
+          ));
+          if (sObjects.records) {
+            queueData.queueSobject = sObjects.records.map(r => ({ sobjectType: r.SobjectType }));
+          }
+        } catch (e) { console.warn('Queue sObjects: ' + e.message); }
+        // Fetch members
+        try {
+          const members = await sfApiFetch('/services/data/v59.0/query?q=' + encodeURIComponent(
+            "SELECT UserOrGroupId FROM GroupMember WHERE GroupId = '" + comp.sfId + "'"
+          ));
+          if (members.records) {
+            const userIds = [];
+            const groupIds = [];
+            members.records.forEach(m => {
+              const uid = m.UserOrGroupId;
+              if (uid && uid.startsWith('005')) userIds.push(uid);
+              else if (uid) groupIds.push(uid);
+            });
+            // Resolve user names
+            if (userIds.length) {
+              try {
+                const users = await sfApiFetch('/services/data/v59.0/query?q=' + encodeURIComponent(
+                  "SELECT Id, Username FROM User WHERE Id IN ('" + userIds.join("','") + "')"
+                ));
+                if (users.records) queueData.queueMembers.users = users.records.map(u => ({ user: u.Username }));
+              } catch (e) { console.warn('Queue users: ' + e.message); }
+            }
+            // Resolve group/role names
+            if (groupIds.length) {
+              try {
+                const groups = await sfApiFetch('/services/data/v59.0/query?q=' + encodeURIComponent(
+                  "SELECT Id, Name, Type FROM Group WHERE Id IN ('" + groupIds.join("','") + "')"
+                ));
+                if (groups.records) {
+                  groups.records.forEach(g => {
+                    if (g.Type === 'Role' || g.Type === 'RoleAndSubordinates') queueData.queueMembers.roles.push({ role: g.Name });
+                    else queueData.queueMembers.publicGroups.push({ publicGroup: g.Name });
+                  });
+                }
+              } catch (e) { console.warn('Queue groups: ' + e.message); }
+            }
+          }
+        } catch (e) { console.warn('Queue members: ' + e.message); }
+        // Clean empty arrays
+        if (!queueData.queueMembers.users.length) delete queueData.queueMembers.users;
+        if (!queueData.queueMembers.roles.length) delete queueData.queueMembers.roles;
+        if (!queueData.queueMembers.publicGroups.length) delete queueData.queueMembers.publicGroups;
+        if (!Object.keys(queueData.queueMembers).length) delete queueData.queueMembers;
+        if (!queueData.email) delete queueData.email;
+        comp.body = metadataJsonToXml(queueData, comp.type);
+        comp._metadataLoaded = true;
+        return;
+      } catch (e) {
+        console.warn('ensureFullMetadata Queue: ' + e.message);
+        comp._metadataLoaded = true;
+        return;
+      }
+    }
+
+    // Generic SOQL type
     try {
       const rec = await sfApiFetch('/services/data/v59.0/sobjects/' + sObj + '/' + comp.sfId);
       const skip = new Set(['attributes','Id','IsDeleted','LastModifiedDate','LastModifiedById','CreatedDate','CreatedById','SystemModstamp','OwnerId','LastViewedDate','LastReferencedDate']);
@@ -3409,7 +3527,7 @@ async function fetchMetadata() {
                   components.push({
                     type: q.type,
                     name: displayName,
-                    fullName: q.path + '/' + displayName.replace(/\./g, '/') + q.ext,
+                    fullName: buildSfdxPath(q.type, displayName, q.path, q.ext),
                     body: buildMetaXmlBody(rec, q.type),
                     _hasRealBody: false,
                     lastModified: rec.LastModifiedDate,
@@ -3436,11 +3554,12 @@ async function fetchMetadata() {
                 const name = rec.Name || rec.DeveloperName || rec.MasterLabel || rec.Title || rec.TestSuiteName || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
                 const realBody = rec.Body || rec.Markup || (rec.Metadata ? metadataJsonToXml(rec.Metadata, q.type) : '');
                 const body = realBody || buildMetaXmlBody(rec, q.type);
-                const displayName = rec.EntityDefinition ? (rec.EntityDefinition.DeveloperName + '.' + name) : (rec.TableEnumOrId ? (rec.TableEnumOrId + '.' + name) : name);
+                const objRef = rec.EntityDefinition ? rec.EntityDefinition.DeveloperName : (rec.TableEnumOrId || rec.SobjectType || rec.PageOrSobjectType || '');
+                const displayName = objRef ? (objRef + '.' + name) : name;
                 components.push({
                   type: q.type,
                   name: displayName,
-                  fullName: q.path + '/' + (displayName.replace(/\./g, '/')) + q.ext,
+                  fullName: buildSfdxPath(q.type, displayName, q.path, q.ext),
                   body: body,
                   _hasRealBody: !!realBody,
                   lastModified: rec.LastModifiedDate,
