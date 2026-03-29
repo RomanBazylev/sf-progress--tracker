@@ -3254,6 +3254,41 @@ function buildMetaXmlBody(rec, typeName) {
   return xml;
 }
 
+// Convert Salesforce Metadata JSON to XML format
+function metadataJsonToXml(obj, typeName, indent) {
+  indent = indent || '';
+  let xml = '';
+  if (indent === '') {
+    xml += '<?xml version="1.0" encoding="UTF-8"?>\n';
+    xml += '<' + typeName + ' xmlns="http://soap.sforce.com/2006/04/metadata">\n';
+    indent = '    ';
+  }
+  for (const [key, val] of Object.entries(obj)) {
+    if (key === 'urls' || val === null || val === undefined) continue;
+    if (Array.isArray(val)) {
+      val.forEach(item => {
+        if (typeof item === 'object' && item !== null) {
+          xml += indent + '<' + key + '>\n';
+          xml += metadataJsonToXml(item, key, indent + '    ');
+          xml += indent + '</' + key + '>\n';
+        } else {
+          xml += indent + '<' + key + '>' + String(item).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + key + '>\n';
+        }
+      });
+    } else if (typeof val === 'object') {
+      xml += indent + '<' + key + '>\n';
+      xml += metadataJsonToXml(val, key, indent + '    ');
+      xml += indent + '</' + key + '>\n';
+    } else {
+      xml += indent + '<' + key + '>' + String(val).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + key + '>\n';
+    }
+  }
+  if (indent === '    ') {
+    xml += '</' + typeName + '>\n';
+  }
+  return xml;
+}
+
 // Types that don't have Body/Markup and need per-record Metadata fetch via Tooling API
 // Maps our type name → Tooling API sObject name (extracted from SOQL FROM clause)
 function getToolingSObject(q) {
@@ -3261,7 +3296,7 @@ function getToolingSObject(q) {
   return m ? m[1] : null;
 }
 
-// Fetch full Metadata JSON for a single component via Tooling API
+// Fetch full Metadata for a single component via Tooling API
 // Salesforce Tooling API: GET /tooling/sobjects/{sObject}/{id} returns Metadata + FullName
 async function ensureFullMetadata(comp) {
   if (comp._hasRealBody || comp._metadataLoaded) return;
@@ -3272,13 +3307,12 @@ async function ensureFullMetadata(comp) {
   try {
     const rec = await sfApiFetch('/services/data/v59.0/tooling/sobjects/' + sObj + '/' + comp.sfId);
     if (rec.Metadata) {
-      comp.body = JSON.stringify(rec.Metadata, null, 2);
+      comp.body = metadataJsonToXml(rec.Metadata, comp.type);
       comp._metadataLoaded = true;
       return;
     }
     if (rec.Body) { comp.body = rec.Body; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
     if (rec.Markup) { comp.body = rec.Markup; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
-    // Fallback: use all fields as body
     comp._metadataLoaded = true;
   } catch (e) {
     console.warn('ensureFullMetadata(' + comp.type + '/' + comp.sfId + '): ' + e.message);
@@ -3354,7 +3388,7 @@ async function fetchMetadata() {
             if (res.records) {
               res.records.forEach(rec => {
                 const name = rec.Name || rec.DeveloperName || rec.MasterLabel || rec.Title || rec.TestSuiteName || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
-                const realBody = rec.Body || rec.Markup || (rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '');
+                const realBody = rec.Body || rec.Markup || (rec.Metadata ? metadataJsonToXml(rec.Metadata, q.type) : '');
                 const body = realBody || buildMetaXmlBody(rec, q.type);
                 const displayName = rec.EntityDefinition ? (rec.EntityDefinition.DeveloperName + '.' + name) : (rec.TableEnumOrId ? (rec.TableEnumOrId + '.' + name) : name);
                 components.push({
