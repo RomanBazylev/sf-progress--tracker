@@ -3020,6 +3020,7 @@ const META_QUERIES = [
   { type: 'RecordType', label: 'Record Types', desc: 'Record types on objects', api: 'tooling', soql: "SELECT Id, Name, SobjectType, IsActive, LastModifiedDate FROM RecordType WHERE NamespacePrefix = null", path: 'recordTypes', ext: '.recordType-meta.xml' },
   { type: 'Layout', label: 'Page Layouts', desc: 'Page layouts for objects', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM Layout WHERE NamespacePrefix = null", path: 'layouts', ext: '.layout-meta.xml' },
   { type: 'FlexiPage', label: 'Lightning Pages', desc: 'Lightning record/app/home pages', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM FlexiPage WHERE NamespacePrefix = null", path: 'flexipages', ext: '.flexipage-meta.xml' },
+  { type: 'ListView', label: 'List Views', desc: 'Object list views', api: 'tooling', soql: "SELECT Id, Name, DeveloperName, SobjectType, LastModifiedDate FROM ListView WHERE NamespacePrefix = null", path: 'listViews', ext: '.listView-meta.xml' },
   { type: 'StandardValueSet', label: 'Standard Value Sets', desc: 'Standard picklist values (Status, etc.)', api: 'tooling', soql: "SELECT Id, MasterLabel, LastModifiedDate FROM StandardValueSet", path: 'standardValueSets', ext: '.standardValueSet-meta.xml' },
   // ── Standard SOQL — setup objects ──
   { type: 'BusinessProcess', label: 'Business Processes', desc: 'Support/Sales/Lead processes', api: 'soql', soql: "SELECT Id, Name, SobjectType, IsActive, LastModifiedDate FROM BusinessProcess", path: 'businessProcesses', ext: '.businessProcess-meta.xml' },
@@ -3036,7 +3037,7 @@ function buildFetchConfigHtml() {
   const typeGroups = [
     { label: 'Code', types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'] },
     { label: 'Configuration', types: ['ValidationRule','WorkflowRule','Flow','CustomObject','CustomField','RecordType','BusinessProcess'] },
-    { label: 'UI & Layout', types: ['Layout','FlexiPage','StandardValueSet'] },
+    { label: 'UI & Layout', types: ['Layout','FlexiPage','ListView','StandardValueSet'] },
     { label: 'Rules', types: ['AssignmentRule','AutoResponseRule','EscalationRule','MatchingRule','DuplicateRule'] },
     { label: 'Other', types: ['EmailTemplate','StaticResource','Queue'] },
   ];
