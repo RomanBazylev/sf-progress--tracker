@@ -3236,57 +3236,80 @@ function buildDateClause(soql) {
   return clause;
 }
 
+// Map our type names to the correct SFDX root XML element name
+const SFDX_XML_ROOT = {
+  ApexClass: 'ApexClass', ApexTrigger: 'ApexTrigger', ApexPage: 'ApexPage', ApexComponent: 'ApexComponent',
+  CustomObject: 'CustomObject', CustomField: 'CustomField', RecordType: 'RecordType',
+  CompactLayout: 'CompactLayout', FieldSet: 'FieldSet', CustomMetadata: 'CustomObject',
+  PlatformEvent: 'CustomObject', ExternalObject: 'CustomObject',
+  Flow: 'Flow', ValidationRule: 'ValidationRule', WorkflowRule: 'WorkflowRule',
+  WorkflowFieldUpdate: 'WorkflowFieldUpdate', WorkflowAlert: 'WorkflowAlert',
+  WorkflowOutboundMessage: 'WorkflowOutboundMessage', WorkflowTask: 'WorkflowTask',
+  ApprovalProcess: 'ApprovalProcess', QuickAction: 'QuickActionDefinition',
+  BusinessProcess: 'BusinessProcess',
+  Layout: 'Layout', FlexiPage: 'FlexiPage', ListView: 'ListView',
+  CustomTab: 'CustomTab', CustomApplication: 'CustomApplication',
+  HomePageLayout: 'HomePageLayout', PathAssistant: 'PathAssistant', WebLink: 'WebLink',
+  StandardValueSet: 'StandardValueSet', GlobalValueSet: 'GlobalValueSet', CustomLabel: 'CustomLabel',
+  PermissionSet: 'PermissionSet', PermissionSetGroup: 'PermissionSetGroup',
+  CustomPermission: 'CustomPermission', Profile: 'Profile',
+  AssignmentRule: 'AssignmentRules', AutoResponseRule: 'AutoResponseRules',
+  EscalationRule: 'EscalationRules', MatchingRule: 'MatchingRule', DuplicateRule: 'DuplicateRule',
+  EmailTemplate: 'EmailTemplate', Letterhead: 'Letterhead',
+  Report: 'Report', Dashboard: 'Dashboard', ReportType: 'ReportType',
+  NamedCredential: 'NamedCredential', ExternalDataSource: 'ExternalDataSource',
+  RemoteSiteSetting: 'RemoteSiteSetting', ConnectedApp: 'ConnectedApp',
+  Queue: 'Queue', CustomNotificationType: 'CustomNotificationType', FlowCategory: 'FlowCategory',
+  StaticResource: 'StaticResource', ApexTestSuite: 'ApexTestSuite',
+  AuraBundle: 'AuraDefinitionBundle', LWC: 'LightningComponentBundle'
+};
+
 function buildMetaXmlBody(rec, typeName) {
   const skip = new Set(['Id','attributes','Body','Markup','Metadata','LastModifiedDate','LastModifiedById','CreatedDate','CreatedById','SystemModstamp']);
-  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<' + typeName + ' xmlns="http://soap.sforce.com/2006/04/metadata">\n';
+  const root = SFDX_XML_ROOT[typeName] || typeName;
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<' + root + ' xmlns="http://soap.sforce.com/2006/04/metadata">\n';
   for (const [k, v] of Object.entries(rec)) {
     if (skip.has(k) || v === null || v === undefined) continue;
     if (typeof v === 'object') {
+      xml += '    <' + k + '>\n';
       for (const [nk, nv] of Object.entries(v)) {
         if (nk === 'attributes' || nv === null || nv === undefined) continue;
-        xml += '  <' + k + '.' + nk + '>' + String(nv).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + k + '.' + nk + '>\n';
+        xml += '        <' + nk + '>' + String(nv).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + nk + '>\n';
       }
+      xml += '    </' + k + '>\n';
     } else {
-      xml += '  <' + k + '>' + String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + k + '>\n';
+      xml += '    <' + k + '>' + String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + k + '>\n';
     }
   }
-  xml += '</' + typeName + '>\n';
+  xml += '</' + root + '>\n';
   return xml;
 }
 
-// Convert Salesforce Metadata JSON to XML format
-function metadataJsonToXml(obj, typeName, indent) {
-  indent = indent || '';
-  let xml = '';
-  if (indent === '') {
-    xml += '<?xml version="1.0" encoding="UTF-8"?>\n';
-    xml += '<' + typeName + ' xmlns="http://soap.sforce.com/2006/04/metadata">\n';
-    indent = '    ';
-  }
-  for (const [key, val] of Object.entries(obj)) {
-    if (key === 'urls' || val === null || val === undefined) continue;
-    if (Array.isArray(val)) {
-      val.forEach(item => {
-        if (typeof item === 'object' && item !== null) {
-          xml += indent + '<' + key + '>\n';
-          xml += metadataJsonToXml(item, key, indent + '    ');
-          xml += indent + '</' + key + '>\n';
-        } else {
-          xml += indent + '<' + key + '>' + String(item).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + key + '>\n';
-        }
-      });
-    } else if (typeof val === 'object') {
-      xml += indent + '<' + key + '>\n';
-      xml += metadataJsonToXml(val, key, indent + '    ');
-      xml += indent + '</' + key + '>\n';
-    } else {
-      xml += indent + '<' + key + '>' + String(val).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + key + '>\n';
+// Convert Salesforce Metadata JSON to SFDX-compatible XML format
+function metadataJsonToXml(obj, typeName) {
+  function escXml(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+  function renderNode(o, indent) {
+    let out = '';
+    for (const [key, val] of Object.entries(o)) {
+      if (key === 'urls' || val === null || val === undefined) continue;
+      if (Array.isArray(val)) {
+        val.forEach(item => {
+          if (typeof item === 'object' && item !== null) {
+            out += indent + '<' + key + '>\n' + renderNode(item, indent + '    ') + indent + '</' + key + '>\n';
+          } else {
+            out += indent + '<' + key + '>' + escXml(item) + '</' + key + '>\n';
+          }
+        });
+      } else if (typeof val === 'object') {
+        out += indent + '<' + key + '>\n' + renderNode(val, indent + '    ') + indent + '</' + key + '>\n';
+      } else {
+        out += indent + '<' + key + '>' + escXml(val) + '</' + key + '>\n';
+      }
     }
+    return out;
   }
-  if (indent === '    ') {
-    xml += '</' + typeName + '>\n';
-  }
-  return xml;
+  const root = SFDX_XML_ROOT[typeName] || typeName;
+  return '<?xml version="1.0" encoding="UTF-8"?>\n<' + root + ' xmlns="http://soap.sforce.com/2006/04/metadata">\n' + renderNode(obj, '    ') + '</' + root + '>\n';
 }
 
 // Types that don't have Body/Markup and need per-record Metadata fetch via Tooling API
@@ -3296,27 +3319,50 @@ function getToolingSObject(q) {
   return m ? m[1] : null;
 }
 
-// Fetch full Metadata for a single component via Tooling API
-// Salesforce Tooling API: GET /tooling/sobjects/{sObject}/{id} returns Metadata + FullName
+// Fetch full Metadata for a single component via Tooling API or Standard API
 async function ensureFullMetadata(comp) {
   if (comp._hasRealBody || comp._metadataLoaded) return;
   const q = META_QUERIES.find(x => x.type === comp.type);
-  if (!q || q.api !== 'tooling') { comp._metadataLoaded = true; return; }
-  const sObj = getToolingSObject(q);
-  if (!sObj) { comp._metadataLoaded = true; return; }
-  try {
-    const rec = await sfApiFetch('/services/data/v59.0/tooling/sobjects/' + sObj + '/' + comp.sfId);
-    if (rec.Metadata) {
-      comp.body = metadataJsonToXml(rec.Metadata, comp.type);
+  if (!q) { comp._metadataLoaded = true; return; }
+
+  // Tooling API types
+  if (q.api === 'tooling') {
+    const sObj = getToolingSObject(q);
+    if (!sObj) { comp._metadataLoaded = true; return; }
+    try {
+      const rec = await sfApiFetch('/services/data/v59.0/tooling/sobjects/' + sObj + '/' + comp.sfId);
+      if (rec.Body) { comp.body = rec.Body; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
+      if (rec.Markup) { comp.body = rec.Markup; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
+      if (rec.Metadata) {
+        comp.body = metadataJsonToXml(rec.Metadata, comp.type);
+        comp._metadataLoaded = true;
+        return;
+      }
       comp._metadataLoaded = true;
-      return;
+    } catch (e) {
+      console.warn('ensureFullMetadata(' + comp.type + '/' + comp.sfId + '): ' + e.message);
+      comp._metadataLoaded = true;
     }
-    if (rec.Body) { comp.body = rec.Body; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
-    if (rec.Markup) { comp.body = rec.Markup; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
-    comp._metadataLoaded = true;
-  } catch (e) {
-    console.warn('ensureFullMetadata(' + comp.type + '/' + comp.sfId + '): ' + e.message);
-    comp._metadataLoaded = true;
+    return;
+  }
+
+  // Standard REST API types (api: 'soql')
+  if (q.api === 'soql') {
+    const sObj = getToolingSObject(q);
+    if (!sObj) { comp._metadataLoaded = true; return; }
+    try {
+      const rec = await sfApiFetch('/services/data/v59.0/sobjects/' + sObj + '/' + comp.sfId);
+      const skip = new Set(['attributes','Id','IsDeleted','LastModifiedDate','LastModifiedById','CreatedDate','CreatedById','SystemModstamp','OwnerId','LastViewedDate','LastReferencedDate']);
+      const fields = {};
+      for (const [k, v] of Object.entries(rec)) {
+        if (!skip.has(k) && v !== null && v !== undefined) fields[k] = v;
+      }
+      comp.body = metadataJsonToXml(fields, comp.type);
+      comp._metadataLoaded = true;
+    } catch (e) {
+      console.warn('ensureFullMetadata SOQL(' + comp.type + '/' + comp.sfId + '): ' + e.message);
+      comp._metadataLoaded = true;
+    }
   }
 }
 
