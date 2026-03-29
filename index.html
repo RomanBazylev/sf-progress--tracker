@@ -3673,8 +3673,8 @@ function onCommitBranchChange() {
 }
 
 async function doCommit() {
-  const selected = metaCache.components.filter(c => c.selected && c.body);
-  if (!selected.length) { toast('Select components with content first','warn'); return; }
+  const selected = metaCache.components.filter(c => c.selected);
+  if (!selected.length) { toast('Select components first','warn'); return; }
 
   const mode = document.querySelector('input[name=commitMode]:checked').value;
   let branch;
@@ -3723,10 +3723,11 @@ async function doCommit() {
       const comp = selected[i];
       updProg('(uploading ' + (i + 1) + '/' + selected.length + ' files...)');
       const filePath = basePath + '/' + comp.fullName;
+      const content = comp.body || '<?xml version="1.0" encoding="UTF-8"?>\n<' + comp.type + ' xmlns="http://soap.sforce.com/2006/04/metadata">\n  <!-- ' + comp.name + ' -->\n</' + comp.type + '>\n';
       const blob = await ghFetch('/repos/' + repo + '/git/blobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: comp.body, encoding: 'utf-8' })
+        body: JSON.stringify({ content: content, encoding: 'utf-8' })
       });
       treeItems.push({ path: filePath, mode: '100644', type: 'blob', sha: blob.sha });
     }
