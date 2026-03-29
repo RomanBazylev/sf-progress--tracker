@@ -2686,6 +2686,8 @@ function sfDisconnect() {
   renderMetadataView();
 }
 
+const SF_API_VERSION = '65.0';
+
 async function sfApiFetch(path, opts = {}) {
   const baseUrl = sfState.instance + path;
   const proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.replace(/\/+$/, '') : '';
@@ -2707,6 +2709,104 @@ async function sfApiFetch(path, opts = {}) {
     throw new Error(detail);
   }
   return res.json();
+}
+
+async function sfSoapFetch(soapBody) {
+  const soapEnvelope = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:meta="http://soap.sforce.com/2006/04/metadata">' +
+    '<soapenv:Header><meta:SessionHeader><meta:sessionId>' + sfState.token + '</meta:sessionId></meta:SessionHeader></soapenv:Header>' +
+    '<soapenv:Body>' + soapBody + '</soapenv:Body></soapenv:Envelope>';
+  const baseUrl = sfState.instance + '/services/Soap/m/' + SF_API_VERSION;
+  const proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.replace(/\/+$/, '') : '';
+  const url = proxy ? proxy + '/' + baseUrl : baseUrl;
+  let res;
+  try {
+    res = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/xml; charset=UTF-8', SOAPAction: '""' },
+      body: soapEnvelope
+    });
+  } catch (networkErr) {
+    throw new Error('SOAP network error: ' + networkErr.message);
+  }
+  if (!res.ok) throw new Error('SOAP error: ' + res.status + ' ' + res.statusText);
+  const txt = await res.text();
+  return new DOMParser().parseFromString(txt, 'text/xml');
+}
+
+// Map our internal type names → Metadata API xmlName (only mismatches)
+const TYPE_TO_XML_NAME = {
+  CustomMetadata: 'CustomObject', PlatformEvent: 'CustomObject', ExternalObject: 'CustomObject',
+  LWC: 'LightningComponentBundle', AuraBundle: 'AuraDefinitionBundle',
+  ReportType: 'CustomReportType', ConnectedApp: 'ConnectedApplication'
+};
+
+// Dynamic describe data — populated by fetchDescribeMetadata()
+let describeTypeDir = {};    // xmlName → directoryName
+let describeTypeSuffix = {}; // xmlName → suffix
+let describeChildTypes = new Set();  // xmlNames that are children of CustomObject
+let describeInFolder = new Set();    // xmlNames with inFolder=true
+let describeMetaFile = {};   // xmlName → boolean metaFile
+
+async function fetchDescribeMetadata() {
+  // Try sessionStorage cache first
+  const cacheKey = 'sf_describe_metadata_' + sfState.instance;
+  try {
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      const data = JSON.parse(cached);
+      describeTypeDir = data.dir;
+      describeTypeSuffix = data.suffix;
+      describeChildTypes = new Set(data.children);
+      describeInFolder = new Set(data.inFolder);
+      describeMetaFile = data.metaFile || {};
+      console.log('describeMetadata: restored from cache (' + Object.keys(data.dir).length + ' types)');
+      return;
+    }
+  } catch (e) { /* cache miss */ }
+
+  const doc = await sfSoapFetch(
+    '<meta:describeMetadata><meta:asOfVersion>' + SF_API_VERSION + '</meta:asOfVersion></meta:describeMetadata>'
+  );
+  const objects = doc.getElementsByTagName('metadataObjects');
+  const dir = {}, suffix = {}, mf = {};
+  const children = [], inFolder = [];
+
+  for (let i = 0; i < objects.length; i++) {
+    const obj = objects[i];
+    const xmlName = (obj.getElementsByTagName('xmlName')[0] || {}).textContent || '';
+    const dirName = (obj.getElementsByTagName('directoryName')[0] || {}).textContent || '';
+    const sfx = (obj.getElementsByTagName('suffix')[0] || {}).textContent || '';
+    const isInFolder = ((obj.getElementsByTagName('inFolder')[0] || {}).textContent || '') === 'true';
+    const hasMetaFile = ((obj.getElementsByTagName('metaFile')[0] || {}).textContent || '') === 'true';
+
+    if (xmlName) {
+      if (dirName) dir[xmlName] = dirName;
+      if (sfx) suffix[xmlName] = sfx;
+      if (isInFolder) inFolder.push(xmlName);
+      mf[xmlName] = hasMetaFile;
+    }
+
+    // Collect child types (e.g. CustomObject → CustomField, RecordType, ...)
+    const childNodes = obj.getElementsByTagName('childXmlNames');
+    for (let j = 0; j < childNodes.length; j++) {
+      const childName = childNodes[j].textContent;
+      if (childName) children.push(childName);
+    }
+  }
+
+  describeTypeDir = dir;
+  describeTypeSuffix = suffix;
+  describeChildTypes = new Set(children);
+  describeInFolder = new Set(inFolder);
+  describeMetaFile = mf;
+
+  // Cache in sessionStorage
+  try {
+    sessionStorage.setItem(cacheKey, JSON.stringify({ dir, suffix, children, inFolder, metaFile: mf }));
+  } catch (e) { /* quota exceeded — ignore */ }
+
+  console.log('describeMetadata: fetched ' + Object.keys(dir).length + ' types, ' + children.length + ' child types');
 }
 
 async function fetchSfUser() {
@@ -3272,25 +3372,27 @@ const OBJECT_CHILD_FOLDERS = {
 };
 
 function buildSfdxPath(typeName, displayName, qPath, ext) {
+  const xmlName = TYPE_TO_XML_NAME[typeName] || typeName;
   const dotIdx = displayName.indexOf('.');
   const hasObject = dotIdx > 0;
   const objName = hasObject ? displayName.substring(0, dotIdx) : '';
   const compName = hasObject ? displayName.substring(dotIdx + 1) : displayName;
 
   // Object-child types → objects/{Obj}/{childFolder}/{Name}{ext}
-  const childFolder = OBJECT_CHILD_FOLDERS[typeName];
-  if (childFolder && hasObject) {
+  const isChild = describeChildTypes.size ? describeChildTypes.has(typeName) : !!OBJECT_CHILD_FOLDERS[typeName];
+  if (isChild && hasObject) {
+    const childFolder = describeTypeDir[typeName] || OBJECT_CHILD_FOLDERS[typeName] || qPath;
     return 'objects/' + objName + '/' + childFolder + '/' + compName + ext;
   }
 
   // Layout → layouts/{Obj}-{Name}{ext}  (dash-separated, no subdirectory)
   if (typeName === 'Layout' && hasObject) {
-    return 'layouts/' + objName + '-' + compName + ext;
+    return (describeTypeDir[typeName] || 'layouts') + '/' + objName + '-' + compName + ext;
   }
 
   // QuickAction → quickActions/{Obj}.{Name}{ext} or quickActions/{Name}{ext}
   if (typeName === 'QuickAction') {
-    return 'quickActions/' + displayName + ext;
+    return (describeTypeDir[typeName] || 'quickActions') + '/' + displayName + ext;
   }
 
   // Report / Dashboard with folder → {path}/{FolderName}/{Name}{ext}
@@ -3372,7 +3474,7 @@ async function ensureFullMetadata(comp) {
     const sObj = getToolingSObject(q);
     if (!sObj) { comp._metadataLoaded = true; return; }
     try {
-      const rec = await sfApiFetch('/services/data/v59.0/tooling/sobjects/' + sObj + '/' + comp.sfId);
+      const rec = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/tooling/sobjects/' + sObj + '/' + comp.sfId);
       if (rec.Body) { comp.body = rec.Body; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
       if (rec.Markup) { comp.body = rec.Markup; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
       if (rec.Metadata) {
@@ -3396,7 +3498,7 @@ async function ensureFullMetadata(comp) {
     // Special handling for Queue — fetch related QueueSobject + GroupMember
     if (comp.type === 'Queue') {
       try {
-        const rec = await sfApiFetch('/services/data/v59.0/sobjects/Group/' + comp.sfId);
+        const rec = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/sobjects/Group/' + comp.sfId);
         const queueData = {
           doesSendEmailToMembers: rec.DoesIncludeBosses || false,
           name: rec.Name,
@@ -3406,7 +3508,7 @@ async function ensureFullMetadata(comp) {
         };
         // Fetch supported objects
         try {
-          const sObjects = await sfApiFetch('/services/data/v59.0/query?q=' + encodeURIComponent(
+          const sObjects = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/query?q=' + encodeURIComponent(
             "SELECT SobjectType FROM QueueSobject WHERE QueueId = '" + comp.sfId + "'"
           ));
           if (sObjects.records) {
@@ -3415,7 +3517,7 @@ async function ensureFullMetadata(comp) {
         } catch (e) { console.warn('Queue sObjects: ' + e.message); }
         // Fetch members
         try {
-          const members = await sfApiFetch('/services/data/v59.0/query?q=' + encodeURIComponent(
+          const members = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/query?q=' + encodeURIComponent(
             "SELECT UserOrGroupId FROM GroupMember WHERE GroupId = '" + comp.sfId + "'"
           ));
           if (members.records) {
@@ -3429,7 +3531,7 @@ async function ensureFullMetadata(comp) {
             // Resolve user names
             if (userIds.length) {
               try {
-                const users = await sfApiFetch('/services/data/v59.0/query?q=' + encodeURIComponent(
+                const users = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/query?q=' + encodeURIComponent(
                   "SELECT Id, Username FROM User WHERE Id IN ('" + userIds.join("','") + "')"
                 ));
                 if (users.records) queueData.queueMembers.users = users.records.map(u => ({ user: u.Username }));
@@ -3438,7 +3540,7 @@ async function ensureFullMetadata(comp) {
             // Resolve group/role names
             if (groupIds.length) {
               try {
-                const groups = await sfApiFetch('/services/data/v59.0/query?q=' + encodeURIComponent(
+                const groups = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/query?q=' + encodeURIComponent(
                   "SELECT Id, Name, Type FROM Group WHERE Id IN ('" + groupIds.join("','") + "')"
                 ));
                 if (groups.records) {
@@ -3469,7 +3571,7 @@ async function ensureFullMetadata(comp) {
 
     // Generic SOQL type
     try {
-      const rec = await sfApiFetch('/services/data/v59.0/sobjects/' + sObj + '/' + comp.sfId);
+      const rec = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/sobjects/' + sObj + '/' + comp.sfId);
       const skip = new Set(['attributes','Id','IsDeleted','LastModifiedDate','LastModifiedById','CreatedDate','CreatedById','SystemModstamp','OwnerId','LastViewedDate','LastReferencedDate']);
       const fields = {};
       for (const [k, v] of Object.entries(rec)) {
@@ -3506,6 +3608,36 @@ async function fetchMetadata() {
     const activeTypes = META_QUERIES.filter(q => metaFetchConfig.types.includes(q.type));
     let done = 0;
 
+    // Fetch SFDX metadata schema (directoryName, suffix, childXmlNames) from org
+    const prog0 = document.getElementById('metaFetchProgress');
+    if (prog0) prog0.textContent = 'Fetching metadata schema...';
+    const floatingText0 = document.getElementById('metaFetchFloatingText');
+    if (floatingText0) floatingText0.textContent = 'Fetching metadata schema...';
+    try {
+      await fetchDescribeMetadata();
+    } catch (e) {
+      console.warn('describeMetadata failed (using hardcoded defaults): ' + e.message);
+    }
+
+    // Enrich META_QUERIES path/ext from describeMetadata if available
+    if (Object.keys(describeTypeDir).length) {
+      const CODE_TYPES = new Set(['ApexClass','ApexTrigger','ApexPage','ApexComponent']);
+      const BUNDLE_TYPES = new Set(['AuraBundle','LWC']);
+      for (const q of activeTypes) {
+        const xmlName = TYPE_TO_XML_NAME[q.type] || q.type;
+        if (describeTypeDir[xmlName]) q.path = describeTypeDir[xmlName];
+        if (describeTypeSuffix[xmlName]) {
+          if (BUNDLE_TYPES.has(q.type)) {
+            q.ext = '';
+          } else if (CODE_TYPES.has(q.type)) {
+            q.ext = '.' + describeTypeSuffix[xmlName];
+          } else {
+            q.ext = '.' + describeTypeSuffix[xmlName] + '-meta.xml';
+          }
+        }
+      }
+    }
+
     for (const q of activeTypes) {
       done++;
       const prog = document.getElementById('metaFetchProgress');
@@ -3516,7 +3648,7 @@ async function fetchMetadata() {
         if (q.api === 'soql') {
           // Standard REST API SOQL (setup objects like AssignmentRule, etc.)
           const soql = q.soql + buildDateClause(q.soql) + ' ORDER BY LastModifiedDate DESC';
-          let queryUrl = '/services/data/v59.0/query?q=' + encodeURIComponent(soql);
+          let queryUrl = '/services/data/v' + SF_API_VERSION + '/query?q=' + encodeURIComponent(soql);
           try {
             while (queryUrl) {
               const res = await sfApiFetch(queryUrl);
@@ -3546,7 +3678,7 @@ async function fetchMetadata() {
         } else {
           // Tooling API SOQL
           const soql = q.soql + buildDateClause(q.soql) + ' ORDER BY LastModifiedDate DESC';
-          let queryUrl = '/services/data/v59.0/tooling/query?q=' + encodeURIComponent(soql);
+          let queryUrl = '/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(soql);
           while (queryUrl) {
             const res = await sfApiFetch(queryUrl);
             if (res.records) {
@@ -3588,7 +3720,7 @@ async function fetchMetadata() {
       const comp = lwcComps[i];
       updFloating('Fetching LWC source (' + (i + 1) + '/' + lwcComps.length + ')...');
       try {
-        const res = await sfApiFetch('/services/data/v59.0/tooling/query?q=' + encodeURIComponent(
+        const res = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(
           "SELECT FilePath, Source FROM LightningComponentResource WHERE LightningComponentBundleId = '" + comp.sfId + "' ORDER BY FilePath"
         ));
         if (res.records && res.records.length) {
@@ -3605,7 +3737,7 @@ async function fetchMetadata() {
     // Aura: fetch AuraDefinition for each bundle
     for (const comp of auraComps) {
       try {
-        const res = await sfApiFetch('/services/data/v59.0/tooling/query?q=' + encodeURIComponent(
+        const res = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(
           "SELECT DefType, Source FROM AuraDefinition WHERE AuraDefinitionBundleId = '" + comp.sfId + "' ORDER BY DefType"
         ));
         if (res.records && res.records.length) {
