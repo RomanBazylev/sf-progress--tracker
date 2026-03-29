@@ -2995,36 +2995,75 @@ function metaToggleAllCb(on) {
    FETCH METADATA FROM SALESFORCE
    ═══════════════════════════════════════════════════════ */
 const META_QUERIES = [
-  // ── Tooling API (SOQL) ──
+  // ── Code ──
   { type: 'ApexClass', label: 'Apex Classes', desc: 'Custom Apex classes', api: 'tooling', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexClass WHERE NamespacePrefix = null AND Status = 'Active'", path: 'classes', ext: '.cls' },
   { type: 'ApexTrigger', label: 'Apex Triggers', desc: 'Object triggers', api: 'tooling', soql: "SELECT Id, Name, Body, LastModifiedDate FROM ApexTrigger WHERE NamespacePrefix = null AND Status = 'Active'", path: 'triggers', ext: '.trigger' },
   { type: 'ApexPage', label: 'Visualforce Pages', desc: 'VF pages', api: 'tooling', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexPage WHERE NamespacePrefix = null", path: 'pages', ext: '.page' },
   { type: 'ApexComponent', label: 'VF Components', desc: 'Visualforce components', api: 'tooling', soql: "SELECT Id, Name, Markup, LastModifiedDate FROM ApexComponent WHERE NamespacePrefix = null", path: 'components', ext: '.component' },
   { type: 'AuraBundle', label: 'Aura Bundles', desc: 'Aura/Lightning components', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM AuraDefinitionBundle WHERE NamespacePrefix = null", path: 'aura', ext: '' },
   { type: 'LWC', label: 'LWC Bundles', desc: 'Lightning Web Components', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM LightningComponentBundle WHERE NamespacePrefix = null", path: 'lwc', ext: '' },
-  // ── Tooling API (SOQL) — additional types ──
-  { type: 'ValidationRule', label: 'Validation Rules', desc: 'Field validation rules', api: 'tooling', soql: "SELECT Id, ValidationName, EntityDefinition.DeveloperName, Metadata, LastModifiedDate FROM ValidationRule WHERE NamespacePrefix = null", path: 'validationRules', ext: '.validationRule-meta.xml', bodyField: '_metadata' },
-  { type: 'WorkflowRule', label: 'Workflow Rules', desc: 'Workflow automation rules', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM WorkflowRule WHERE NamespacePrefix = null", path: 'workflowRules', ext: '.rule-meta.xml' },
-  { type: 'Flow', label: 'Flows', desc: 'Flows & autolaunched flows', api: 'tooling', soql: "SELECT Id, Definition.DeveloperName, ProcessType, LastModifiedDate FROM Flow WHERE Status = 'Active' AND NamespacePrefix = null", path: 'flows', ext: '.flow-meta.xml' },
+  { type: 'ApexTestSuite', label: 'Apex Test Suites', desc: 'Test suite definitions', api: 'tooling', soql: "SELECT Id, TestSuiteName, LastModifiedDate FROM ApexTestSuite", path: 'testSuites', ext: '.testSuite-meta.xml' },
+  { type: 'StaticResource', label: 'Static Resources', desc: 'JS, CSS, images, zips', api: 'tooling', soql: "SELECT Id, Name, ContentType, LastModifiedDate FROM StaticResource WHERE NamespacePrefix = null", path: 'staticresources', ext: '.resource-meta.xml' },
+  // ── Objects & Fields ──
   { type: 'CustomObject', label: 'Custom Objects', desc: 'Custom object definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM CustomObject WHERE NamespacePrefix = null AND DeveloperName != null", path: 'objects', ext: '.object-meta.xml' },
   { type: 'CustomField', label: 'Custom Fields', desc: 'Custom fields on objects', api: 'tooling', soql: "SELECT Id, DeveloperName, TableEnumOrId, LastModifiedDate FROM CustomField WHERE NamespacePrefix = null", path: 'fields', ext: '.field-meta.xml' },
-  { type: 'EmailTemplate', label: 'Email Templates', desc: 'Email templates', api: 'tooling', soql: "SELECT Id, DeveloperName, Subject, LastModifiedDate FROM EmailTemplate WHERE NamespacePrefix = null", path: 'email', ext: '.email-meta.xml' },
-  { type: 'StaticResource', label: 'Static Resources', desc: 'JS, CSS, images, zips', api: 'tooling', soql: "SELECT Id, Name, ContentType, LastModifiedDate FROM StaticResource WHERE NamespacePrefix = null", path: 'staticresources', ext: '.resource-meta.xml' },
-  // ── Standard SOQL (setup objects) ──
+  { type: 'RecordType', label: 'Record Types', desc: 'Record types on objects', api: 'tooling', soql: "SELECT Id, Name, SobjectType, IsActive, LastModifiedDate FROM RecordType WHERE NamespacePrefix = null", path: 'recordTypes', ext: '.recordType-meta.xml' },
+  { type: 'CompactLayout', label: 'Compact Layouts', desc: 'Compact layouts for objects', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM CompactLayout WHERE NamespacePrefix = null", path: 'compactLayouts', ext: '.compactLayout-meta.xml' },
+  { type: 'FieldSet', label: 'Field Sets', desc: 'Reusable field collections', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM FieldSet WHERE NamespacePrefix = null", path: 'fieldSets', ext: '.fieldSet-meta.xml' },
+  { type: 'CustomMetadata', label: 'Custom Metadata Types', desc: 'Custom metadata type definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM CustomObject WHERE NamespacePrefix = null AND DeveloperName LIKE '%__mdt'", path: 'customMetadata', ext: '.md-meta.xml' },
+  { type: 'PlatformEvent', label: 'Platform Events', desc: 'Platform event definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM CustomObject WHERE NamespacePrefix = null AND DeveloperName LIKE '%__e'", path: 'platformEvents', ext: '.object-meta.xml' },
+  { type: 'ExternalObject', label: 'External Objects', desc: 'External data source objects', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM CustomObject WHERE NamespacePrefix = null AND DeveloperName LIKE '%__x'", path: 'externalObjects', ext: '.object-meta.xml' },
+  // ── Automation ──
+  { type: 'Flow', label: 'Flows', desc: 'Flows & autolaunched flows', api: 'tooling', soql: "SELECT Id, Definition.DeveloperName, ProcessType, LastModifiedDate FROM Flow WHERE Status = 'Active' AND NamespacePrefix = null", path: 'flows', ext: '.flow-meta.xml' },
+  { type: 'ValidationRule', label: 'Validation Rules', desc: 'Field validation rules', api: 'tooling', soql: "SELECT Id, ValidationName, EntityDefinition.DeveloperName, Metadata, LastModifiedDate FROM ValidationRule WHERE NamespacePrefix = null", path: 'validationRules', ext: '.validationRule-meta.xml', bodyField: '_metadata' },
+  { type: 'WorkflowRule', label: 'Workflow Rules', desc: 'Workflow automation rules', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM WorkflowRule WHERE NamespacePrefix = null", path: 'workflowRules', ext: '.rule-meta.xml' },
+  { type: 'WorkflowFieldUpdate', label: 'Field Updates', desc: 'Workflow field update actions', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM WorkflowFieldUpdate WHERE NamespacePrefix = null", path: 'workflowFieldUpdates', ext: '.fieldUpdate-meta.xml' },
+  { type: 'WorkflowAlert', label: 'Email Alerts', desc: 'Workflow email alert actions', api: 'tooling', soql: "SELECT Id, DeveloperName, TableEnumOrId, LastModifiedDate FROM WorkflowAlert WHERE NamespacePrefix = null", path: 'workflowAlerts', ext: '.alert-meta.xml' },
+  { type: 'WorkflowOutboundMessage', label: 'Outbound Messages', desc: 'Workflow outbound messages', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM WorkflowOutboundMessage WHERE NamespacePrefix = null", path: 'workflowOutbound', ext: '.outboundMessage-meta.xml' },
+  { type: 'WorkflowTask', label: 'Workflow Tasks', desc: 'Workflow task actions', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM WorkflowTask WHERE NamespacePrefix = null", path: 'workflowTasks', ext: '.task-meta.xml' },
+  { type: 'ApprovalProcess', label: 'Approval Processes', desc: 'Approval process definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, TableEnumOrId, LastModifiedDate FROM ApprovalProcess WHERE NamespacePrefix = null", path: 'approvalProcesses', ext: '.approvalProcess-meta.xml' },
+  { type: 'QuickAction', label: 'Quick Actions', desc: 'Object & global quick actions', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM QuickActionDefinition WHERE NamespacePrefix = null", path: 'quickActions', ext: '.quickAction-meta.xml' },
+  { type: 'BusinessProcess', label: 'Business Processes', desc: 'Support/Sales/Lead processes', api: 'soql', soql: "SELECT Id, Name, SobjectType, IsActive, LastModifiedDate FROM BusinessProcess", path: 'businessProcesses', ext: '.businessProcess-meta.xml' },
+  // ── UI & Layout ──
+  { type: 'Layout', label: 'Page Layouts', desc: 'Page layouts for objects', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM Layout WHERE NamespacePrefix = null", path: 'layouts', ext: '.layout-meta.xml' },
+  { type: 'FlexiPage', label: 'Lightning Pages', desc: 'Lightning record/app/home pages', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM FlexiPage WHERE NamespacePrefix = null", path: 'flexipages', ext: '.flexipage-meta.xml' },
+  { type: 'ListView', label: 'List Views', desc: 'Object list views', api: 'tooling', soql: "SELECT Id, Name, DeveloperName, SobjectType, LastModifiedDate FROM ListView WHERE NamespacePrefix = null", path: 'listViews', ext: '.listView-meta.xml' },
+  { type: 'CustomTab', label: 'Custom Tabs', desc: 'Custom object & web tabs', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectName, LastModifiedDate FROM CustomTab WHERE NamespacePrefix = null", path: 'tabs', ext: '.tab-meta.xml' },
+  { type: 'CustomApplication', label: 'Custom Apps', desc: 'Lightning & Classic apps', api: 'tooling', soql: "SELECT Id, DeveloperName, Label, LastModifiedDate FROM CustomApplication WHERE NamespacePrefix = null", path: 'applications', ext: '.app-meta.xml' },
+  { type: 'HomePageLayout', label: 'Home Page Layouts', desc: 'Classic home page layouts', api: 'tooling', soql: "SELECT Id, Name, LastModifiedDate FROM HomePageLayout WHERE NamespacePrefix = null", path: 'homePageLayouts', ext: '.homePageLayout-meta.xml' },
+  { type: 'PathAssistant', label: 'Path (Guidance)', desc: 'Path / Sales Path settings', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM PathAssistant WHERE NamespacePrefix = null", path: 'pathAssistants', ext: '.pathAssistant-meta.xml' },
+  { type: 'WebLink', label: 'Custom Buttons/Links', desc: 'Custom buttons & links on objects', api: 'tooling', soql: "SELECT Id, Name, PageOrSobjectType, LastModifiedDate FROM WebLink WHERE NamespacePrefix = null", path: 'webLinks', ext: '.webLink-meta.xml' },
+  // ── Picklist & Values ──
+  { type: 'StandardValueSet', label: 'Standard Value Sets', desc: 'Standard picklist values (Status, etc.)', api: 'tooling', soql: "SELECT Id, MasterLabel, LastModifiedDate FROM StandardValueSet", path: 'standardValueSets', ext: '.standardValueSet-meta.xml' },
+  { type: 'GlobalValueSet', label: 'Global Value Sets', desc: 'Global picklist value definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM GlobalValueSet WHERE NamespacePrefix = null", path: 'globalValueSets', ext: '.globalValueSet-meta.xml' },
+  { type: 'CustomLabel', label: 'Custom Labels', desc: 'Custom label definitions', api: 'tooling', soql: "SELECT Id, Name, Value, LastModifiedDate FROM CustomLabel WHERE NamespacePrefix = null", path: 'labels', ext: '.labels-meta.xml' },
+  // ── Security & Access ──
+  { type: 'PermissionSet', label: 'Permission Sets', desc: 'Permission set definitions', api: 'tooling', soql: "SELECT Id, Name, Label, IsCustom, LastModifiedDate FROM PermissionSet WHERE NamespacePrefix = null AND IsCustom = true", path: 'permissionsets', ext: '.permissionset-meta.xml' },
+  { type: 'PermissionSetGroup', label: 'Permission Set Groups', desc: 'Permission set group definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM PermissionSetGroup WHERE NamespacePrefix = null", path: 'permissionsetgroups', ext: '.permissionsetgroup-meta.xml' },
+  { type: 'CustomPermission', label: 'Custom Permissions', desc: 'Custom permission definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM CustomPermission WHERE NamespacePrefix = null", path: 'customPermissions', ext: '.customPermission-meta.xml' },
+  { type: 'Profile', label: 'Profiles', desc: 'User profile definitions', api: 'soql', soql: "SELECT Id, Name, LastModifiedDate FROM Profile WHERE UserType = 'Standard'", path: 'profiles', ext: '.profile-meta.xml' },
+  // ── Rules ──
   { type: 'AssignmentRule', label: 'Assignment Rules', desc: 'Lead & Case assignment rules', api: 'soql', soql: "SELECT Id, Name, SobjectType, Active, LastModifiedDate FROM AssignmentRule", path: 'assignmentRules', ext: '.assignmentRules-meta.xml' },
   { type: 'AutoResponseRule', label: 'Auto-Response Rules', desc: 'Auto-response email rules', api: 'soql', soql: "SELECT Id, Name, SobjectType, Active, LastModifiedDate FROM AutoResponseRule", path: 'autoResponseRules', ext: '.autoResponseRules-meta.xml' },
   { type: 'EscalationRule', label: 'Escalation Rules', desc: 'Case escalation rules', api: 'soql', soql: "SELECT Id, Name, SobjectType, Active, LastModifiedDate FROM EscalationRule", path: 'escalationRules', ext: '.escalationRules-meta.xml' },
   { type: 'MatchingRule', label: 'Matching Rules', desc: 'Duplicate matching rules', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM MatchingRule WHERE NamespacePrefix = null", path: 'matchingRules', ext: '.matchingRule-meta.xml' },
   { type: 'DuplicateRule', label: 'Duplicate Rules', desc: 'Duplicate management rules', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM DuplicateRule WHERE NamespacePrefix = null", path: 'duplicateRules', ext: '.duplicateRule-meta.xml' },
-  // ── Tooling API — UI & layout types ──
-  { type: 'RecordType', label: 'Record Types', desc: 'Record types on objects', api: 'tooling', soql: "SELECT Id, Name, SobjectType, IsActive, LastModifiedDate FROM RecordType WHERE NamespacePrefix = null", path: 'recordTypes', ext: '.recordType-meta.xml' },
-  { type: 'Layout', label: 'Page Layouts', desc: 'Page layouts for objects', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM Layout WHERE NamespacePrefix = null", path: 'layouts', ext: '.layout-meta.xml' },
-  { type: 'FlexiPage', label: 'Lightning Pages', desc: 'Lightning record/app/home pages', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM FlexiPage WHERE NamespacePrefix = null", path: 'flexipages', ext: '.flexipage-meta.xml' },
-  { type: 'ListView', label: 'List Views', desc: 'Object list views', api: 'tooling', soql: "SELECT Id, Name, DeveloperName, SobjectType, LastModifiedDate FROM ListView WHERE NamespacePrefix = null", path: 'listViews', ext: '.listView-meta.xml' },
-  { type: 'StandardValueSet', label: 'Standard Value Sets', desc: 'Standard picklist values (Status, etc.)', api: 'tooling', soql: "SELECT Id, MasterLabel, LastModifiedDate FROM StandardValueSet", path: 'standardValueSets', ext: '.standardValueSet-meta.xml' },
-  // ── Standard SOQL — setup objects ──
-  { type: 'BusinessProcess', label: 'Business Processes', desc: 'Support/Sales/Lead processes', api: 'soql', soql: "SELECT Id, Name, SobjectType, IsActive, LastModifiedDate FROM BusinessProcess", path: 'businessProcesses', ext: '.businessProcess-meta.xml' },
+  // ── Email & Templates ──
+  { type: 'EmailTemplate', label: 'Email Templates', desc: 'Email templates', api: 'tooling', soql: "SELECT Id, DeveloperName, Subject, LastModifiedDate FROM EmailTemplate WHERE NamespacePrefix = null", path: 'email', ext: '.email-meta.xml' },
+  { type: 'Letterhead', label: 'Letterheads', desc: 'Email letterhead branding', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM Letterhead WHERE NamespacePrefix = null", path: 'letterhead', ext: '.letter-meta.xml' },
+  // ── Reports & Dashboards ──
+  { type: 'Report', label: 'Reports', desc: 'Report definitions', api: 'soql', soql: "SELECT Id, Name, DeveloperName, FolderName, LastModifiedDate FROM Report WHERE NamespacePrefix = null", path: 'reports', ext: '.report-meta.xml' },
+  { type: 'Dashboard', label: 'Dashboards', desc: 'Dashboard definitions', api: 'soql', soql: "SELECT Id, Title, DeveloperName, FolderName, LastModifiedDate FROM Dashboard WHERE NamespacePrefix = null", path: 'dashboards', ext: '.dashboard-meta.xml' },
+  { type: 'ReportType', label: 'Report Types', desc: 'Custom report type definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM CustomReportType WHERE NamespacePrefix = null", path: 'reportTypes', ext: '.reportType-meta.xml' },
+  // ── Integration & Connectivity ──
+  { type: 'NamedCredential', label: 'Named Credentials', desc: 'Named credential endpoints', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM NamedCredential WHERE NamespacePrefix = null", path: 'namedCredentials', ext: '.namedCredential-meta.xml' },
+  { type: 'ExternalDataSource', label: 'External Data Sources', desc: 'External data connections', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM ExternalDataSource WHERE NamespacePrefix = null", path: 'dataSources', ext: '.dataSource-meta.xml' },
+  { type: 'RemoteSiteSetting', label: 'Remote Site Settings', desc: 'Allowed remote endpoints', api: 'tooling', soql: "SELECT Id, DeveloperName, EndpointUrl, LastModifiedDate FROM RemoteSiteSetting WHERE NamespacePrefix = null", path: 'remoteSiteSettings', ext: '.remoteSite-meta.xml' },
+  { type: 'ConnectedApp', label: 'Connected Apps', desc: 'OAuth connected app definitions', api: 'tooling', soql: "SELECT Id, Name, MasterLabel, LastModifiedDate FROM ConnectedApplication WHERE NamespacePrefix = null", path: 'connectedApps', ext: '.connectedApp-meta.xml' },
+  // ── Admin ──
   { type: 'Queue', label: 'Queues', desc: 'Case/Lead queues', api: 'soql', soql: "SELECT Id, Name, Type, LastModifiedDate FROM Group WHERE Type = 'Queue'", path: 'queues', ext: '.queue-meta.xml' },
+  { type: 'CustomNotificationType', label: 'Custom Notifications', desc: 'Custom notification types', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM CustomNotificationType WHERE NamespacePrefix = null", path: 'notificationTypes', ext: '.notiftype-meta.xml' },
+  { type: 'FlowCategory', label: 'Flow Categories', desc: 'Flow category groupings', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM FlowCategory WHERE NamespacePrefix = null", path: 'flowCategories', ext: '.flowCategory-meta.xml' },
 ];
 
 const META_DEFAULT_TYPES = ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'];
@@ -3032,25 +3071,37 @@ const META_DEFAULT_TYPES = ['ApexClass','ApexTrigger','ApexPage','ApexComponent'
 function buildFetchConfigHtml() {
   let h = '<div class="meta-fetch-config">';
   h += '<h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">1/3</span>Select Metadata Types</h3>';
-  h += '<div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-sm" onclick="metaFetchConfig.types=META_QUERIES.map(q=>q.type);renderMetadataView()">Select All</button><button class="btn btn-sm" onclick="metaFetchConfig.types=[];renderMetadataView()">Deselect All</button><button class="btn btn-sm" onclick="metaFetchConfig.types=META_DEFAULT_TYPES.slice();renderMetadataView()">Reset to Defaults</button></div>';
+  h += '<div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap;align-items:center">';
+  h += '<button class="btn btn-sm" onclick="metaFetchConfig.types=META_QUERIES.map(q=>q.type);renderMetadataView()">Select All</button>';
+  h += '<button class="btn btn-sm" onclick="metaFetchConfig.types=[];renderMetadataView()">Deselect All</button>';
+  h += '<button class="btn btn-sm" onclick="metaFetchConfig.types=META_DEFAULT_TYPES.slice();renderMetadataView()">Reset to Defaults</button>';
+  h += '<input id="metaTypeSearch" placeholder="\ud83d\udd0d Search types..." oninput="filterMetaTypes(this.value)" style="margin-left:auto;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;width:180px">';
+  h += '</div>';
   // Group types by category
   const typeGroups = [
-    { label: 'Code', types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'] },
-    { label: 'Configuration', types: ['ValidationRule','WorkflowRule','Flow','CustomObject','CustomField','RecordType','BusinessProcess'] },
-    { label: 'UI & Layout', types: ['Layout','FlexiPage','ListView','StandardValueSet'] },
+    { label: 'Code', types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC','ApexTestSuite','StaticResource'] },
+    { label: 'Objects & Fields', types: ['CustomObject','CustomField','RecordType','CompactLayout','FieldSet','CustomMetadata','PlatformEvent','ExternalObject'] },
+    { label: 'Automation', types: ['Flow','ValidationRule','WorkflowRule','WorkflowFieldUpdate','WorkflowAlert','WorkflowOutboundMessage','WorkflowTask','ApprovalProcess','QuickAction','BusinessProcess'] },
+    { label: 'UI & Layout', types: ['Layout','FlexiPage','ListView','CustomTab','CustomApplication','HomePageLayout','PathAssistant','WebLink'] },
+    { label: 'Picklist & Values', types: ['StandardValueSet','GlobalValueSet','CustomLabel'] },
+    { label: 'Security & Access', types: ['PermissionSet','PermissionSetGroup','CustomPermission','Profile'] },
     { label: 'Rules', types: ['AssignmentRule','AutoResponseRule','EscalationRule','MatchingRule','DuplicateRule'] },
-    { label: 'Other', types: ['EmailTemplate','StaticResource','Queue'] },
+    { label: 'Email & Templates', types: ['EmailTemplate','Letterhead'] },
+    { label: 'Reports & Dashboards', types: ['Report','Dashboard','ReportType'] },
+    { label: 'Integration', types: ['NamedCredential','ExternalDataSource','RemoteSiteSetting','ConnectedApp'] },
+    { label: 'Admin', types: ['Queue','CustomNotificationType','FlowCategory'] },
   ];
   typeGroups.forEach(grp => {
     const grpQueries = META_QUERIES.filter(q => grp.types.includes(q.type));
     if (!grpQueries.length) return;
-    h += `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">${grp.label}</div>`;
+    h += `<div class="meta-type-group">`;
+    h += `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">${grp.label} <span style="font-weight:400;opacity:.6">(${grpQueries.length})</span></div>`;
     h += '<div class="meta-type-grid">';
     grpQueries.forEach(q => {
       const chk = metaFetchConfig.types.includes(q.type) ? 'checked' : '';
       h += `<label class="meta-type-opt"><input type="checkbox" value="${q.type}" ${chk} onchange="toggleMetaType('${q.type}',this.checked)"><div><div class="lbl">${q.label}</div><div class="desc">${q.desc}</div></div></label>`;
     });
-    h += '</div>';
+    h += '</div></div>';
   });
   h += '<h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/3</span>Date Range Filter</h3>';
   h += '<p style="font-size:12px;color:var(--muted);margin-bottom:10px">Only fetch components modified within this period</p>';
@@ -3106,6 +3157,19 @@ async function loadRepoBranches() {
 function toggleMetaType(type, on) {
   if (on && !metaFetchConfig.types.includes(type)) metaFetchConfig.types.push(type);
   if (!on) metaFetchConfig.types = metaFetchConfig.types.filter(t => t !== type);
+}
+
+function filterMetaTypes(query) {
+  const q = query.toLowerCase();
+  document.querySelectorAll('.meta-type-opt').forEach(label => {
+    const text = label.textContent.toLowerCase();
+    label.style.display = text.includes(q) ? '' : 'none';
+  });
+  // Show/hide group headers
+  document.querySelectorAll('.meta-type-group').forEach(grp => {
+    const visible = grp.querySelectorAll('.meta-type-opt:not([style*="display: none"])');
+    grp.style.display = visible.length ? '' : 'none';
+  });
 }
 
 function setDatePreset(key) {
@@ -3181,8 +3245,8 @@ async function fetchMetadata() {
               const res = await sfApiFetch(queryUrl);
               if (res.records) {
                 res.records.forEach(rec => {
-                  const name = rec.Name || rec.DeveloperName || rec.Id;
-                  const displayName = rec.SobjectType ? (rec.SobjectType + '.' + name) : name;
+                  const name = rec.Name || rec.DeveloperName || rec.Title || rec.Id;
+                  const displayName = rec.SobjectType ? (rec.SobjectType + '.' + name) : (rec.FolderName ? (rec.FolderName + '/' + name) : name);
                   components.push({
                     type: q.type,
                     name: displayName,
@@ -3208,7 +3272,7 @@ async function fetchMetadata() {
             const res = await sfApiFetch(queryUrl);
             if (res.records) {
               res.records.forEach(rec => {
-                const name = rec.Name || rec.DeveloperName || rec.MasterLabel || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
+                const name = rec.Name || rec.DeveloperName || rec.MasterLabel || rec.Title || rec.TestSuiteName || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
                 const body = rec.Body || rec.Markup || (rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '') || '';
                 const displayName = rec.EntityDefinition ? (rec.EntityDefinition.DeveloperName + '.' + name) : (rec.TableEnumOrId ? (rec.TableEnumOrId + '.' + name) : name);
                 components.push({
