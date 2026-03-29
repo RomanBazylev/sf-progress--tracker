@@ -3130,15 +3130,16 @@ function getDateFilterLabel() {
     if (metaFetchConfig.dateTo) parts.push('to ' + metaFetchConfig.dateTo);
     return parts.length ? 'Filtering: ' + parts.join(' ') : 'Set custom dates above';
   }
-  const labels = {today:'Modified today',  '2d':'Modified in last 2 days', week:'Modified in last week', month:'Modified in last month'};
+  const labels = {today:'Modified today', '2d':'Modified in last 2 days', '5d':'Modified in last 5 days', week:'Modified in last week', month:'Modified in last month'};
   return labels[metaFetchConfig.datePreset] || '';
 }
 
-function buildDateClause() {
+function buildDateClause(soql) {
   if (metaFetchConfig.datePreset === 'all' && !metaFetchConfig.dateFrom) return '';
+  const hasWhere = soql && /\bWHERE\b/i.test(soql);
   let clause = '';
-  if (metaFetchConfig.dateFrom) clause += " AND LastModifiedDate >= " + metaFetchConfig.dateFrom + "T00:00:00Z";
-  if (metaFetchConfig.dateTo) clause += " AND LastModifiedDate <= " + metaFetchConfig.dateTo + "T23:59:59Z";
+  if (metaFetchConfig.dateFrom) clause += (clause || hasWhere ? ' AND ' : ' WHERE ') + "LastModifiedDate >= " + metaFetchConfig.dateFrom + "T00:00:00Z";
+  if (metaFetchConfig.dateTo) clause += (clause || hasWhere ? ' AND ' : ' WHERE ') + "LastModifiedDate <= " + metaFetchConfig.dateTo + "T23:59:59Z";
   return clause;
 }
 
@@ -3160,7 +3161,6 @@ async function fetchMetadata() {
 
   try {
     const components = [];
-    const dateSuffix = buildDateClause();
     const activeTypes = META_QUERIES.filter(q => metaFetchConfig.types.includes(q.type));
     let done = 0;
 
@@ -3173,7 +3173,7 @@ async function fetchMetadata() {
       try {
         if (q.api === 'soql') {
           // Standard REST API SOQL (setup objects like AssignmentRule, etc.)
-          const soql = q.soql + dateSuffix + ' ORDER BY LastModifiedDate DESC';
+          const soql = q.soql + buildDateClause(q.soql) + ' ORDER BY LastModifiedDate DESC';
           let queryUrl = '/services/data/v59.0/query?q=' + encodeURIComponent(soql);
           try {
             while (queryUrl) {
@@ -3201,7 +3201,7 @@ async function fetchMetadata() {
           }
         } else {
           // Tooling API SOQL
-          const soql = q.soql + dateSuffix + ' ORDER BY LastModifiedDate DESC';
+          const soql = q.soql + buildDateClause(q.soql) + ' ORDER BY LastModifiedDate DESC';
           let queryUrl = '/services/data/v59.0/tooling/query?q=' + encodeURIComponent(soql);
           while (queryUrl) {
             const res = await sfApiFetch(queryUrl);
