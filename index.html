@@ -843,7 +843,7 @@ let isCreatingRelease = false;
 
 // Salesforce metadata state
 let sfState = { token: null, instance: null, user: null, envIndex: -1 };
-let metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
+let metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false, failedTypes: [] };
 let metaFetchConfig = { types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'], datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' }; // updated by META_DEFAULT_TYPES after load
 let repoBranches = [];
 
@@ -2770,6 +2770,15 @@ function renderMetadataView() {
     html += '</div>';
     html += '<div class="empty-state" style="padding:40px"><div class="empty-icon">🔍</div>';
     html += '<p>No components matched your filter criteria.</p>';
+    if (metaCache.failedTypes && metaCache.failedTypes.length) {
+      html += '<div style="text-align:left;margin:16px auto;max-width:600px;background:var(--hover);border-radius:8px;padding:12px 16px">';
+      html += '<p style="font-size:13px;color:var(--danger);margin:0 0 8px">⚠ ' + metaCache.failedTypes.length + ' type(s) failed to query:</p>';
+      html += '<div style="font-size:12px;color:var(--muted);max-height:200px;overflow-y:auto">';
+      metaCache.failedTypes.forEach(function(ft) {
+        html += '<div style="margin-bottom:4px"><b>' + esc(ft.label || ft.type) + '</b>: ' + esc(ft.error) + '</div>';
+      });
+      html += '</div></div>';
+    }
     html += '<p style="font-size:12px;color:var(--muted);margin-top:8px">Try adjusting the metadata types, date range, or branch selection.</p>';
     html += '<button class="btn btn-primary" style="margin-top:16px" onclick="metaCache.hasFetched=false;renderMetadataView()">← Modify Filters</button>';
     html += '</div>';
@@ -2783,6 +2792,17 @@ function renderMetadataView() {
   html += '<div class="meta-status ok">✓ Connected as ' + esc(sfConnectedLabel()) + '</div>';
   html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
   html += '</div>';
+
+  // Failed types warning
+  if (metaCache.failedTypes && metaCache.failedTypes.length) {
+    html += '<details style="margin-bottom:12px;background:var(--hover);border-radius:8px;padding:8px 12px;border-left:3px solid var(--danger)">';
+    html += '<summary style="cursor:pointer;font-size:13px;color:var(--danger)">⚠ ' + metaCache.failedTypes.length + ' type(s) failed to query — click to expand</summary>';
+    html += '<div style="font-size:12px;color:var(--muted);margin-top:8px;max-height:200px;overflow-y:auto">';
+    metaCache.failedTypes.forEach(function(ft) {
+      html += '<div style="margin-bottom:4px"><b>' + esc(ft.label || ft.type) + '</b>: ' + esc(ft.error) + '</div>';
+    });
+    html += '</div></details>';
+  }
 
   // Toolbar
   html += '<div class="meta-toolbar">';
@@ -3226,6 +3246,7 @@ async function fetchMetadata() {
 
   try {
     const components = [];
+    const failedTypes = [];
     const activeTypes = META_QUERIES.filter(q => metaFetchConfig.types.includes(q.type));
     let done = 0;
 
@@ -3263,6 +3284,7 @@ async function fetchMetadata() {
             }
           } catch (e) {
             console.warn(q.type + ': standard SOQL failed — ' + e.message);
+            failedTypes.push({ type: q.type, label: q.label, error: e.message });
           }
         } else {
           // Tooling API SOQL
@@ -3292,6 +3314,7 @@ async function fetchMetadata() {
         }
       } catch (e) {
         console.warn('Skip ' + q.type + ': ' + e.message);
+        failedTypes.push({ type: q.type, label: q.label, error: e.message });
       }
     }
 
@@ -3339,6 +3362,7 @@ async function fetchMetadata() {
     await fetchGitTreeForDiff(components);
 
     metaCache.components = components;
+    metaCache.failedTypes = failedTypes;
     metaCache.hasFetched = true;
     renderMetadataView();
   } catch (e) {
