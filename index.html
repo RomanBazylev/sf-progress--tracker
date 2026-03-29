@@ -2695,7 +2695,12 @@ async function sfApiFetch(path, opts = {}) {
   if (method !== 'GET' && method !== 'HEAD' && method !== 'DELETE') {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   }
-  const res = await fetch(url, { ...opts, method, headers });
+  let res;
+  try {
+    res = await fetch(url, { ...opts, method, headers });
+  } catch (networkErr) {
+    throw new Error('Network error: ' + networkErr.message + ' (URL: ' + url.slice(0, 120) + ')');
+  }
   if (!res.ok) {
     let detail = res.status + ' ' + res.statusText;
     try { const b = await res.json(); if (b[0] && b[0].message) detail += ' — ' + b[0].message; else if (b.message) detail += ' — ' + b.message; } catch {}
