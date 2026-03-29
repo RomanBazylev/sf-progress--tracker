@@ -3016,6 +3016,14 @@ const META_QUERIES = [
   { type: 'EscalationRule', label: 'Escalation Rules', desc: 'Case escalation rules', api: 'soql', soql: "SELECT Id, Name, SobjectType, Active, LastModifiedDate FROM EscalationRule", path: 'escalationRules', ext: '.escalationRules-meta.xml' },
   { type: 'MatchingRule', label: 'Matching Rules', desc: 'Duplicate matching rules', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM MatchingRule WHERE NamespacePrefix = null", path: 'matchingRules', ext: '.matchingRule-meta.xml' },
   { type: 'DuplicateRule', label: 'Duplicate Rules', desc: 'Duplicate management rules', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM DuplicateRule WHERE NamespacePrefix = null", path: 'duplicateRules', ext: '.duplicateRule-meta.xml' },
+  // ── Tooling API — UI & layout types ──
+  { type: 'RecordType', label: 'Record Types', desc: 'Record types on objects', api: 'tooling', soql: "SELECT Id, Name, SobjectType, IsActive, LastModifiedDate FROM RecordType WHERE NamespacePrefix = null", path: 'recordTypes', ext: '.recordType-meta.xml' },
+  { type: 'Layout', label: 'Page Layouts', desc: 'Page layouts for objects', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM Layout WHERE NamespacePrefix = null", path: 'layouts', ext: '.layout-meta.xml' },
+  { type: 'FlexiPage', label: 'Lightning Pages', desc: 'Lightning record/app/home pages', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM FlexiPage WHERE NamespacePrefix = null", path: 'flexipages', ext: '.flexipage-meta.xml' },
+  { type: 'StandardValueSet', label: 'Standard Value Sets', desc: 'Standard picklist values (Status, etc.)', api: 'tooling', soql: "SELECT Id, MasterLabel, LastModifiedDate FROM StandardValueSet", path: 'standardValueSets', ext: '.standardValueSet-meta.xml' },
+  // ── Standard SOQL — setup objects ──
+  { type: 'BusinessProcess', label: 'Business Processes', desc: 'Support/Sales/Lead processes', api: 'soql', soql: "SELECT Id, Name, SobjectType, IsActive, LastModifiedDate FROM BusinessProcess", path: 'businessProcesses', ext: '.businessProcess-meta.xml' },
+  { type: 'Queue', label: 'Queues', desc: 'Case/Lead queues', api: 'soql', soql: "SELECT Id, Name, Type, LastModifiedDate FROM Group WHERE Type = 'Queue'", path: 'queues', ext: '.queue-meta.xml' },
 ];
 
 const META_DEFAULT_TYPES = ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'];
@@ -3027,9 +3035,10 @@ function buildFetchConfigHtml() {
   // Group types by category
   const typeGroups = [
     { label: 'Code', types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'] },
-    { label: 'Configuration', types: ['ValidationRule','WorkflowRule','Flow','CustomObject','CustomField'] },
+    { label: 'Configuration', types: ['ValidationRule','WorkflowRule','Flow','CustomObject','CustomField','RecordType','BusinessProcess'] },
+    { label: 'UI & Layout', types: ['Layout','FlexiPage','StandardValueSet'] },
     { label: 'Rules', types: ['AssignmentRule','AutoResponseRule','EscalationRule','MatchingRule','DuplicateRule'] },
-    { label: 'Other', types: ['EmailTemplate','StaticResource'] },
+    { label: 'Other', types: ['EmailTemplate','StaticResource','Queue'] },
   ];
   typeGroups.forEach(grp => {
     const grpQueries = META_QUERIES.filter(q => grp.types.includes(q.type));
@@ -3045,7 +3054,7 @@ function buildFetchConfigHtml() {
   h += '<h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/3</span>Date Range Filter</h3>';
   h += '<p style="font-size:12px;color:var(--muted);margin-bottom:10px">Only fetch components modified within this period</p>';
   h += '<div class="meta-date-row">';
-  const presets = [['all','All time'],['today','Today'],['2d','Last 2 days'],['week','Last week'],['month','Last month'],['custom','Custom']];
+  const presets = [['all','All time'],['today','Today'],['2d','Last 2 days'],['5d','Last 5 days'],['week','Last week'],['month','Last month'],['custom','Custom']];
   presets.forEach(([k,lbl]) => {
     h += `<button class="date-preset${metaFetchConfig.datePreset===k?' active':''}" onclick="setDatePreset('${k}')">${lbl}</button>`;
   });
@@ -3104,6 +3113,7 @@ function setDatePreset(key) {
   switch(key) {
     case 'today': metaFetchConfig.dateFrom = now.toISOString().slice(0,10); metaFetchConfig.dateTo = ''; break;
     case '2d': { const d = new Date(now); d.setDate(d.getDate()-2); metaFetchConfig.dateFrom = d.toISOString().slice(0,10); metaFetchConfig.dateTo = ''; break; }
+    case '5d': { const d = new Date(now); d.setDate(d.getDate()-5); metaFetchConfig.dateFrom = d.toISOString().slice(0,10); metaFetchConfig.dateTo = ''; break; }
     case 'week': { const d = new Date(now); d.setDate(d.getDate()-7); metaFetchConfig.dateFrom = d.toISOString().slice(0,10); metaFetchConfig.dateTo = ''; break; }
     case 'month': { const d = new Date(now); d.setMonth(d.getMonth()-1); metaFetchConfig.dateFrom = d.toISOString().slice(0,10); metaFetchConfig.dateTo = ''; break; }
     case 'all': metaFetchConfig.dateFrom = ''; metaFetchConfig.dateTo = ''; break;
@@ -3197,7 +3207,7 @@ async function fetchMetadata() {
             const res = await sfApiFetch(queryUrl);
             if (res.records) {
               res.records.forEach(rec => {
-                const name = rec.Name || rec.DeveloperName || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
+                const name = rec.Name || rec.DeveloperName || rec.MasterLabel || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
                 const body = rec.Body || rec.Markup || (rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '') || '';
                 const displayName = rec.EntityDefinition ? (rec.EntityDefinition.DeveloperName + '.' + name) : (rec.TableEnumOrId ? (rec.TableEnumOrId + '.' + name) : name);
                 components.push({
