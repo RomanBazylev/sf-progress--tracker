@@ -3236,6 +3236,25 @@ function buildDateClause(soql) {
   return clause;
 }
 
+function buildMetaXmlBody(rec, typeName) {
+  const skip = new Set(['Id','attributes','Body','Markup','Metadata','LastModifiedDate','LastModifiedById','CreatedDate','CreatedById','SystemModstamp']);
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<' + typeName + ' xmlns="http://soap.sforce.com/2006/04/metadata">\n';
+  for (const [k, v] of Object.entries(rec)) {
+    if (skip.has(k) || v === null || v === undefined) continue;
+    if (typeof v === 'object') {
+      // Nested object (e.g. EntityDefinition, Definition)
+      for (const [nk, nv] of Object.entries(v)) {
+        if (nk === 'attributes' || nv === null || nv === undefined) continue;
+        xml += '  <' + k + '.' + nk + '>' + String(nv).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + k + '.' + nk + '>\n';
+      }
+    } else {
+      xml += '  <' + k + '>' + String(v).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + k + '>\n';
+    }
+  }
+  xml += '</' + typeName + '>\n';
+  return xml;
+}
+
 async function fetchMetadata() {
   if (!sfState.token) { toast('Connect to Salesforce first','warn'); return; }
   const el = document.getElementById('metaContent');
@@ -3280,7 +3299,7 @@ async function fetchMetadata() {
                     type: q.type,
                     name: displayName,
                     fullName: q.path + '/' + displayName.replace(/\./g, '/') + q.ext,
-                    body: '',
+                    body: buildMetaXmlBody(rec, q.type),
                     lastModified: rec.LastModifiedDate,
                     sfId: rec.Id,
                     change: 'new',
@@ -3303,7 +3322,7 @@ async function fetchMetadata() {
             if (res.records) {
               res.records.forEach(rec => {
                 const name = rec.Name || rec.DeveloperName || rec.MasterLabel || rec.Title || rec.TestSuiteName || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
-                const body = rec.Body || rec.Markup || (rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '') || '';
+                const body = rec.Body || rec.Markup || (rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '') || buildMetaXmlBody(rec, q.type);
                 const displayName = rec.EntityDefinition ? (rec.EntityDefinition.DeveloperName + '.' + name) : (rec.TableEnumOrId ? (rec.TableEnumOrId + '.' + name) : name);
                 components.push({
                   type: q.type,
@@ -3451,17 +3470,13 @@ async function fetchGitTreeForDiff(components) {
         comp.gitPath = gitPath;
         comp.gitSha = gitSha;
         // Fetch git content to compare
-        if (comp.body) {
-          try {
-            const blob = await ghFetch('/repos/' + projectData.repo + '/git/blobs/' + gitSha);
-            const gitContent = atob(blob.content.replace(/\n/g, ''));
-            comp.gitBody = gitContent;
-            comp.change = (comp.body.trim() === gitContent.trim()) ? 'same' : 'modified';
-          } catch {
-            comp.change = 'modified';
-          }
-        } else {
-          comp.change = 'same'; // no body to compare
+        try {
+          const blob = await ghFetch('/repos/' + projectData.repo + '/git/blobs/' + gitSha);
+          const gitContent = atob(blob.content.replace(/\n/g, ''));
+          comp.gitBody = gitContent;
+          comp.change = (comp.body && comp.body.trim() === gitContent.trim()) ? 'same' : 'modified';
+        } catch {
+          comp.change = 'modified';
         }
       }
     }
@@ -3723,11 +3738,10 @@ async function doCommit() {
       const comp = selected[i];
       updProg('(uploading ' + (i + 1) + '/' + selected.length + ' files...)');
       const filePath = basePath + '/' + comp.fullName;
-      const content = comp.body || '<?xml version="1.0" encoding="UTF-8"?>\n<' + comp.type + ' xmlns="http://soap.sforce.com/2006/04/metadata">\n  <!-- ' + comp.name + ' -->\n</' + comp.type + '>\n';
       const blob = await ghFetch('/repos/' + repo + '/git/blobs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ content: content, encoding: 'utf-8' })
+        body: JSON.stringify({ content: comp.body, encoding: 'utf-8' })
       });
       treeItems.push({ path: filePath, mode: '100644', type: 'blob', sha: blob.sha });
     }
