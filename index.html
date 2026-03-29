@@ -3242,7 +3242,6 @@ function buildMetaXmlBody(rec, typeName) {
   for (const [k, v] of Object.entries(rec)) {
     if (skip.has(k) || v === null || v === undefined) continue;
     if (typeof v === 'object') {
-      // Nested object (e.g. EntityDefinition, Definition)
       for (const [nk, nv] of Object.entries(v)) {
         if (nk === 'attributes' || nv === null || nv === undefined) continue;
         xml += '  <' + k + '.' + nk + '>' + String(nv).replace(/&/g,'&amp;').replace(/</g,'&lt;') + '</' + k + '.' + nk + '>\n';
@@ -3253,6 +3252,38 @@ function buildMetaXmlBody(rec, typeName) {
   }
   xml += '</' + typeName + '>\n';
   return xml;
+}
+
+// Types that don't have Body/Markup and need per-record Metadata fetch via Tooling API
+// Maps our type name → Tooling API sObject name (extracted from SOQL FROM clause)
+function getToolingSObject(q) {
+  const m = q.soql.match(/FROM\s+(\w+)/i);
+  return m ? m[1] : null;
+}
+
+// Fetch full Metadata JSON for a single component via Tooling API
+// Salesforce Tooling API: GET /tooling/sobjects/{sObject}/{id} returns Metadata + FullName
+async function ensureFullMetadata(comp) {
+  if (comp._hasRealBody || comp._metadataLoaded) return;
+  const q = META_QUERIES.find(x => x.type === comp.type);
+  if (!q || q.api !== 'tooling') { comp._metadataLoaded = true; return; }
+  const sObj = getToolingSObject(q);
+  if (!sObj) { comp._metadataLoaded = true; return; }
+  try {
+    const rec = await sfApiFetch('/services/data/v59.0/tooling/sobjects/' + sObj + '/' + comp.sfId);
+    if (rec.Metadata) {
+      comp.body = JSON.stringify(rec.Metadata, null, 2);
+      comp._metadataLoaded = true;
+      return;
+    }
+    if (rec.Body) { comp.body = rec.Body; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
+    if (rec.Markup) { comp.body = rec.Markup; comp._hasRealBody = true; comp._metadataLoaded = true; return; }
+    // Fallback: use all fields as body
+    comp._metadataLoaded = true;
+  } catch (e) {
+    console.warn('ensureFullMetadata(' + comp.type + '/' + comp.sfId + '): ' + e.message);
+    comp._metadataLoaded = true;
+  }
 }
 
 async function fetchMetadata() {
@@ -3300,6 +3331,7 @@ async function fetchMetadata() {
                     name: displayName,
                     fullName: q.path + '/' + displayName.replace(/\./g, '/') + q.ext,
                     body: buildMetaXmlBody(rec, q.type),
+                    _hasRealBody: false,
                     lastModified: rec.LastModifiedDate,
                     sfId: rec.Id,
                     change: 'new',
@@ -3322,13 +3354,15 @@ async function fetchMetadata() {
             if (res.records) {
               res.records.forEach(rec => {
                 const name = rec.Name || rec.DeveloperName || rec.MasterLabel || rec.Title || rec.TestSuiteName || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
-                const body = rec.Body || rec.Markup || (rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '') || buildMetaXmlBody(rec, q.type);
+                const realBody = rec.Body || rec.Markup || (rec.Metadata ? JSON.stringify(rec.Metadata, null, 2) : '');
+                const body = realBody || buildMetaXmlBody(rec, q.type);
                 const displayName = rec.EntityDefinition ? (rec.EntityDefinition.DeveloperName + '.' + name) : (rec.TableEnumOrId ? (rec.TableEnumOrId + '.' + name) : name);
                 components.push({
                   type: q.type,
                   name: displayName,
                   fullName: q.path + '/' + (displayName.replace(/\./g, '/')) + q.ext,
                   body: body,
+                  _hasRealBody: !!realBody,
                   lastModified: rec.LastModifiedDate,
                   sfId: rec.Id,
                   change: 'new',
@@ -3488,8 +3522,12 @@ async function fetchGitTreeForDiff(components) {
 /* ═══════════════════════════════════════════════════════
    DIFF VIEW
    ═══════════════════════════════════════════════════════ */
-function showDiff(idx) {
+async function showDiff(idx) {
   const c = metaCache.components[idx];
+  document.getElementById('diffTitle').textContent = '⏳ Loading full metadata...';
+  document.getElementById('diffBody').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  document.getElementById('diffModal').style.display = '';
+  await ensureFullMetadata(c);
   const bundleLabel = c._primaryFile ? ' — ' + c._primaryFile : '';
   document.getElementById('diffTitle').textContent = c.fullName + bundleLabel + ' (' + c.change + ')';
 
@@ -3522,9 +3560,13 @@ function closeDiffModal() {
   document.getElementById('diffModal').style.display = 'none';
 }
 
-function viewComponent(idx) {
+async function viewComponent(idx) {
   const c = metaCache.components[idx];
-  const body = c.body || '(no body available — this is a bundle reference)';
+  document.getElementById('diffTitle').textContent = '⏳ Loading full metadata...';
+  document.getElementById('diffBody').innerHTML = '<div class="loading"><div class="spinner"></div></div>';
+  document.getElementById('diffModal').style.display = '';
+  await ensureFullMetadata(c);
+  const body = c.body || '(no body available)';
   document.getElementById('diffTitle').textContent = '📄 ' + c.fullName;
   let html = '<div class="diff-hdr">/* Source from Salesforce — ' + esc(c.type) + ' — last modified: ' + (c.lastModified ? new Date(c.lastModified).toLocaleString() : 'unknown') + ' */</div>\n';
   body.split('\n').forEach((line, i) => {
@@ -3712,6 +3754,12 @@ async function doCommit() {
   try {
     const repo = projectData.repo;
     const updProg = t => { const p = document.getElementById('commitProgress'); if (p) p.textContent = t; };
+
+    // 0. Fetch full metadata for components that don't have real body yet
+    for (let i = 0; i < selected.length; i++) {
+      updProg('(loading full metadata ' + (i + 1) + '/' + selected.length + '...)');
+      await ensureFullMetadata(selected[i]);
+    }
 
     // 1. Get base branch SHA (for new branch, use compare branch as base)
     updProg('(resolving branch...)');
