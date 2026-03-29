@@ -3620,11 +3620,16 @@ async function fetchMetadata() {
     }
 
     // Enrich META_QUERIES path/ext from describeMetadata if available
+    // Restore original defaults first (in case previous fetch mutated them)
+    for (const q of activeTypes) {
+      if (q._origPath !== undefined) { q.path = q._origPath; q.ext = q._origExt; }
+    }
     if (Object.keys(describeTypeDir).length) {
       const CODE_TYPES = new Set(['ApexClass','ApexTrigger','ApexPage','ApexComponent']);
       const BUNDLE_TYPES = new Set(['AuraBundle','LWC']);
       for (const q of activeTypes) {
         const xmlName = TYPE_TO_XML_NAME[q.type] || q.type;
+        if (q._origPath === undefined) { q._origPath = q.path; q._origExt = q.ext; }
         if (describeTypeDir[xmlName]) q.path = describeTypeDir[xmlName];
         if (describeTypeSuffix[xmlName]) {
           if (BUNDLE_TYPES.has(q.type)) {
