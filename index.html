@@ -3420,7 +3420,7 @@ const META_QUERIES = [
   { type: 'RemoteSiteSetting', label: 'Remote Site Settings', desc: 'Allowed remote endpoints', api: 'tooling', soql: "SELECT Id, DeveloperName, EndpointUrl, LastModifiedDate FROM RemoteSiteSetting WHERE NamespacePrefix = null", path: 'remoteSiteSettings', ext: '.remoteSite-meta.xml' },
   { type: 'ConnectedApp', label: 'Connected Apps', desc: 'OAuth connected app definitions', api: 'tooling', soql: "SELECT Id, Name, MasterLabel, LastModifiedDate FROM ConnectedApplication WHERE NamespacePrefix = null", path: 'connectedApps', ext: '.connectedApp-meta.xml' },
   // ── Admin ──
-  { type: 'Queue', label: 'Queues', desc: 'Case/Lead queues', api: 'soql', soql: "SELECT Id, Name, Type, LastModifiedDate FROM Group WHERE Type = 'Queue'", path: 'queues', ext: '.queue-meta.xml' },
+  { type: 'Queue', label: 'Queues', desc: 'Case/Lead queues', api: 'soql', soql: "SELECT Id, Name, DeveloperName, Type, LastModifiedDate FROM Group WHERE Type = 'Queue'", path: 'queues', ext: '.queue-meta.xml' },
   { type: 'CustomNotificationType', label: 'Custom Notifications', desc: 'Custom notification types', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM CustomNotificationType WHERE NamespacePrefix = null", path: 'notificationTypes', ext: '.notiftype-meta.xml' },
   { type: 'FlowCategory', label: 'Flow Categories', desc: 'Flow category groupings', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM FlowCategory WHERE NamespacePrefix = null", path: 'flowCategories', ext: '.flowCategory-meta.xml' },
 ];
@@ -3635,7 +3635,14 @@ function buildSfdxPath(typeName, displayName, qPath, ext) {
   const dotIdx = displayName.indexOf('.');
   const hasObject = dotIdx > 0;
   const objName = hasObject ? displayName.substring(0, dotIdx) : '';
-  const compName = hasObject ? displayName.substring(dotIdx + 1) : displayName;
+  let compName = hasObject ? displayName.substring(dotIdx + 1) : displayName;
+
+  // SFDX uses DeveloperName (underscores) not Name (spaces) for file names
+  // Types where Name may contain spaces: Queue, Profile, BusinessProcess, etc.
+  const SPACE_TO_UNDERSCORE_TYPES = new Set(['Queue','Profile','BusinessProcess','AssignmentRule','AutoResponseRule','EscalationRule']);
+  if (SPACE_TO_UNDERSCORE_TYPES.has(typeName)) {
+    compName = compName.replace(/ /g, '_');
+  }
 
   // Object-child types → objects/{Obj}/{childFolder}/{Name}{ext}
   // Use || so hardcoded OBJECT_CHILD_FOLDERS always works as guaranteed fallback
@@ -3942,11 +3949,15 @@ async function fetchMetadata() {
               const res = await sfApiFetch(queryUrl);
               if (res.records) {
                 res.records.forEach(rec => {
-                  const name = rec.Name || rec.DeveloperName || rec.Title || rec.Id;
-                  const displayName = rec.SobjectType ? (rec.SobjectType + '.' + name) : (rec.FolderName ? (rec.FolderName + '/' + name) : name);
+                  // For file path: prefer DeveloperName (has underscores, SFDX-compatible)
+                  // For UI label: prefer Name (human-readable)
+                  const pathName = rec.DeveloperName || rec.Name || rec.Title || rec.Id;
+                  const uiName = rec.Name || rec.DeveloperName || rec.Title || rec.Id;
+                  const displayName = rec.SobjectType ? (rec.SobjectType + '.' + pathName) : (rec.FolderName ? (rec.FolderName + '/' + pathName) : pathName);
+                  const uiDisplayName = rec.SobjectType ? (rec.SobjectType + '.' + uiName) : (rec.FolderName ? (rec.FolderName + '/' + uiName) : uiName);
                   components.push({
                     type: q.type,
-                    name: displayName,
+                    name: uiDisplayName,
                     fullName: buildSfdxPath(q.type, displayName, q.path, q.ext),
                     body: buildMetaXmlBody(rec, q.type),
                     _hasRealBody: false,
