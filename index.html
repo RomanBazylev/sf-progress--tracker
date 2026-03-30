@@ -444,12 +444,12 @@ input,select{font-family:inherit}
 /* ── META FETCH CONFIG (type selector + date filter) ── */
 .meta-fetch-config{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;max-width:640px;margin:20px auto}
 .meta-fetch-config h3{font-size:15px;margin-bottom:14px}
-.meta-type-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:18px}
-.meta-type-opt{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;background:var(--surface2);border-radius:8px;cursor:pointer;transition:background .15s}
-.meta-type-opt:hover{background:var(--bg)}
-.meta-type-opt input{margin-top:3px;accent-color:var(--accent);width:16px;height:16px;flex-shrink:0}
-.meta-type-opt .lbl{font-weight:600;font-size:13px}
-.meta-type-opt .desc{font-size:11px;color:var(--muted);margin-top:2px}
+.meta-type-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:2px;margin-bottom:12px}
+.meta-type-opt{display:flex;align-items:center;gap:6px;padding:4px 8px;border-radius:4px;cursor:pointer;transition:background .15s;font-size:12px}
+.meta-type-opt:hover{background:var(--hover)}
+.meta-type-opt input{accent-color:var(--accent);width:14px;height:14px;flex-shrink:0;margin:0}
+.meta-type-opt .lbl{font-weight:500;font-size:12px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.meta-type-opt .desc{display:none}
 .meta-date-row{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:14px}
 .date-preset{padding:5px 12px;border-radius:6px;background:var(--surface2);border:1px solid var(--border);color:var(--text);font-size:12px;cursor:pointer;transition:all .15s}
 .date-preset:hover{border-color:var(--accent)}
@@ -3237,12 +3237,14 @@ function buildFetchConfigHtml() {
   typeGroups.forEach(grp => {
     const grpQueries = META_QUERIES.filter(q => grp.types.includes(q.type));
     if (!grpQueries.length) return;
+    const allChecked = grpQueries.every(q => metaFetchConfig.types.includes(q.type));
+    const someChecked = grpQueries.some(q => metaFetchConfig.types.includes(q.type));
     h += `<div class="meta-type-group">`;
-    h += `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">${grp.label} <span style="font-weight:400;opacity:.6">(${grpQueries.length})</span></div>`;
+    h += `<div style="font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;margin:8px 0 2px;display:flex;align-items:center;gap:6px"><label style="cursor:pointer;display:flex;align-items:center;gap:4px"><input type="checkbox" ${allChecked?'checked':''} ${someChecked&&!allChecked?'style="opacity:.5"':''} onchange="toggleMetaGroup('${grp.label}',this.checked)" style="accent-color:var(--accent);width:13px;height:13px">${grp.label}</label> <span style="font-weight:400;opacity:.6">(${grpQueries.length})</span></div>`;
     h += '<div class="meta-type-grid">';
     grpQueries.forEach(q => {
       const chk = metaFetchConfig.types.includes(q.type) ? 'checked' : '';
-      h += `<label class="meta-type-opt"><input type="checkbox" value="${q.type}" ${chk} onchange="toggleMetaType('${q.type}',this.checked)"><div><div class="lbl">${q.label}</div><div class="desc">${q.desc}</div></div></label>`;
+      h += `<label class="meta-type-opt" title="${q.desc}"><input type="checkbox" value="${q.type}" ${chk} onchange="toggleMetaType('${q.type}',this.checked)"><span class="lbl">${q.label}</span></label>`;
     });
     h += '</div></div>';
   });
@@ -3300,6 +3302,29 @@ async function loadRepoBranches() {
 function toggleMetaType(type, on) {
   if (on && !metaFetchConfig.types.includes(type)) metaFetchConfig.types.push(type);
   if (!on) metaFetchConfig.types = metaFetchConfig.types.filter(t => t !== type);
+}
+
+function toggleMetaGroup(groupLabel, on) {
+  const typeGroups = {
+    'Code': ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC','ApexTestSuite','StaticResource'],
+    'Objects & Fields': ['CustomObject','CustomField','RecordType','CompactLayout','FieldSet','CustomMetadata','PlatformEvent','ExternalObject'],
+    'Automation': ['Flow','ValidationRule','WorkflowRule','WorkflowFieldUpdate','WorkflowAlert','WorkflowOutboundMessage','WorkflowTask','ApprovalProcess','QuickAction','BusinessProcess'],
+    'UI & Layout': ['Layout','FlexiPage','ListView','CustomTab','CustomApplication','HomePageLayout','PathAssistant','WebLink'],
+    'Picklist & Values': ['StandardValueSet','GlobalValueSet','CustomLabel'],
+    'Security & Access': ['PermissionSet','PermissionSetGroup','CustomPermission','Profile'],
+    'Rules': ['AssignmentRule','AutoResponseRule','EscalationRule','MatchingRule','DuplicateRule'],
+    'Email & Templates': ['EmailTemplate','Letterhead'],
+    'Reports & Dashboards': ['Report','Dashboard','ReportType'],
+    'Integration': ['NamedCredential','ExternalDataSource','RemoteSiteSetting','ConnectedApp'],
+    'Admin': ['Queue','CustomNotificationType','FlowCategory']
+  };
+  const types = typeGroups[groupLabel] || [];
+  if (on) {
+    types.forEach(t => { if (!metaFetchConfig.types.includes(t)) metaFetchConfig.types.push(t); });
+  } else {
+    metaFetchConfig.types = metaFetchConfig.types.filter(t => !types.includes(t));
+  }
+  renderMetadataView();
 }
 
 function filterMetaTypes(query) {
