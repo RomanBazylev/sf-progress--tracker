@@ -1476,9 +1476,9 @@ function buildFeatures() {
       featureBranch = gsMatch[1];
     } else {
       // Non-Gearset: use head branch as feature name
-      // Strip release/ prefix so release PRs group with the original feature
-      featureName = headRef.replace(/^release\//, '');
-      featureBranch = headRef.replace(/^release\//, '');
+      // Strip promote/ prefix and _<envBranch> suffix so promote PRs group with the original feature
+      featureName = headRef.replace(/^promote\//, '').replace(/_[^/]+$/, '');
+      featureBranch = headRef.replace(/^promote\//, '').replace(/_[^/]+$/, '');
     }
     // Skip sync PRs
     if (pr.title && pr.title.startsWith('Sync:')) return;
@@ -1869,11 +1869,13 @@ function releaseClear() {
 function getReleaseBranchSuggestion() {
   const releasable = (pipelineCache.releasablePrs && pipelineCache.releasablePrs[projectData.envs[activeEnvIndex].branch]) || [];
   const selected = releasable.filter(pr => releaseSelected.has(pr.number));
+  const nextEnv = projectData.envs[activeEnvIndex + 1];
+  const suffix = nextEnv ? '_' + nextEnv.branch : '';
   if (selected.length === 1) {
-    return 'release/' + selected[0].head.ref;
+    return 'promote/' + selected[0].head.ref + suffix;
   }
   const today = new Date().toISOString().slice(0, 10);
-  return 'release/' + today;
+  return 'promote/' + today + suffix;
 }
 
 function getReleaseTitleSuggestion(envIndex) {
@@ -1881,9 +1883,9 @@ function getReleaseTitleSuggestion(envIndex) {
   const releasable = (pipelineCache.releasablePrs && pipelineCache.releasablePrs[projectData.envs[envIndex].branch]) || [];
   const selected = releasable.filter(pr => releaseSelected.has(pr.number));
   if (selected.length === 1) {
-    return 'Release: ' + selected[0].title + ' → ' + nextEnv.displayName;
+    return 'Promote: ' + selected[0].title + ' → ' + nextEnv.displayName;
   }
-  return 'Release: ' + (selected.length || releasable.length) + ' changes → ' + nextEnv.displayName;
+  return 'Promote: ' + (selected.length || releasable.length) + ' changes → ' + nextEnv.displayName;
 }
 
 function getReleaseBodySuggestion(envIndex) {
@@ -1909,9 +1911,10 @@ function renderReleaseForm(envIndex) {
   const titleSuggestion = getReleaseTitleSuggestion(envIndex);
   const hasSelection = selected.length > 0;
   const prsForRelease = hasSelection ? selected : releasable;
+  const actionWord = 'Promote';
 
   let html = '<div class="release-form">';
-  html += '<h4>🚀 Create Release PR</h4>';
+  html += '<h4>\uD83D\uDE80 Create ' + actionWord + ' PR</h4>';
 
   // Target env (read-only)
   html += '<div class="field">';
@@ -1921,8 +1924,8 @@ function renderReleaseForm(envIndex) {
 
   // Branch name
   html += '<div class="field">';
-  html += '<label>Release Branch Name <span style="color:var(--red)">*</span></label>';
-  html += `<input type="text" id="releaseBranchName" value="${esc(branchSuggestion)}" placeholder="release/feature/TICKET-123">`;
+  html += '<label>' + actionWord + ' Branch Name <span style="color:var(--red)">*</span></label>';
+  html += `<input type="text" id="releaseBranchName" value="${esc(branchSuggestion)}" placeholder="promote/TICKET-123_UAT">`;
   html += `<div class="field-hint">Branch will be created from <code>${esc(nextEnv.branch)}</code></div>`;
   html += '</div>';
 
@@ -1947,7 +1950,7 @@ function renderReleaseForm(envIndex) {
 
   // Actions
   const btnDisabled = isCreatingRelease ? ' disabled' : '';
-  const btnLabel = isCreatingRelease ? '⏳ Creating...' : '🚀 Create Release PR';
+  const btnLabel = isCreatingRelease ? '⏳ Creating...' : '\uD83D\uDE80 Create ' + actionWord + ' PR';
   html += '<div class="release-actions">';
   html += `<button class="btn btn-release" id="releaseBtn" onclick="createReleasePr(${envIndex})"${btnDisabled}>${btnLabel}</button>`;
   html += `<button class="btn" onclick="releaseClear()">Clear Selection</button>`;
