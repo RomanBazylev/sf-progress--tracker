@@ -847,6 +847,7 @@ let batchSelected = new Set();
 let isPromoting = false;
 let releaseSelected = new Set();
 let isCreatingRelease = false;
+let isFetchingMeta = false;
 
 // Salesforce metadata state
 let sfState = { token: null, instance: null, user: null, envIndex: -1 };
@@ -873,7 +874,7 @@ function saveProjects(projects) {
 function applyTheme(theme) {
   document.documentElement.setAttribute('data-theme', theme);
   document.getElementById('themeBtn').textContent = theme === 'dark' ? '☀️' : '🌙';
-  localStorage.setItem('sfpt_theme', theme);
+  try { localStorage.setItem('sfpt_theme', theme); } catch {}
 }
 function toggleTheme() {
   const c = document.documentElement.getAttribute('data-theme');
@@ -1043,6 +1044,10 @@ function enterProject() {
   document.getElementById('cfgCaseUrl').value = projectData.caseBaseUrl || '';
   document.getElementById('cfgMergeMethod').value = projectData.mergeMethod || 'merge';
   document.getElementById('cfgProtectedBranches').value = (projectData.protectedBranches || []).join(', ');
+  // Restore persisted metadata fetch config
+  if (projectData.metaFetchTypes && projectData.metaFetchTypes.length) {
+    metaFetchConfig.types = projectData.metaFetchTypes.slice();
+  }
   updateConnBadge();
   renderEnvList();
   if (projectData.pat && projectData.repo && projectData.envs.length) {
@@ -1070,6 +1075,7 @@ function lockProject() {
   batchSelected = new Set();
   releaseSelected = new Set();
   isCreatingRelease = false;
+  isFetchingMeta = false;
   // Reset Salesforce & metadata state to prevent cross-project bleed
   sfState = { token: null, instance: null, user: null };
   metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
@@ -1141,6 +1147,7 @@ async function saveSettings() {
   projectData.caseBaseUrl = document.getElementById('cfgCaseUrl').value.trim().replace(/\/+$/, '');
   projectData.mergeMethod = document.getElementById('cfgMergeMethod').value;
   projectData.protectedBranches = document.getElementById('cfgProtectedBranches').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
+  projectData.metaFetchTypes = metaFetchConfig.types.slice();
   // envs already updated via renderEnvList interactions
   const encrypted = await Crypto.encrypt(currentPassword, projectData);
   const projects = getProjects();
@@ -1189,19 +1196,29 @@ async function ghFetch(path, opts = {}) {
   const headers = { Accept: 'application/vnd.github+json', ...(opts.headers || {}) };
   if (projectData.pat) headers.Authorization = 'Bearer ' + projectData.pat;
   const { headers: _h, ...restOpts } = opts;
-  const res = await fetch('https://api.github.com' + path, { headers, ...restOpts });
-  const rl = res.headers.get('X-RateLimit-Remaining');
-  if (rl !== null) {
-    rateLimitRemaining = parseInt(rl);
-    const el = document.getElementById('rateLimit');
-    if (el) el.textContent = 'API: ' + rateLimitRemaining + ' calls remaining';
+  const maxRetries = 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    const res = await fetch('https://api.github.com' + path, { headers, ...restOpts });
+    const rl = res.headers.get('X-RateLimit-Remaining');
+    if (rl !== null) {
+      rateLimitRemaining = parseInt(rl);
+      const el = document.getElementById('rateLimit');
+      if (el) el.textContent = 'API: ' + rateLimitRemaining + ' calls remaining';
+    }
+    // Retry on 429 or secondary rate-limit (403 with retry-after)
+    if ((res.status === 429 || (res.status === 403 && res.headers.get('Retry-After'))) && attempt < maxRetries) {
+      const retryAfter = parseInt(res.headers.get('Retry-After') || '0') * 1000 || 2000 * (attempt + 1);
+      logMsg('warn', 'ghFetch', 'Rate limited (' + res.status + '), retrying in ' + retryAfter + 'ms', path);
+      await _sleep(retryAfter);
+      continue;
+    }
+    if (!res.ok) {
+      let detail = res.status + ' ' + res.statusText;
+      try { const b = await res.json(); if (b.message) detail += ' — ' + b.message; } catch {}
+      throw new Error(detail);
+    }
+    return res.json();
   }
-  if (!res.ok) {
-    let detail = res.status + ' ' + res.statusText;
-    try { const b = await res.json(); if (b.message) detail += ' — ' + b.message; } catch {}
-    throw new Error(detail);
-  }
-  return res.json();
 }
 
 async function ghFetchAll(path) {
@@ -2185,7 +2202,9 @@ function populateFilterAuthors() {
     Array.from(authors).sort().map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
 }
 
-function applyFilters() { renderPipeline(); }
+let _filterTimer = 0;
+function applyFilters() { clearTimeout(_filterTimer); _filterTimer = setTimeout(() => renderPipeline(), 150); }
+function applyFiltersNow() { clearTimeout(_filterTimer); renderPipeline(); }
 
 /* ═══════════════════════════════════════════════════════
    SIDE PANEL
@@ -2791,19 +2810,31 @@ async function sfApiFetch(path, opts = {}) {
   if (method !== 'GET' && method !== 'HEAD' && method !== 'DELETE') {
     headers['Content-Type'] = headers['Content-Type'] || 'application/json';
   }
-  let res;
-  try {
-    res = await fetch(url, { ...opts, method, headers });
-  } catch (networkErr) {
-    throw new Error('Network error: ' + networkErr.message + ' (URL: ' + url.slice(0, 120) + ')');
+  const maxRetries = opts._noRetry ? 0 : 2;
+  for (let attempt = 0; attempt <= maxRetries; attempt++) {
+    let res;
+    try {
+      res = await fetch(url, { ...opts, method, headers });
+    } catch (networkErr) {
+      if (attempt < maxRetries) { await _sleep(500 * (attempt + 1)); continue; }
+      throw new Error('Network error: ' + networkErr.message + ' (URL: ' + url.slice(0, 120) + ')');
+    }
+    // Retry on 429 rate-limit or 503 service unavailable
+    if ((res.status === 429 || res.status === 503) && attempt < maxRetries) {
+      const retryAfter = parseInt(res.headers.get('Retry-After') || '0') * 1000 || 1000 * (attempt + 1);
+      logMsg('warn', 'sfApiFetch', 'Rate limited (' + res.status + '), retrying in ' + retryAfter + 'ms', path);
+      await _sleep(retryAfter);
+      continue;
+    }
+    if (!res.ok) {
+      let detail = res.status + ' ' + res.statusText;
+      try { const b = await res.json(); if (b[0] && b[0].message) detail += ' — ' + b[0].message; else if (b.message) detail += ' — ' + b.message; } catch {}
+      throw new Error(detail);
+    }
+    return res.json();
   }
-  if (!res.ok) {
-    let detail = res.status + ' ' + res.statusText;
-    try { const b = await res.json(); if (b[0] && b[0].message) detail += ' — ' + b[0].message; else if (b.message) detail += ' — ' + b.message; } catch {}
-    throw new Error(detail);
-  }
-  return res.json();
 }
+function _sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 
 async function sfSoapFetch(soapBody) {
   const soapEnvelope = '<?xml version="1.0" encoding="UTF-8"?>' +
@@ -3219,7 +3250,12 @@ function renderMetaRow(c, idx) {
   </div>`;
 }
 
+let _metaFilterTimer = 0;
 function filterMetaRows() {
+  clearTimeout(_metaFilterTimer);
+  _metaFilterTimer = setTimeout(_applyMetaFilter, 150);
+}
+function _applyMetaFilter() {
   const typeF = document.getElementById('metaTypeFilter').value;
   const changeF = document.getElementById('metaChangeFilter').value;
   const search = document.getElementById('metaSearch').value.toLowerCase();
@@ -3751,6 +3787,10 @@ async function ensureFullMetadata(comp) {
 
 async function fetchMetadata() {
   if (!sfState.token) { toast('Connect to Salesforce first','warn'); return; }
+  if (isFetchingMeta) { toast('Metadata fetch already in progress','warn'); return; }
+  isFetchingMeta = true;
+  // Auto-persist selected types to project
+  if (projectData) { projectData.metaFetchTypes = metaFetchConfig.types.slice(); saveSettings(); }
   const el = document.getElementById('metaContent');
   el.innerHTML = '<div class="loading"><div class="spinner"></div><p id="metaFetchProgress">Fetching metadata from Salesforce...</p></div>';
 
@@ -3934,7 +3974,9 @@ async function fetchMetadata() {
     renderMetadataView();
   } catch (e) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error fetching metadata: ' + esc(e.message) + '</p></div>';
+    logMsg('error', 'fetchMetadata', 'Fatal error', e.message);
   } finally {
+    isFetchingMeta = false;
     const f = document.getElementById('metaFetchFloating');
     if (f) f.style.display = 'none';
   }

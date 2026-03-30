@@ -290,6 +290,20 @@ Two themes: `dark` (default) and `light`, toggled via `data-theme` attribute on 
 - SF tokens stored in `sessionStorage` (cleared on tab close)
 - No external dependencies or CDNs — zero supply-chain risk
 - CORS proxy required for SF API calls (browser same-origin policy)
+- `localStorage` writes wrapped in try/catch for `QuotaExceededError` — user warned when storage is full
+
+---
+
+## 8. Robustness & Error Handling
+
+- **Retry with backoff** — `sfApiFetch()` retries on 429/503 (up to 2 retries with exponential backoff); `ghFetch()` retries on 429 and 403+Retry-After
+- **`isFetchingMeta` guard** — prevents concurrent metadata fetches from double-click
+- **401 session detection** — early exit on first 401, shows "Session Expired" card with Reconnect button
+- **Debounced search** — pipeline search and metadata filter inputs use 150ms debounce to avoid excessive re-renders
+- **Persistent type selection** — `metaFetchConfig.types` saved to encrypted project data via `projectData.metaFetchTypes`, restored on project unlock
+- **`isPromoting` / `isCreatingRelease`** — lock flags prevent concurrent batch/release operations
+- **`_origPath` / `_origExt`** — prevents stale META_QUERIES mutation when switching orgs
+- **sessionStorage cache** for describeMetadata — avoids redundant SOAP calls within a session
 
 ---
 
@@ -297,7 +311,7 @@ Two themes: `dark` (default) and `light`, toggled via `data-theme` attribute on 
 
 ```
 sf-progress-tracker/
-├── index.html          # The entire application (~2900 lines)
+├── index.html          # The entire application (~4300 lines)
 ├── README.md           # Quick readme
 └── PROJECT_SPEC.md     # This specification (keep up to date!)
 ```
