@@ -3382,11 +3382,11 @@ const META_QUERIES = [
   { type: 'WorkflowTask', label: 'Workflow Tasks', desc: 'Workflow task actions', api: 'tooling', soql: "SELECT Id, DeveloperName, LastModifiedDate FROM WorkflowTask WHERE NamespacePrefix = null", path: 'workflowTasks', ext: '.task-meta.xml' },
   { type: 'ApprovalProcess', label: 'Approval Processes', desc: 'Approval process definitions', api: 'tooling', soql: "SELECT Id, DeveloperName, TableEnumOrId, LastModifiedDate FROM ApprovalProcess WHERE NamespacePrefix = null", path: 'approvalProcesses', ext: '.approvalProcess-meta.xml' },
   { type: 'QuickAction', label: 'Quick Actions', desc: 'Object & global quick actions', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectType, LastModifiedDate FROM QuickActionDefinition WHERE NamespacePrefix = null", path: 'quickActions', ext: '.quickAction-meta.xml' },
-  { type: 'BusinessProcess', label: 'Business Processes', desc: 'Support/Sales/Lead processes', api: 'soql', soql: "SELECT Id, Name, SobjectType, IsActive, LastModifiedDate FROM BusinessProcess", path: 'businessProcesses', ext: '.businessProcess-meta.xml' },
+  { type: 'BusinessProcess', label: 'Business Processes', desc: 'Support/Sales/Lead processes', api: 'soql', soql: "SELECT Id, Name, TableEnumOrId, IsActive, LastModifiedDate FROM BusinessProcess", path: 'businessProcesses', ext: '.businessProcess-meta.xml' },
   // ── UI & Layout ──
   { type: 'Layout', label: 'Page Layouts', desc: 'Page layouts for objects', api: 'tooling', soql: "SELECT Id, Name, TableEnumOrId, LastModifiedDate FROM Layout WHERE NamespacePrefix = null", path: 'layouts', ext: '.layout-meta.xml' },
   { type: 'FlexiPage', label: 'Lightning Pages', desc: 'Lightning record/app/home pages', api: 'tooling', soql: "SELECT Id, DeveloperName, MasterLabel, LastModifiedDate FROM FlexiPage WHERE NamespacePrefix = null", path: 'flexipages', ext: '.flexipage-meta.xml' },
-  { type: 'ListView', label: 'List Views', desc: 'Object list views', api: 'tooling', soql: "SELECT Id, Name, DeveloperName, SobjectType, LastModifiedDate FROM ListView WHERE NamespacePrefix = null", path: 'listViews', ext: '.listView-meta.xml' },
+  { type: 'ListView', label: 'List Views', desc: 'Object list views', api: 'soql', soql: "SELECT Id, Name, DeveloperName, SobjectType, LastModifiedDate FROM ListView WHERE CreatedBy.Profile.Name != null", path: 'listViews', ext: '.listView-meta.xml' },
   { type: 'CustomTab', label: 'Custom Tabs', desc: 'Custom object & web tabs', api: 'tooling', soql: "SELECT Id, DeveloperName, SobjectName, LastModifiedDate FROM CustomTab WHERE NamespacePrefix = null", path: 'tabs', ext: '.tab-meta.xml' },
   { type: 'CustomApplication', label: 'Custom Apps', desc: 'Lightning & Classic apps', api: 'tooling', soql: "SELECT Id, DeveloperName, Label, LastModifiedDate FROM CustomApplication WHERE NamespacePrefix = null", path: 'applications', ext: '.app-meta.xml' },
   { type: 'HomePageLayout', label: 'Home Page Layouts', desc: 'Classic home page layouts', api: 'tooling', soql: "SELECT Id, Name, LastModifiedDate FROM HomePageLayout WHERE NamespacePrefix = null", path: 'homePageLayouts', ext: '.homePageLayout-meta.xml' },
@@ -3954,8 +3954,9 @@ async function fetchMetadata() {
                   // For UI label: prefer Name (human-readable)
                   const pathName = rec.DeveloperName || rec.Name || rec.Title || rec.Id;
                   const uiName = rec.Name || rec.DeveloperName || rec.Title || rec.Id;
-                  const displayName = rec.SobjectType ? (rec.SobjectType + '.' + pathName) : (rec.FolderName ? (rec.FolderName + '/' + pathName) : pathName);
-                  const uiDisplayName = rec.SobjectType ? (rec.SobjectType + '.' + uiName) : (rec.FolderName ? (rec.FolderName + '/' + uiName) : uiName);
+                  const objPrefix = rec.SobjectType || rec.TableEnumOrId || '';
+                  const displayName = objPrefix ? (objPrefix + '.' + pathName) : (rec.FolderName ? (rec.FolderName + '/' + pathName) : pathName);
+                  const uiDisplayName = objPrefix ? (objPrefix + '.' + uiName) : (rec.FolderName ? (rec.FolderName + '/' + uiName) : uiName);
                   components.push({
                     type: q.type,
                     name: uiDisplayName,
