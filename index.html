@@ -3308,7 +3308,7 @@ function renderMetaRow(c, idx) {
     <span class="meta-change ${c.change}" title="${tip}">${label}</span>
     <span class="meta-row-actions">
       <button class="btn btn-sm" onclick="event.stopPropagation();viewComponent(${idx})" title="View full component source code">View</button>
-      ${c.change !== 'same' ? '<button class="btn btn-sm" onclick="event.stopPropagation();showDiff(' + idx + ')" title="Show line-by-line diff between Salesforce and git">Diff</button>' : ''}
+      ${c.change !== 'new' ? '<button class="btn btn-sm" onclick="event.stopPropagation();showDiff(' + idx + ')" title="Show line-by-line diff between Salesforce and git">Diff</button>' : ''}
     </span>
   </div>`;
 }
@@ -3639,7 +3639,8 @@ function buildSfdxPath(typeName, displayName, qPath, ext) {
 
   // SFDX uses DeveloperName (underscores) not Name (spaces) for file names
   // Types where Name may contain spaces: Queue, Profile, BusinessProcess, etc.
-  const SPACE_TO_UNDERSCORE_TYPES = new Set(['Queue','Profile','BusinessProcess','AssignmentRule','AutoResponseRule','EscalationRule']);
+  // Only Queue uses DeveloperName (underscores) for file names; other types keep spaces as-is
+  const SPACE_TO_UNDERSCORE_TYPES = new Set(['Queue']);
   if (SPACE_TO_UNDERSCORE_TYPES.has(typeName)) {
     compName = compName.replace(/ /g, '_');
   }
@@ -4169,6 +4170,12 @@ async function showDiff(idx) {
 
   const gitLines = (c.gitBody || '').split('\n');
   const sfLines = (c.body || '').split('\n');
+
+  // Identical files
+  if (c.change === 'same') {
+    document.getElementById('diffBody').innerHTML = '<div style="text-align:center;padding:48px 24px;color:var(--green)"><div style="font-size:40px;margin-bottom:12px">✓</div><div style="font-size:16px;font-weight:600">Files are identical</div><div style="color:var(--muted);margin-top:6px;font-size:13px">' + sfLines.length + ' lines — no differences</div></div>';
+    return;
+  }
 
   // Simple line-by-line diff
   let html = '';
