@@ -2880,7 +2880,16 @@ function renderMetadataView() {
     html += '<p>No components matched your filter criteria.</p>';
     const qc = metaCache.queriedCount || 0;
     const fc = (metaCache.failedTypes && metaCache.failedTypes.length) || 0;
-    html += '<p style="font-size:12px;color:var(--muted);margin-top:8px">Queried <b>' + qc + '</b> type(s) &bull; <b>0</b> components found &bull; <b style="color:' + (fc ? 'var(--danger)' : 'inherit') + '">' + fc + '</b> failed</p>';
+    // Detect session expiration (all failures are 401)
+    const allAre401 = fc > 0 && metaCache.failedTypes.every(ft => ft.error && ft.error.includes('401'));
+    if (allAre401) {
+      html += '<div style="text-align:center;margin:20px auto;padding:20px;background:var(--hover);border-radius:12px;border-left:4px solid var(--danger);max-width:500px">';
+      html += '<p style="font-size:16px;margin:0 0 8px">🔑 Session Expired</p>';
+      html += '<p style="font-size:13px;color:var(--muted);margin:0 0 16px">Your Salesforce session has expired. Please reconnect to continue.</p>';
+      html += '<button class="btn btn-primary" onclick="sfDisconnect();renderMetadataView()">Reconnect to Salesforce</button>';
+      html += '</div>';
+    } else {
+      html += '<p style="font-size:12px;color:var(--muted);margin-top:8px">Queried <b>' + qc + '</b> type(s) &bull; <b>0</b> components found &bull; <b style="color:' + (fc ? 'var(--danger)' : 'inherit') + '">' + fc + '</b> failed</p>';
     if (fc) {
       html += '<div style="text-align:left;margin:16px auto;max-width:600px;background:var(--hover);border-radius:8px;padding:12px 16px">';
       html += '<p style="font-size:13px;color:var(--danger);margin:0 0 8px">⚠ ' + fc + ' type(s) failed to query:</p>';
@@ -2891,6 +2900,7 @@ function renderMetadataView() {
       html += '</div></div>';
     }
     html += '<p style="font-size:12px;color:var(--muted);margin-top:8px">Try adjusting the metadata types, date range, or branch selection.</p>';
+    } // close else (non-401)
     html += '<button class="btn btn-primary" style="margin-top:16px" onclick="metaCache.hasFetched=false;renderMetadataView()">← Modify Filters</button>';
     html += '</div>';
     el.innerHTML = html;
@@ -3646,7 +3656,10 @@ async function fetchMetadata() {
       }
     }
 
+    let sessionExpired = false;
+
     for (const q of activeTypes) {
+      if (sessionExpired) break;
       done++;
       const prog = document.getElementById('metaFetchProgress');
       if (prog) prog.textContent = 'Fetching ' + q.type + ' (' + done + '/' + activeTypes.length + ')...';
@@ -3715,6 +3728,7 @@ async function fetchMetadata() {
       } catch (e) {
         console.warn('Skip ' + q.type + ': ' + e.message);
         failedTypes.push({ type: q.type, label: q.label, error: e.message });
+        if (e.message.includes('401')) { sessionExpired = true; }
       }
     }
 
