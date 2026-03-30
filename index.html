@@ -251,6 +251,7 @@ input,select{font-family:inherit}
 .mini-journey .mj-dot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--border);margin:0 1px}
 .mini-journey .mj-dot.reached{border-color:var(--green);background:var(--green)}
 .mini-journey .mj-dot.current{border-color:var(--blue);background:var(--blue)}
+.mini-journey .mj-dot.draft{border-color:var(--yellow);background:transparent;border-style:dashed}
 .mini-journey .mj-dot.future{border-color:var(--border);background:transparent}
 .mini-journey .mj-arrow{color:var(--border);font-size:8px;margin:0 1px}
 
@@ -429,9 +430,12 @@ input,select{font-family:inherit}
 .meta-row:hover{border-color:var(--accent);background:var(--surface2)}
 .meta-row.selected{border-color:var(--accent);background:var(--accent-dim)}
 .meta-row .meta-cb{width:16px;height:16px;accent-color:var(--accent);flex-shrink:0}
-.meta-row .meta-name{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta-row .meta-name{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.meta-copy-btn{background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;opacity:0;transition:opacity .15s}
+.meta-row:hover .meta-copy-btn{opacity:.6}
+.meta-copy-btn:hover{opacity:1!important}
 .meta-row .meta-type{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--muted);font-weight:500;width:90px;text-align:center;flex-shrink:0;box-sizing:border-box}
-.meta-row .meta-date-cell{font-size:11px;color:var(--muted);white-space:nowrap;width:90px;flex-shrink:0}
+.meta-row .meta-date-cell{font-size:11px;color:var(--muted);white-space:nowrap;width:120px;flex-shrink:0}
 .meta-row .meta-change{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;width:80px;text-align:center;flex-shrink:0;box-sizing:border-box}
 .meta-row .meta-change.new{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
 .meta-row .meta-change.modified{background:color-mix(in srgb,var(--yellow) 15%,transparent);color:var(--yellow)}
@@ -942,6 +946,24 @@ function safeSsGet(key) { try { return sessionStorage.getItem(key); } catch { re
 function safeSsSet(key, val) { try { sessionStorage.setItem(key, val); } catch {} }
 function safeSsRemove(key) { try { sessionStorage.removeItem(key); } catch {} }
 
+// Desktop notifications (non-blocking, permission asked on first use)
+function notifyUser(title, body) {
+  if (!('Notification' in window)) return;
+  if (document.hasFocus()) return; // Only notify when tab is in background
+  if (Notification.permission === 'granted') {
+    new Notification(title, { body, icon: '📦' });
+  } else if (Notification.permission !== 'denied') {
+    Notification.requestPermission().then(p => { if (p === 'granted') new Notification(title, { body, icon: '📦' }); });
+  }
+}
+
+// Format metadata date as "YYYY-MM-DD HH:mm" in user's local timezone with tooltip showing UTC
+function fmtMetaDate(isoStr) {
+  const d = new Date(isoStr);
+  const pad = n => String(n).padStart(2, '0');
+  return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+}
+
 /* ═══════════════════════════════════════════════════════
    CREATE PROJECT
    ═══════════════════════════════════════════════════════ */
@@ -1035,6 +1057,9 @@ function enterProject() {
   document.getElementById('mainNav').style.display = 'flex';
   document.getElementById('lockBtn').style.display = 'flex';
   document.getElementById('helpBtn').style.display = 'flex';
+  // Restore env tab from session
+  const savedTab = safeSsGet('sf_env_tab');
+  if (savedTab) activeEnvTab = savedTab;
   // Reset filters from previous project
   document.getElementById('filterSearch').value = '';
   document.getElementById('filterAuthor').innerHTML = '<option value="">All authors</option>';
@@ -1262,10 +1287,13 @@ async function testConnection() {
 /* ═══════════════════════════════════════════════════════
    BRANCHES
    ═══════════════════════════════════════════════════════ */
+let _branchCacheTime = 0;
 async function loadBranches() {
+  if (Date.now() - _branchCacheTime < 300000 && pipelineCache.branches.length) return; // 5-min cache
   try {
     const branches = await ghFetchAll('/repos/' + projectData.repo + '/branches');
     pipelineCache.branches = branches.map(b => b.name);
+    _branchCacheTime = Date.now();
     const sel = document.getElementById('branchSelect');
     sel.innerHTML = '<option value="">— select branch —</option>' +
       pipelineCache.branches.map(b => '<option value="' + esc(b) + '">' + esc(b) + '</option>').join('');
@@ -1568,6 +1596,7 @@ function selectEnv(idx) {
 
 function switchEnvTab(tab) {
   activeEnvTab = tab;
+  safeSsSet('sf_env_tab', tab);
   renderPipeline();
 }
 
@@ -1743,8 +1772,9 @@ function renderMiniJourney(pr) {
     const envPr = feat.prs.get(env.branch);
     let cls = 'future';
     if (envPr && envPr.merged_at) cls = 'reached';
+    else if (envPr && envPr.draft) cls = 'draft';
     else if (envPr) cls = 'current';
-    html += `<div class="mj-dot ${cls}" title="${esc(env.displayName)}"></div>`;
+    html += `<div class="mj-dot ${cls}" title="${esc(env.displayName)}${envPr && envPr.draft ? ' (Draft)' : ''}"></div>`;
     if (i < envs.length - 1) html += '<span class="mj-arrow">›</span>';
   });
   html += '</div>';
@@ -1781,18 +1811,23 @@ function batchClear() {
 async function batchPromote() {
   if (!batchSelected.size || isPromoting) return;
   const nums = Array.from(batchSelected);
-  if (!confirm('Promote (merge) ' + nums.length + ' PR(s)?\n\n' + nums.map(n => '#' + n).join(', ') + '\n\nThis will merge them sequentially.')) return;
+  if (!confirm('Promote (merge) ' + nums.length + ' PR(s)?\n\n' + nums.map(n => '#' + n).join(', ') + '\n\nThis will merge them sequentially. Failed PRs will be skipped.')) return;
 
   isPromoting = true;
   // Immediately disable the button in the DOM
   document.querySelectorAll('[onclick*="batchPromote"]').forEach(b => { b.disabled = true; b.textContent = '⏳ Promoting...'; });
   const results = [];
-  for (const num of nums) {
+  for (let i = 0; i < nums.length; i++) {
+    const num = nums[i];
+    // Update floating progress
+    document.querySelectorAll('[onclick*="batchPromote"]').forEach(b => { b.textContent = '⏳ ' + (i + 1) + '/' + nums.length + '...'; });
     try {
       await promotePr(num, false);
       results.push({ num, ok: true });
     } catch (e) {
       results.push({ num, ok: false, err: e.message });
+      logMsg('warn', 'batchPromote', 'PR #' + num + ' failed, skipping', e.message);
+      // Continue to next PR instead of stopping
     }
   }
   batchSelected.clear();
@@ -1802,8 +1837,9 @@ async function batchPromote() {
   const ok = results.filter(r => r.ok).length;
   const fail = results.filter(r => !r.ok);
   let msg = ok + '/' + results.length + ' PR(s) promoted successfully.';
-  if (fail.length) msg += '\n\nFailed:\n' + fail.map(r => '#' + r.num + ': ' + r.err).join('\n');
+  if (fail.length) msg += '\n\nSkipped (failed):\n' + fail.map(r => '#' + r.num + ': ' + r.err).join('\n');
   if (fail.length) toast(msg,'warn',6000); else toast(msg,'ok');
+  notifyUser('Batch Promote Complete', ok + '/' + results.length + ' PRs merged' + (fail.length ? ', ' + fail.length + ' failed' : ''));
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -3266,9 +3302,9 @@ function renderMetaRow(c, idx) {
   const tip = META_CHANGE_TIPS[c.change] || '';
   return `<div class="meta-row${c.selected ? ' selected' : ''}" data-type="${esc(c.type)}" data-change="${c.change}" onclick="toggleMetaComponent(${idx})">
     <input type="checkbox" class="meta-cb" ${checked} onclick="event.stopPropagation();toggleMetaComponent(${idx})">
-    <span class="meta-name" title="${esc(c.fullName)}">${esc(c.name)}</span>
+    <span class="meta-name" title="${esc(c.fullName)}">${esc(c.name)}<button class="meta-copy-btn" onclick="event.stopPropagation();navigator.clipboard.writeText('${esc(c.fullName).replace(/'/g, '\\\'')}');toast('Copied: ${esc(c.name)}','ok',1500)" title="Copy API name">📋</button></span>
     <span class="meta-type">${esc(c.type)}</span>
-    <span class="meta-date-cell">${c.lastModified ? new Date(c.lastModified).toLocaleDateString() : ''}</span>
+    <span class="meta-date-cell" title="${c.lastModified || ''}">${c.lastModified ? fmtMetaDate(c.lastModified) : ''}</span>
     <span class="meta-change ${c.change}" title="${tip}">${label}</span>
     <span class="meta-row-actions">
       <button class="btn btn-sm" onclick="event.stopPropagation();viewComponent(${idx})" title="View full component source code">View</button>
@@ -3465,8 +3501,10 @@ function buildFetchConfigHtml() {
   return h;
 }
 
+let _repoBranchCacheTime = 0;
 async function loadRepoBranches() {
   if (!projectData || !projectData.pat || !projectData.repo) { toast('Configure GitHub PAT and repo first','warn'); return; }
+  if (Date.now() - _repoBranchCacheTime < 300000 && repoBranches.length) { renderMetadataView(); return; } // 5-min cache
   try {
     const data = await ghFetch('/repos/' + projectData.repo + '/branches?per_page=100');
     repoBranches = data.map(b => b.name).sort((a,b) => {
@@ -3475,6 +3513,7 @@ async function loadRepoBranches() {
       return a.localeCompare(b);
     });
     if (!metaFetchConfig.compareBranch && repoBranches.length) metaFetchConfig.compareBranch = repoBranches[0];
+    _repoBranchCacheTime = Date.now();
     renderMetadataView();
   } catch (e) { toast('Failed to load branches: ' + e.message,'err'); }
 }
@@ -3838,6 +3877,17 @@ async function fetchMetadata() {
     const activeTypes = META_QUERIES.filter(q => metaFetchConfig.types.includes(q.type));
     let done = 0;
 
+    // Warn on large fetch
+    if (activeTypes.length > 20) {
+      if (!confirm('You selected ' + activeTypes.length + ' metadata types. This may take several minutes on a large org.\n\nContinue?')) {
+        isFetchingMeta = false;
+        el.innerHTML = '';
+        const f = document.getElementById('metaFetchFloating'); if (f) f.style.display = 'none';
+        renderMetadataView();
+        return;
+      }
+    }
+
     // Fetch SFDX metadata schema (directoryName, suffix, childXmlNames) from org
     const prog0 = document.getElementById('metaFetchProgress');
     if (prog0) prog0.textContent = 'Fetching metadata schema...';
@@ -3998,6 +4048,7 @@ async function fetchMetadata() {
     metaCache.queriedCount = activeTypes.length;
     metaCache.hasFetched = true;
     logMsg('success', 'fetchMetadata', 'Fetch complete', components.length + ' components from ' + activeTypes.length + ' types' + (failedTypes.length ? ', ' + failedTypes.length + ' failed' : ''));
+    notifyUser('Metadata Fetch Complete', components.length + ' components fetched' + (failedTypes.length ? ' (' + failedTypes.length + ' types failed)' : ''));
     renderMetadataView();
   } catch (e) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error fetching metadata: ' + esc(e.message) + '</p></div>';
