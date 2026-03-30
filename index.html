@@ -2878,6 +2878,16 @@ function renderMetadataView() {
     html += '<div class="meta-status ok">✓ Connected as ' + esc(sfConnectedLabel()) + '</div>';
     html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
     html += '</div>';
+    // API info bar (empty results view)
+    const hasDescribe0 = Object.keys(describeTypeDir).length > 0;
+    html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:11px">';
+    html += '<span style="background:var(--surface2);border-radius:4px;padding:2px 8px;color:var(--muted)">API v' + SF_API_VERSION + '</span>';
+    if (hasDescribe0) {
+      html += '<span style="background:#1a3a2a;border-radius:4px;padding:2px 8px;color:#4ade80">SOAP describeMetadata ✓</span>';
+    } else {
+      html += '<span style="background:#3a2a1a;border-radius:4px;padding:2px 8px;color:#fbbf24">Hardcoded paths (SOAP unavailable)</span>';
+    }
+    html += '</div>';
     html += '<div class="empty-state" style="padding:40px"><div class="empty-icon">🔍</div>';
     html += '<p>No components matched your filter criteria.</p>';
     const qc = metaCache.queriedCount || 0;
@@ -2914,6 +2924,19 @@ function renderMetadataView() {
   html += '<h2>☁️ Metadata Browser</h2>';
   html += '<div class="meta-status ok">✓ Connected as ' + esc(sfConnectedLabel()) + '</div>';
   html += '<button class="btn btn-sm" onclick="sfDisconnect()" style="margin-left:auto">Disconnect</button>';
+  html += '</div>';
+
+  // API info bar
+  const hasDescribe = Object.keys(describeTypeDir).length > 0;
+  const childCount = describeChildTypes.size;
+  html += '<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:12px;font-size:11px">';
+  html += '<span style="background:var(--surface2);border-radius:4px;padding:2px 8px;color:var(--muted)">API v' + SF_API_VERSION + '</span>';
+  if (hasDescribe) {
+    html += '<span style="background:#1a3a2a;border-radius:4px;padding:2px 8px;color:#4ade80">SOAP describeMetadata ✓ (' + Object.keys(describeTypeDir).length + ' types, ' + childCount + ' children)</span>';
+  } else {
+    html += '<span style="background:#3a2a1a;border-radius:4px;padding:2px 8px;color:#fbbf24">Hardcoded paths (SOAP unavailable)</span>';
+  }
+  html += '<span style="background:var(--surface2);border-radius:4px;padding:2px 8px;color:var(--muted)">' + metaCache.components.length + ' components from ' + metaCache.queriedCount + ' types</span>';
   html += '</div>';
 
   // Failed types warning
