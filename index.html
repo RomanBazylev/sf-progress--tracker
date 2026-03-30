@@ -3398,7 +3398,12 @@ function buildSfdxPath(typeName, displayName, qPath, ext) {
   const isChild = describeChildTypes.has(typeName) || !!OBJECT_CHILD_FOLDERS[typeName];
   if (isChild && hasObject) {
     const childFolder = describeTypeDir[typeName] || OBJECT_CHILD_FOLDERS[typeName] || qPath;
-    return 'objects/' + objName + '/' + childFolder + '/' + compName + ext;
+    const result = 'objects/' + objName + '/' + childFolder + '/' + compName + ext;
+    console.log('buildSfdxPath [child]:', typeName, displayName, '→', result);
+    return result;
+  }
+  if (isChild && !hasObject) {
+    console.warn('buildSfdxPath: ' + typeName + ' is child type but displayName has no object prefix: "' + displayName + '" — falling through to default path');
   }
 
   // Layout → layouts/{Obj}-{Name}{ext}  (dash-separated, no subdirectory)
@@ -3710,7 +3715,8 @@ async function fetchMetadata() {
                 const name = rec.Name || rec.DeveloperName || rec.MasterLabel || rec.Title || rec.TestSuiteName || (rec.Definition && rec.Definition.DeveloperName) || rec.ValidationName;
                 const realBody = rec.Body || rec.Markup || (rec.Metadata ? metadataJsonToXml(rec.Metadata, q.type) : '');
                 const body = realBody || buildMetaXmlBody(rec, q.type);
-                const objRef = rec.EntityDefinition ? rec.EntityDefinition.DeveloperName : (rec.TableEnumOrId || rec.SobjectType || rec.PageOrSobjectType || '');
+                // Use || chain (NOT ternary) so null DeveloperName falls through to SobjectType etc.
+                const objRef = (rec.EntityDefinition && rec.EntityDefinition.DeveloperName) || rec.TableEnumOrId || rec.SobjectType || rec.PageOrSobjectType || '';
                 const displayName = objRef ? (objRef + '.' + name) : name;
                 components.push({
                   type: q.type,
