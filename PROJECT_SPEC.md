@@ -9,9 +9,9 @@
 
 | Aspect | Detail |
 |--------|--------|
-| **Format** | All HTML + CSS + JS in one file (`index.html`, ~2900 lines) |
+| **Format** | All HTML + CSS + JS in one file (`index.html`, ~4200 lines) |
 | **Storage** | Projects stored in `localStorage`, encrypted with AES-256-GCM + PBKDF2 |
-| **APIs** | GitHub REST API v3, Salesforce Tooling API v59.0 |
+| **APIs** | GitHub REST API v3, Salesforce Tooling API v65.0, Salesforce SOAP Metadata API v65.0 |
 | **Auth – GitHub** | Personal Access Token (PAT) with `repo` scope |
 | **Auth – Salesforce** | OAuth 2.0 Implicit Flow (`response_type=token`) |
 | **CORS** | Cloudflare Worker proxy for Salesforce API calls (required) |
@@ -88,20 +88,33 @@
 - **Post-release** — clears selection, refreshes data so released PRs no longer appear in Release tab
 
 ### 2.7 Metadata Tab (Salesforce Integration)
-- **Connect screen** — Instance URL, Consumer Key, CORS Proxy fields
+- **Per-environment SF connections** — each pipeline environment can have its own Org URL, Consumer Key, and CORS Proxy configured in Settings → Environments
+- **Connect screen** — Instance URL, Consumer Key, CORS Proxy fields; env-specific OAuth with `sfOAuthLogin(envIdx)`
 - **OAuth Implicit Flow** — redirects to SF login, captures token from URL hash
 - **Smart redirect recovery** — `sf_oauth_pending` flag in `sessionStorage` auto-navigates back to Metadata tab after OAuth redirect
+- **SOAP describeMetadata** — `sfSoapFetch()` calls the Metadata API `describeMetadata()` to dynamically discover:
+  - Directory names (`describeTypeDir`) and file suffixes (`describeTypeSuffix`) for each type
+  - Child type relationships (`describeChildTypes`) — only from CustomObject parent
+  - InFolder/MetaFile flags (`describeInFolder`, `describeMetaFile`)
+  - Results cached in `sessionStorage` (cache key `sf_describe_v2_` + instance)
 - **Fetch Config** (3 steps):
-  1. **Select Metadata Types** — checkboxes for 6 types (ApexClass, ApexTrigger, ApexPage, ApexComponent, AuraBundle, LWC) + Select All / Deselect All
+  1. **Select Metadata Types** — compact 3-column grid with 53+ types organized by category (Code, UI Components, Objects & Fields, Security, Automation, Configuration, Other); group-level checkboxes via `toggleMetaGroup()`; tooltips with type descriptions
   2. **Date Range Filter** — presets (All time, Today, 2 days, Week, Month, Custom) with From/To date inputs
   3. **Compare with Git Branch** — dropdown of all repo branches, auto-loaded
+- **API Info Bar** — badges showing: API version, SOAP/hardcoded describe status, component count, query success/failure stats
+- **401 Session Detection** — early exit on first 401 response; shows "Session Expired" card with Reconnect button
 - **Metadata Browser** — grid of components with columns:
   - Checkbox (for commit selection), Name, Type, Last Modified, Change Status, Actions
   - Change statuses: New in SF, Modified, In Sync
   - Actions: View (source code), Diff (side-by-side comparison)
   - Sticky column headers
   - Empty state with "Modify Filters" button when 0 results
-- **Fetch Progress** — live indicator showing "Fetching ApexClass 2/6..."
+- **Fetch Progress** — live indicator showing "Fetching ApexClass 2/N..."
+- **SFDX-compatible paths** — `buildSfdxPath()` routes files to correct directory structure:
+  - Dynamic maps from SOAP `describeMetadata()` with hardcoded fallback (`OBJECT_CHILD_FOLDERS`)
+  - Object-child types (CustomField, RecordType, ValidationRule, etc.) → `objects/{ObjectName}/{childFolder}/`
+  - Bundle types (LWC, Aura) → deep file structure
+  - Robust object name extraction via `||` chain: `EntityDefinition.DeveloperName || TableEnumOrId || SobjectType || PageOrSobjectType`
 - **Diff Modal** — shows code differences between SF and git versions
 - **Commit to Git** — select changed components, choose existing or create new branch, commit message
   - Base path auto-detected from existing repo structure via `detectBasePath()`
@@ -109,7 +122,17 @@
   - Commit progress steps: resolving branch → uploading files → creating tree → committing → updating ref
   - Creates blobs, tree, commit via GitHub Git Data API
 
-### 2.8 UX System
+### 2.8 Logs Tab (In-App Diagnostics)
+- **Application log buffer** — `appLogs[]` array (max 500 entries, FIFO)
+- **`logMsg(level, source, message, detail)`** — pushes to buffer + mirrors to browser console
+- **Log levels**: info (ℹ️), success (✅), warn (⚠️), error (❌) with color-coded rows
+- **Filter buttons** — ALL / INFO / SUCCESS / WARN / ERROR
+- **Newest-first** display in monospace font with timestamps (HH:MM:SS.mmm)
+- **Actions**: Clear logs, Copy All to clipboard, Download as `.txt` file
+- **Sources**: describeMetadata, buildSfdxPath, ensureFullMetadata, fetchMetadata, gitTree, and more
+- All 17+ former `console.log`/`console.warn` calls rewired to `logMsg()` for in-app visibility
+
+### 2.9 UX System
 - **Toast notifications** — all user feedback via animated toasts (ok/err/warn/info), no browser alerts
 - **Help modal** (press `?`) — keyboard shortcuts table + quick tips
 - **Keyboard shortcuts**: R=refresh, T=theme, S=settings, M=metadata, P=pipeline, /=search, ?=help, Esc=close
@@ -135,8 +158,9 @@ GitHub API ──┐
              └── buildFeatures() ──→ feature grouping by head branch
 
 Salesforce ──┐
-             ├── sfOAuthLogin() → OAuth implicit → token in sessionStorage
-             ├── fetchMetadata() → SOQL per type via Tooling API → metaCache
+             ├── sfOAuthLogin(envIdx) → OAuth implicit → token in sessionStorage
+             ├── fetchDescribeMetadata() → SOAP describeMetadata() → dynamic type maps (cached)
+             ├── fetchMetadata() → enriches paths from describe → SOQL per type via Tooling API → metaCache
              └── fetchGitTreeForDiff() → GitHub tree API → diff comparison
 ```
 
@@ -152,9 +176,16 @@ Salesforce ──┐
 | `pipelineCache` | object | `{ prs[], mergedPrs[], branches[], drifts{}, features[], syncPrs[], releasablePrs{}, lastFetch }` |
 | `detailCache` | object | PR detail/review cache by PR number |
 | `sfState` | object | `{ token, instance, user }` (session-scoped via sessionStorage) |
-| `metaCache` | object | `{ components[], gitTree{}, gitBranch, hasFetched }` |
+| `metaCache` | object | `{ components[], gitTree{}, gitBranch, hasFetched, failedTypes[], queriedCount }` |
 | `metaFetchConfig` | object | `{ types[], datePreset, dateFrom, dateTo, compareBranch }` |
 | `repoBranches` | array | All branch names from repo (for metadata comparison) |
+| `SF_API_VERSION` | string | `'65.0'` — centralized constant used by all API call sites |
+| `describeTypeDir` | object | `{ typeName → directoryName }` — from SOAP describeMetadata |
+| `describeTypeSuffix` | object | `{ typeName → suffix }` — from SOAP describeMetadata |
+| `describeChildTypes` | Set | Child type names (only from CustomObject parent) |
+| `describeInFolder` | object | `{ typeName → boolean }` — folder-based types |
+| `describeMetaFile` | object | `{ typeName → boolean }` — types needing -meta.xml |
+| `appLogs` | array | In-app log buffer (max 500 entries) with `{ ts, level, source, message, detail }` |
 | `activeEnvIndex` | number | Selected pipeline stage (-1 = overview) |
 | `activeEnvTab` | string | 'open' / 'merged' / 'sync' / 'release' |
 | `batchSelected` | Set | PR numbers selected for batch promote |
@@ -168,7 +199,7 @@ Salesforce ──┐
 ### Navigation & UI
 | Function | Purpose |
 |----------|---------|
-| `showView(name)` | Switch between pipeline/metadata/settings views |
+| `showView(name)` | Switch between pipeline/metadata/logs/settings views; auto-calls `renderLogsView()` for logs |
 | `enterProject()` | After unlock: show nav, populate settings, load data |
 | `lockProject()` | Return to project selector; fully resets sfState, metaCache, metaFetchConfig, repoBranches & sessionStorage to prevent cross-project bleed |
 | `toast(msg, type, ms)` | Show notification (types: ok, err, warn, info) |
@@ -201,17 +232,29 @@ Salesforce ──┐
 ### Metadata
 | Function | Purpose |
 |----------|---------|
-| `sfOAuthLogin()` | Redirect to SF OAuth page |
+| `sfOAuthLogin(envIdx)` | Redirect to SF OAuth page (per-env or manual fields) |
 | `handleSfOAuthCallback()` | Capture token from URL hash |
 | `restoreSfSession()` | Restore token from sessionStorage |
 | `renderMetadataView()` | State machine: no token → connect, no data → config, data → browser |
-| `buildFetchConfigHtml()` | Type grid + date presets + branch selector |
-| `fetchMetadata()` | SOQL queries for selected types + date range via Tooling API |
+| `buildFetchConfigHtml()` | Compact 3-column type grid with group checkboxes + date presets + branch selector |
+| `toggleMetaGroup(groupLabel, on)` | Check/uncheck all types in a category |
+| `sfSoapFetch(soapBody)` | POST SOAP envelope to Metadata API via CORS proxy, returns parsed XML |
+| `fetchDescribeMetadata()` | SOAP describeMetadata() → builds 5 dynamic maps, sessionStorage cached |
+| `fetchMetadata()` | Enriches types from describe → SOQL queries via Tooling API → metaCache |
+| `buildSfdxPath(typeName, displayName, qPath, ext)` | Compute SFDX-compatible file path using dynamic maps + hardcoded fallback |
 | `fetchGitTreeForDiff(components)` | Load git tree for selected branch, compare with SF |
 | `showDiff(idx)` | Show side-by-side diff modal |
-| `detectBasePath()` | Scan git tree for existing SFDX paths (classes/triggers/pages) → auto-detect base path (fallback: `force-app/main/default`) |
-| `showCommitForm()` | Commit selected components to git; auto-populated base path, expandable file preview |
+| `detectBasePath()` | Scan git tree for existing SFDX paths → auto-detect base path |
+| `showCommitForm()` | Commit selected components to git |
 | `doCommit()` | Create blobs → tree → commit → update ref via GitHub API |
+
+### Logs
+| Function | Purpose |
+|----------|--------|
+| `logMsg(level, source, message, detail)` | Push log entry to `appLogs` + mirror to console |
+| `renderLogsView()` | Render log entries with filters, badges, actions |
+| `copyLogsToClipboard()` | Copy all logs as plain text |
+| `downloadLogs()` | Download logs as `.txt` file |
 
 ### Crypto
 | Function | Purpose |

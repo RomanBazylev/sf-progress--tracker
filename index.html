@@ -519,6 +519,7 @@ input,select{font-family:inherit}
   <nav id="mainNav" style="display:none">
     <button onclick="showView('pipeline')" id="navPipeline">📦 Pipeline</button>
     <button onclick="showView('metadata')" id="navMetadata">☁️ Metadata</button>
+    <button onclick="showView('logs')" id="navLogs">📋 Logs</button>
     <button onclick="showView('settings')" id="navSettings">⚙️ Settings</button>
   </nav>
   <span id="projBadge" class="proj-badge" style="display:none"></span>
@@ -634,6 +635,11 @@ input,select{font-family:inherit}
   <div id="pipelineContent">
     <div class="loading"><div class="spinner"></div><p>Loading pipeline...</p></div>
   </div>
+</div>
+
+<!-- ── LOGS VIEW ── -->
+<div class="view" id="logsView">
+  <div id="logsContent"></div>
 </div>
 
 <!-- ── METADATA VIEW ── -->
@@ -766,6 +772,7 @@ input,select{font-family:inherit}
       <tr><td><kbd>T</kbd></td><td>Toggle dark/light theme</td></tr>
       <tr><td><kbd>S</kbd></td><td>Go to Settings</td></tr>
       <tr><td><kbd>M</kbd></td><td>Go to Metadata</td></tr>
+      <tr><td><kbd>L</kbd></td><td>Go to Logs</td></tr>
       <tr><td><kbd>P</kbd></td><td>Go to Pipeline</td></tr>
       <tr><td><kbd>/</kbd></td><td>Focus search bar</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
@@ -902,6 +909,7 @@ function showView(name) {
   document.querySelectorAll('#mainNav button').forEach(b => b.classList.remove('active'));
   const nb = document.getElementById('nav' + name.charAt(0).toUpperCase() + name.slice(1));
   if (nb) nb.classList.add('active');
+  if (name === 'logs') renderLogsView();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -2569,6 +2577,91 @@ function updateLastUpdatedTimer() {
 }
 
 /* ═══════════════════════════════════════════════════════
+   IN-APP LOGGING SYSTEM
+   ═══════════════════════════════════════════════════════ */
+const appLogs = [];
+const APP_LOG_MAX = 500;
+
+function logMsg(level, source, message, detail) {
+  const entry = {
+    ts: new Date().toISOString(),
+    level: level,       // 'info' | 'warn' | 'error' | 'success'
+    source: source,     // e.g. 'describeMetadata', 'fetchMetadata', 'sfApiFetch'
+    message: message,
+    detail: detail || ''
+  };
+  appLogs.push(entry);
+  if (appLogs.length > APP_LOG_MAX) appLogs.shift();
+  // Also send to real console
+  const consoleFn = level === 'error' ? console.error : level === 'warn' ? console.warn : console.log;
+  consoleFn('[' + source + '] ' + message + (detail ? ' — ' + detail : ''));
+  // Update logs badge if view is open
+  const badge = document.getElementById('logsBadge');
+  if (badge) badge.textContent = appLogs.length;
+}
+
+function renderLogsView() {
+  const el = document.getElementById('logsContent');
+  if (!el) return;
+  let h = '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px;flex-wrap:wrap">';
+  h += '<h2>📋 Application Logs</h2>';
+  h += '<span id="logsBadge" style="background:var(--surface2);border-radius:12px;padding:2px 10px;font-size:11px;color:var(--muted)">' + appLogs.length + '</span>';
+  h += '<button class="btn btn-sm" onclick="appLogs.length=0;renderLogsView()" style="margin-left:auto">🗑 Clear</button>';
+  h += '<button class="btn btn-sm" onclick="copyLogsToClipboard()">📋 Copy All</button>';
+  h += '<button class="btn btn-sm" onclick="downloadLogs()">⬇ Download</button>';
+  h += '</div>';
+
+  // Filter buttons
+  h += '<div style="display:flex;gap:6px;margin-bottom:12px;flex-wrap:wrap">';
+  const levels = ['all','info','success','warn','error'];
+  levels.forEach(lv => {
+    const active = (window._logFilter || 'all') === lv;
+    const colors = { all:'var(--muted)', info:'var(--blue)', success:'var(--green)', warn:'#fbbf24', error:'var(--danger)' };
+    h += '<button class="btn btn-sm" style="' + (active ? 'border-color:' + colors[lv] + ';color:' + colors[lv] : '') + '" onclick="window._logFilter=\'' + lv + '\';renderLogsView()">' + lv.toUpperCase() + '</button>';
+  });
+  h += '</div>';
+
+  const filter = window._logFilter || 'all';
+  const filtered = filter === 'all' ? appLogs : appLogs.filter(l => l.level === filter);
+
+  if (!filtered.length) {
+    h += '<div class="empty-state" style="padding:40px"><div class="empty-icon">📋</div><p>No logs yet. Logs will appear here as you use the app.</p></div>';
+  } else {
+    h += '<div style="font-family:monospace;font-size:12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;max-height:70vh;overflow-y:auto">';
+    // Show newest first
+    for (let i = filtered.length - 1; i >= 0; i--) {
+      const l = filtered[i];
+      const colors = { info:'var(--blue)', success:'var(--green)', warn:'#fbbf24', error:'var(--danger)' };
+      const icons = { info:'ℹ️', success:'✅', warn:'⚠️', error:'❌' };
+      const time = l.ts.substring(11, 23);
+      h += '<div style="padding:4px 10px;border-bottom:1px solid var(--border);display:flex;gap:8px;align-items:flex-start' + (l.level === 'error' ? ';background:rgba(239,68,68,.08)' : l.level === 'warn' ? ';background:rgba(251,191,36,.06)' : '') + '">';
+      h += '<span style="color:var(--muted);flex-shrink:0">' + time + '</span>';
+      h += '<span style="flex-shrink:0">' + (icons[l.level] || '') + '</span>';
+      h += '<span style="color:' + (colors[l.level] || 'var(--text)') + ';flex-shrink:0;min-width:80px;font-weight:600">[' + esc(l.source) + ']</span>';
+      h += '<span style="color:var(--text);word-break:break-all">' + esc(l.message) + (l.detail ? ' <span style="color:var(--muted)">' + esc(l.detail) + '</span>' : '') + '</span>';
+      h += '</div>';
+    }
+    h += '</div>';
+  }
+  el.innerHTML = h;
+}
+
+function copyLogsToClipboard() {
+  const text = appLogs.map(l => l.ts + ' [' + l.level.toUpperCase() + '] [' + l.source + '] ' + l.message + (l.detail ? ' — ' + l.detail : '')).join('\n');
+  navigator.clipboard.writeText(text).then(() => toast('Logs copied to clipboard', 'ok'));
+}
+
+function downloadLogs() {
+  const text = appLogs.map(l => l.ts + ' [' + l.level.toUpperCase() + '] [' + l.source + '] ' + l.message + (l.detail ? ' — ' + l.detail : '')).join('\n');
+  const blob = new Blob([text], { type: 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'sf-tracker-logs-' + new Date().toISOString().slice(0, 10) + '.txt';
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+
+/* ═══════════════════════════════════════════════════════
    KEYBOARD SHORTCUTS
    ═══════════════════════════════════════════════════════ */
 document.addEventListener('keydown', e => {
@@ -2578,6 +2671,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 's' || e.key === 'S') { e.preventDefault(); if (projectData) showView('settings'); }
   if (e.key === 'm' || e.key === 'M') { e.preventDefault(); if (projectData) showView('metadata'); }
   if (e.key === 'p' || e.key === 'P') { e.preventDefault(); if (projectData) showView('pipeline'); }
+  if (e.key === 'l' || e.key === 'L') { e.preventDefault(); if (projectData) showView('logs'); }
   if (e.key === '/') { e.preventDefault(); const s = document.getElementById('filterSearch'); if (s) s.focus(); }
   if (e.key === '?') { e.preventDefault(); showHelpModal(); }
   if (e.key === 'Escape') { closeSidePanel(); closeCreateModal(); closeUnlockModal(); closeDiffModal(); closeHelpModal(); }
@@ -2760,7 +2854,7 @@ async function fetchDescribeMetadata() {
       describeChildTypes = new Set(data.children);
       describeInFolder = new Set(data.inFolder);
       describeMetaFile = data.metaFile || {};
-      console.log('describeMetadata: restored from cache (' + Object.keys(data.dir).length + ' types, ' + data.children.length + ' children: ' + data.children.join(', ') + ')');
+      logMsg('info', 'describeMetadata', 'Restored from cache', Object.keys(data.dir).length + ' types, ' + data.children.length + ' children: ' + data.children.join(', '));
       return;
     }
   } catch (e) { /* cache miss */ }
@@ -2811,7 +2905,7 @@ async function fetchDescribeMetadata() {
     sessionStorage.setItem(cacheKey, JSON.stringify({ dir, suffix, children, inFolder, metaFile: mf }));
   } catch (e) { /* quota exceeded — ignore */ }
 
-  console.log('describeMetadata: fetched ' + Object.keys(dir).length + ' types, ' + children.length + ' children: ' + children.join(', '));
+  logMsg('info', 'describeMetadata', 'Fetched from org', Object.keys(dir).length + ' types, ' + children.length + ' children: ' + children.join(', '));
 }
 
 async function fetchSfUser() {
@@ -3447,11 +3541,11 @@ function buildSfdxPath(typeName, displayName, qPath, ext) {
   if (isChild && hasObject) {
     const childFolder = describeTypeDir[typeName] || OBJECT_CHILD_FOLDERS[typeName] || qPath;
     const result = 'objects/' + objName + '/' + childFolder + '/' + compName + ext;
-    console.log('buildSfdxPath [child]:', typeName, displayName, '→', result);
+    logMsg('info', 'buildSfdxPath', 'Child: ' + typeName + ' / ' + displayName, '→ ' + result);
     return result;
   }
   if (isChild && !hasObject) {
-    console.warn('buildSfdxPath: ' + typeName + ' is child type but displayName has no object prefix: "' + displayName + '" — falling through to default path');
+    logMsg('warn', 'buildSfdxPath', typeName + ' is child type but displayName has no object prefix', displayName);
   }
 
   // Layout → layouts/{Obj}-{Name}{ext}  (dash-separated, no subdirectory)
@@ -3553,7 +3647,7 @@ async function ensureFullMetadata(comp) {
       }
       comp._metadataLoaded = true;
     } catch (e) {
-      console.warn('ensureFullMetadata(' + comp.type + '/' + comp.sfId + '): ' + e.message);
+      logMsg('warn', 'ensureFullMetadata', comp.type + '/' + comp.sfId, e.message);
       comp._metadataLoaded = true;
     }
     return;
@@ -3583,7 +3677,7 @@ async function ensureFullMetadata(comp) {
           if (sObjects.records) {
             queueData.queueSobject = sObjects.records.map(r => ({ sobjectType: r.SobjectType }));
           }
-        } catch (e) { console.warn('Queue sObjects: ' + e.message); }
+        } catch (e) { logMsg('warn', 'ensureFullMetadata', 'Queue sObjects', e.message); }
         // Fetch members
         try {
           const members = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/query?q=' + encodeURIComponent(
@@ -3604,7 +3698,7 @@ async function ensureFullMetadata(comp) {
                   "SELECT Id, Username FROM User WHERE Id IN ('" + userIds.join("','") + "')"
                 ));
                 if (users.records) queueData.queueMembers.users = users.records.map(u => ({ user: u.Username }));
-              } catch (e) { console.warn('Queue users: ' + e.message); }
+              } catch (e) { logMsg('warn', 'ensureFullMetadata', 'Queue users', e.message); }
             }
             // Resolve group/role names
             if (groupIds.length) {
@@ -3618,10 +3712,10 @@ async function ensureFullMetadata(comp) {
                     else queueData.queueMembers.publicGroups.push({ publicGroup: g.Name });
                   });
                 }
-              } catch (e) { console.warn('Queue groups: ' + e.message); }
+              } catch (e) { logMsg('warn', 'ensureFullMetadata', 'Queue groups', e.message); }
             }
           }
-        } catch (e) { console.warn('Queue members: ' + e.message); }
+        } catch (e) { logMsg('warn', 'ensureFullMetadata', 'Queue members', e.message); }
         // Clean empty arrays
         if (!queueData.queueMembers.users.length) delete queueData.queueMembers.users;
         if (!queueData.queueMembers.roles.length) delete queueData.queueMembers.roles;
@@ -3632,7 +3726,7 @@ async function ensureFullMetadata(comp) {
         comp._metadataLoaded = true;
         return;
       } catch (e) {
-        console.warn('ensureFullMetadata Queue: ' + e.message);
+        logMsg('warn', 'ensureFullMetadata', 'Queue overall', e.message);
         comp._metadataLoaded = true;
         return;
       }
@@ -3649,7 +3743,7 @@ async function ensureFullMetadata(comp) {
       comp.body = metadataJsonToXml(fields, comp.type);
       comp._metadataLoaded = true;
     } catch (e) {
-      console.warn('ensureFullMetadata SOQL(' + comp.type + '/' + comp.sfId + '): ' + e.message);
+      logMsg('warn', 'ensureFullMetadata', 'SOQL ' + comp.type + '/' + comp.sfId, e.message);
       comp._metadataLoaded = true;
     }
   }
@@ -3685,7 +3779,7 @@ async function fetchMetadata() {
     try {
       await fetchDescribeMetadata();
     } catch (e) {
-      console.warn('describeMetadata failed (using hardcoded defaults): ' + e.message);
+      logMsg('warn', 'fetchMetadata', 'describeMetadata failed — using hardcoded defaults', e.message);
     }
 
     // Enrich META_QUERIES path/ext from describeMetadata if available
@@ -3749,7 +3843,7 @@ async function fetchMetadata() {
               queryUrl = res.nextRecordsUrl || null;
             }
           } catch (e) {
-            console.warn(q.type + ': standard SOQL failed — ' + e.message);
+            logMsg('warn', 'fetchMetadata', q.type + ': standard SOQL failed', e.message);
             failedTypes.push({ type: q.type, label: q.label, error: e.message });
           }
         } else {
@@ -3783,9 +3877,9 @@ async function fetchMetadata() {
           }
         }
       } catch (e) {
-        console.warn('Skip ' + q.type + ': ' + e.message);
+        logMsg('warn', 'fetchMetadata', 'Skip ' + q.type, e.message);
         failedTypes.push({ type: q.type, label: q.label, error: e.message });
-        if (e.message.includes('401')) { sessionExpired = true; }
+        if (e.message.includes('401')) { sessionExpired = true; logMsg('error', 'fetchMetadata', 'Session expired (401)', 'Stopping further queries'); }
       }
     }
 
@@ -3810,7 +3904,7 @@ async function fetchMetadata() {
           comp.body = (jsFile && jsFile.Source) || (htmlFile && htmlFile.Source) || (res.records[0].Source || '');
           comp._primaryFile = (jsFile && jsFile.FilePath) || (htmlFile && htmlFile.FilePath) || res.records[0].FilePath || '';
         }
-      } catch (e) { console.warn('LWC resources skip ' + comp.name + ': ' + e.message); }
+      } catch (e) { logMsg('warn', 'fetchMetadata', 'LWC resources skip ' + comp.name, e.message); }
     }
 
     // Aura: fetch AuraDefinition for each bundle
@@ -3826,7 +3920,7 @@ async function fetchMetadata() {
           const ctrl = res.records.find(r => r.DefType === 'CONTROLLER');
           comp.body = (cmp && cmp.Source) || (ctrl && ctrl.Source) || (res.records[0].Source || '');
         }
-      } catch (e) { console.warn('Aura resources skip ' + comp.name + ': ' + e.message); }
+      } catch (e) { logMsg('warn', 'fetchMetadata', 'Aura resources skip ' + comp.name, e.message); }
     }
 
     // Fetch git tree for comparison
@@ -3836,6 +3930,7 @@ async function fetchMetadata() {
     metaCache.failedTypes = failedTypes;
     metaCache.queriedCount = activeTypes.length;
     metaCache.hasFetched = true;
+    logMsg('success', 'fetchMetadata', 'Fetch complete', components.length + ' components from ' + activeTypes.length + ' types' + (failedTypes.length ? ', ' + failedTypes.length + ' failed' : ''));
     renderMetadataView();
   } catch (e) {
     el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error fetching metadata: ' + esc(e.message) + '</p></div>';
@@ -3925,7 +4020,7 @@ async function fetchGitTreeForDiff(components) {
       }
     }
   } catch (e) {
-    console.warn('Git tree fetch failed: ' + e.message);
+    logMsg('warn', 'gitTree', 'Git tree fetch failed', e.message);
   }
 }
 
