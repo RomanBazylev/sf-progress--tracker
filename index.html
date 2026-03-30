@@ -2749,8 +2749,8 @@ let describeInFolder = new Set();    // xmlNames with inFolder=true
 let describeMetaFile = {};   // xmlName → boolean metaFile
 
 async function fetchDescribeMetadata() {
-  // Try sessionStorage cache first
-  const cacheKey = 'sf_describe_metadata_' + sfState.instance;
+  // Try sessionStorage cache first (v2 key invalidates pre-namespace-fix caches)
+  const cacheKey = 'sf_describe_v2_' + sfState.instance;
   try {
     const cached = sessionStorage.getItem(cacheKey);
     if (cached) {
@@ -2760,7 +2760,7 @@ async function fetchDescribeMetadata() {
       describeChildTypes = new Set(data.children);
       describeInFolder = new Set(data.inFolder);
       describeMetaFile = data.metaFile || {};
-      console.log('describeMetadata: restored from cache (' + Object.keys(data.dir).length + ' types)');
+      console.log('describeMetadata: restored from cache (' + Object.keys(data.dir).length + ' types, ' + data.children.length + ' children: ' + data.children.join(', ') + ')');
       return;
     }
   } catch (e) { /* cache miss */ }
@@ -2768,17 +2768,19 @@ async function fetchDescribeMetadata() {
   const doc = await sfSoapFetch(
     '<meta:describeMetadata><meta:asOfVersion>' + SF_API_VERSION + '</meta:asOfVersion></meta:describeMetadata>'
   );
-  const objects = doc.getElementsByTagName('metadataObjects');
+  // Use getElementsByTagNameNS('*', ...) for robust namespace handling
+  const getEl = (parent, tag) => parent.getElementsByTagNameNS ? parent.getElementsByTagNameNS('*', tag) : parent.getElementsByTagName(tag);
+  const objects = getEl(doc, 'metadataObjects');
   const dir = {}, suffix = {}, mf = {};
   const children = [], inFolder = [];
 
   for (let i = 0; i < objects.length; i++) {
     const obj = objects[i];
-    const xmlName = (obj.getElementsByTagName('xmlName')[0] || {}).textContent || '';
-    const dirName = (obj.getElementsByTagName('directoryName')[0] || {}).textContent || '';
-    const sfx = (obj.getElementsByTagName('suffix')[0] || {}).textContent || '';
-    const isInFolder = ((obj.getElementsByTagName('inFolder')[0] || {}).textContent || '') === 'true';
-    const hasMetaFile = ((obj.getElementsByTagName('metaFile')[0] || {}).textContent || '') === 'true';
+    const xmlName = ((getEl(obj, 'xmlName')[0] || {}).textContent || '').trim();
+    const dirName = ((getEl(obj, 'directoryName')[0] || {}).textContent || '').trim();
+    const sfx = ((getEl(obj, 'suffix')[0] || {}).textContent || '').trim();
+    const isInFolder = ((getEl(obj, 'inFolder')[0] || {}).textContent || '').trim() === 'true';
+    const hasMetaFile = ((getEl(obj, 'metaFile')[0] || {}).textContent || '').trim() === 'true';
 
     if (xmlName) {
       if (dirName) dir[xmlName] = dirName;
@@ -2789,10 +2791,10 @@ async function fetchDescribeMetadata() {
 
     // Collect child types ONLY from CustomObject (these go under objects/{Obj}/)
     // Other parents (Workflow, SharingRules, etc.) have children too but different path logic
-    const childNodes = obj.getElementsByTagName('childXmlNames');
     if (xmlName === 'CustomObject') {
+      const childNodes = getEl(obj, 'childXmlNames');
       for (let j = 0; j < childNodes.length; j++) {
-        const childName = childNodes[j].textContent;
+        const childName = (childNodes[j].textContent || '').trim();
         if (childName) children.push(childName);
       }
     }
@@ -2809,7 +2811,7 @@ async function fetchDescribeMetadata() {
     sessionStorage.setItem(cacheKey, JSON.stringify({ dir, suffix, children, inFolder, metaFile: mf }));
   } catch (e) { /* quota exceeded — ignore */ }
 
-  console.log('describeMetadata: fetched ' + Object.keys(dir).length + ' types, ' + children.length + ' child types');
+  console.log('describeMetadata: fetched ' + Object.keys(dir).length + ' types, ' + children.length + ' children: ' + children.join(', '));
 }
 
 async function fetchSfUser() {
@@ -3392,7 +3394,8 @@ function buildSfdxPath(typeName, displayName, qPath, ext) {
   const compName = hasObject ? displayName.substring(dotIdx + 1) : displayName;
 
   // Object-child types → objects/{Obj}/{childFolder}/{Name}{ext}
-  const isChild = describeChildTypes.size ? describeChildTypes.has(typeName) : !!OBJECT_CHILD_FOLDERS[typeName];
+  // Use || so hardcoded OBJECT_CHILD_FOLDERS always works as guaranteed fallback
+  const isChild = describeChildTypes.has(typeName) || !!OBJECT_CHILD_FOLDERS[typeName];
   if (isChild && hasObject) {
     const childFolder = describeTypeDir[typeName] || OBJECT_CHILD_FOLDERS[typeName] || qPath;
     return 'objects/' + objName + '/' + childFolder + '/' + compName + ext;
