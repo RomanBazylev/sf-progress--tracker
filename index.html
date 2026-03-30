@@ -937,6 +937,11 @@ function renderProjectList() {
 
 function esc(s) { const d = document.createElement('div'); d.textContent = s; return d.innerHTML; }
 
+// Safe sessionStorage wrappers (private browsing may throw)
+function safeSsGet(key) { try { return sessionStorage.getItem(key); } catch { return null; } }
+function safeSsSet(key, val) { try { sessionStorage.setItem(key, val); } catch {} }
+function safeSsRemove(key) { try { sessionStorage.removeItem(key); } catch {} }
+
 /* ═══════════════════════════════════════════════════════
    CREATE PROJECT
    ═══════════════════════════════════════════════════════ */
@@ -1051,8 +1056,8 @@ function enterProject() {
   updateConnBadge();
   renderEnvList();
   if (projectData.pat && projectData.repo && projectData.envs.length) {
-    if (sessionStorage.getItem('sf_oauth_pending')) {
-      sessionStorage.removeItem('sf_oauth_pending');
+    if (safeSsGet('sf_oauth_pending')) {
+      safeSsRemove('sf_oauth_pending');
       showView('metadata');
     } else {
       showView('pipeline');
@@ -1081,8 +1086,8 @@ function lockProject() {
   metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false };
   metaFetchConfig = { types: META_DEFAULT_TYPES.slice(), datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' };
   repoBranches = [];
-  sessionStorage.removeItem('sf_token');
-  sessionStorage.removeItem('sf_instance');
+  safeSsRemove('sf_token');
+  safeSsRemove('sf_instance');
   document.getElementById('mainNav').style.display = 'none';
   document.getElementById('lockBtn').style.display = 'none';
   document.getElementById('helpBtn').style.display = 'none';
@@ -1217,6 +1222,7 @@ async function ghFetch(path, opts = {}) {
       try { const b = await res.json(); if (b.message) detail += ' — ' + b.message; } catch {}
       throw new Error(detail);
     }
+    if (res.status === 204) return null;
     return res.json();
   }
 }
@@ -1414,6 +1420,7 @@ async function refreshData() {
     if (refreshTimer) clearInterval(refreshTimer);
     refreshTimer = setInterval(refreshData, 120000);
   } catch (e) {
+    logMsg('error', 'refreshData', 'Pipeline refresh failed', e.message);
     document.getElementById('pipelineContent').innerHTML =
       '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error loading data: ' + esc(e.message) + '</p></div>';
   }
@@ -1777,6 +1784,8 @@ async function batchPromote() {
   if (!confirm('Promote (merge) ' + nums.length + ' PR(s)?\n\n' + nums.map(n => '#' + n).join(', ') + '\n\nThis will merge them sequentially.')) return;
 
   isPromoting = true;
+  // Immediately disable the button in the DOM
+  document.querySelectorAll('[onclick*="batchPromote"]').forEach(b => { b.disabled = true; b.textContent = '⏳ Promoting...'; });
   const results = [];
   for (const num of nums) {
     try {
@@ -1925,6 +1934,11 @@ async function createReleasePr(envIndex) {
   const selected = releasable.filter(pr => releaseSelected.has(pr.number));
   const prsToRelease = selected.length ? selected : releasable;
 
+  // Confirmation when auto-including all PRs (none explicitly selected)
+  if (!selected.length && releasable.length > 1) {
+    if (!confirm('No PRs explicitly selected. Create release with all ' + releasable.length + ' releasable PRs?')) return;
+  }
+
   const branchName = document.getElementById('releaseBranchName').value.trim();
   const prTitle = document.getElementById('releaseTitle').value.trim();
   const progressEl = document.getElementById('releaseProgress');
@@ -2041,8 +2055,11 @@ async function createReleasePr(envIndex) {
     // Check results
     const failedPicks = cherryResults.filter(r => !r.ok);
     if (failedPicks.length === prsToRelease.length) {
-      updProg('✕ All cherry-picks failed. Branch "' + esc(branchName) + '" was created but has no changes.<br>' +
+      // All cherry-picks failed — delete the orphaned branch
+      try { await ghFetch('/repos/' + repo + '/git/refs/heads/' + encodeURIComponent(branchName), { method: 'DELETE' }); } catch {}
+      updProg('✕ All cherry-picks failed. Branch "' + esc(branchName) + '" was deleted.<br>' +
         failedPicks.map(r => '#' + r.num + ': ' + esc(r.err)).join('<br>'), 'error');
+      logMsg('error', 'createReleasePr', 'All cherry-picks failed, branch deleted', branchName);
       isCreatingRelease = false;
       btn.disabled = false;
       btn.textContent = '🚀 Create Release PR';
@@ -2730,10 +2747,12 @@ function sfOAuthLogin(envIdx) {
     projectData.sfClientId = clientId;
     persistProject();
   }
-  sessionStorage.setItem('sf_instance_pending', instance);
-  sessionStorage.setItem('sf_oauth_pending', '1');
-  sessionStorage.setItem('sf_oauth_project_idx', String(currentProjectIndex));
-  if (envIdx !== undefined) sessionStorage.setItem('sf_oauth_env_idx', String(envIdx));
+  try {
+    sessionStorage.setItem('sf_instance_pending', instance);
+    sessionStorage.setItem('sf_oauth_pending', '1');
+    sessionStorage.setItem('sf_oauth_project_idx', String(currentProjectIndex));
+    if (envIdx !== undefined) sessionStorage.setItem('sf_oauth_env_idx', String(envIdx));
+  } catch {}
 
   const redirect = location.origin + location.pathname;
   const url = instance + '/services/oauth2/authorize'
@@ -2753,13 +2772,14 @@ function handleSfOAuthCallback() {
   const params = new URLSearchParams(hash);
   const accessToken = params.get('access_token');
   const instanceUrl = params.get('instance_url');
-  const pendingInstance = sessionStorage.getItem('sf_instance_pending');
+  let pendingInstance;
+  try { pendingInstance = sessionStorage.getItem('sf_instance_pending'); } catch {}
 
   history.replaceState({}, '', location.pathname);
 
   if (params.get('error')) {
     const desc = decodeURIComponent(params.get('error_description') || params.get('error'));
-    sessionStorage.setItem('sf_oauth_error', desc);
+    try { sessionStorage.setItem('sf_oauth_error', desc); } catch {}
     return;
   }
 
@@ -2767,35 +2787,42 @@ function handleSfOAuthCallback() {
 
   sfState.token = accessToken;
   sfState.instance = instanceUrl || pendingInstance || '';
-  const envIdx = sessionStorage.getItem('sf_oauth_env_idx');
-  sfState.envIndex = envIdx !== null ? parseInt(envIdx) : -1;
-  sessionStorage.setItem('sf_token', accessToken);
-  sessionStorage.setItem('sf_instance', sfState.instance);
-  sessionStorage.setItem('sf_env_index', String(sfState.envIndex));
-  sessionStorage.removeItem('sf_instance_pending');
-  sessionStorage.removeItem('sf_oauth_env_idx');
+  let envIdx;
+  try { envIdx = sessionStorage.getItem('sf_oauth_env_idx'); } catch {}
+  sfState.envIndex = envIdx !== null && envIdx !== undefined ? parseInt(envIdx) : -1;
+  try {
+    sessionStorage.setItem('sf_token', accessToken);
+    sessionStorage.setItem('sf_instance', sfState.instance);
+    sessionStorage.setItem('sf_env_index', String(sfState.envIndex));
+    sessionStorage.removeItem('sf_instance_pending');
+    sessionStorage.removeItem('sf_oauth_env_idx');
+  } catch {}
   toast('Connected to Salesforce','ok');
 }
 
 function restoreSfSession() {
-  const token = sessionStorage.getItem('sf_token');
-  const instance = sessionStorage.getItem('sf_instance');
-  if (token && instance) {
-    sfState.token = token;
-    sfState.instance = instance;
-    const envIdx = sessionStorage.getItem('sf_env_index');
-    sfState.envIndex = envIdx !== null ? parseInt(envIdx) : -1;
-    return true;
-  }
+  try {
+    const token = sessionStorage.getItem('sf_token');
+    const instance = sessionStorage.getItem('sf_instance');
+    if (token && instance) {
+      sfState.token = token;
+      sfState.instance = instance;
+      const envIdx = sessionStorage.getItem('sf_env_index');
+      sfState.envIndex = envIdx !== null ? parseInt(envIdx) : -1;
+      return true;
+    }
+  } catch {}
   return false;
 }
 
 function sfDisconnect() {
   sfState = { token: null, instance: null, user: null, envIndex: -1 };
   metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false, failedTypes: [], queriedCount: 0 };
-  sessionStorage.removeItem('sf_token');
-  sessionStorage.removeItem('sf_instance');
-  sessionStorage.removeItem('sf_env_index');
+  try {
+    sessionStorage.removeItem('sf_token');
+    sessionStorage.removeItem('sf_instance');
+    sessionStorage.removeItem('sf_env_index');
+  } catch {}
   renderMetadataView();
 }
 
@@ -2974,11 +3001,11 @@ function renderMetadataView() {
       if (elProxy && projectData.sfCorsProxy) elProxy.value = projectData.sfCorsProxy;
     }
     // Show stored error from OAuth redirect
-    const err = sessionStorage.getItem('sf_oauth_error');
+    const err = safeSsGet('sf_oauth_error');
     if (err) {
       const statusEl = document.getElementById('sfConnStatus');
       if (statusEl) statusEl.innerHTML = '<div class="meta-status err">✕ ' + esc(err) + '</div>';
-      sessionStorage.removeItem('sf_oauth_error');
+      safeSsRemove('sf_oauth_error');
     }
     return;
   }
@@ -4406,15 +4433,15 @@ handleSfOAuthCallback();
 renderProjectList();
 
 // Auto-open unlock modal if returning from SF OAuth redirect
-if (sessionStorage.getItem('sf_oauth_pending')) {
-  const idx = parseInt(sessionStorage.getItem('sf_oauth_project_idx'));
+if (safeSsGet('sf_oauth_pending')) {
+  const idx = parseInt(safeSsGet('sf_oauth_project_idx'));
   if (!isNaN(idx) && idx >= 0) {
     const projects = getProjects();
     if (projects[idx]) {
       openUnlockModal(idx);
     }
   }
-  sessionStorage.removeItem('sf_oauth_project_idx');
+  safeSsRemove('sf_oauth_project_idx');
 }
 </script>
 </body>
