@@ -2219,6 +2219,22 @@ async function createReleasePr(envIndex) {
     toast('Promote PR #' + newPr.number + ' created — <a href="' + esc(newPr.html_url) + '" target="_blank" style="color:inherit;text-decoration:underline">open PR ↗</a>', 'ok', 15000);
     releaseSelected.clear();
     setBtn('✓ Created', true);
+
+    // Aggregate post-deploy checklists from source PRs into the new promote PR
+    const aggregated = [];
+    prsToRelease.forEach(pr => {
+      const items = (projectData.checklists && projectData.checklists[pr.number]) || [];
+      items.forEach(item => {
+        aggregated.push({ text: '[#' + pr.number + '] ' + item.text, done: false });
+      });
+    });
+    if (aggregated.length) {
+      if (!projectData.checklists) projectData.checklists = {};
+      projectData.checklists[newPr.number] = aggregated;
+      persistProject();
+      logMsg('info', 'createReleasePr', 'Aggregated ' + aggregated.length + ' post-deploy steps from ' + prsToRelease.length + ' PRs into #' + newPr.number);
+    }
+
     notifyUser('Promote Complete', 'PR #' + newPr.number + ' created — ' + okCount + '/' + prsToRelease.length + ' changes');
 
     // Refresh data so the released PRs disappear from the Release tab
@@ -2663,8 +2679,9 @@ function getChecklist(prNum) {
 }
 
 function renderPostDeployChecklist(pr) {
-  if (!pr.merged_at) return '';
   const items = getChecklist(pr.number);
+  // Show checklist for merged PRs always, and for open PRs if they already have items (e.g. aggregated from promote)
+  if (!pr.merged_at && !items.length) return '';
   let html = '<div class="sp-section"><div class="sp-section-title">Post-Deploy Checklist</div><div class="sp-checklist">';
   items.forEach((item, i) => {
     const doneCls = item.done ? ' done' : '';

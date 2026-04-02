@@ -62,7 +62,7 @@
     - Fallback: Case number pattern matching → constructs URL from base URL
     - GitHub issue references (#123)
   - Promote button (open PRs) — merge via GitHub API
-  - Post-deploy checklist (merged PRs) — custom checkbox items
+  - Post-deploy checklist (merged PRs, and open PRs with existing items) — custom checkbox items
 
 ### 2.5 Batch Operations
 - **Select multiple open PRs** via checkboxes on PR cards
@@ -96,6 +96,7 @@
 - **Comprehensive logging** — `logMsg()` at every step: operation start, branch resolve, branch create, each cherry-pick result, file-level skips, PR creation, final summary, errors
 - **Error handling** — branch already exists (422), merge conflicts (409 per-PR), protected branch check; `try/finally` guarantees `isCreatingRelease` flag reset
 - **Completion notifications** — `notifyUser()` on both success and failure; toast with 15s duration
+- **Post-deploy checklist aggregation** — after promote PR is created, all post-deploy checklist items from source PRs are copied into the new PR's checklist (prefixed with `[#sourceNum]`, reset to unchecked); visible immediately on the open promote PR
 - **Post-release** — clears selection, refreshes data so released PRs no longer appear in Release tab
 
 ### 2.7 Metadata Tab (Salesforce Integration)
