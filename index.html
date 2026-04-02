@@ -386,6 +386,12 @@ input,select{font-family:inherit}
 .release-progress.success{background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green)}
 .release-progress.error{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
 .release-progress.warn{background:color-mix(in srgb,var(--yellow) 12%,transparent);color:var(--yellow)}
+.release-progress-trail{display:flex;flex-direction:column;gap:4px;margin-top:8px}
+.release-progress-trail .trail-step{font-size:12px;padding:6px 12px;border-radius:6px}
+.release-progress-trail .trail-step.done{background:color-mix(in srgb,var(--green) 8%,transparent);color:var(--green)}
+.release-progress-trail .trail-step.active{background:color-mix(in srgb,var(--blue) 12%,transparent);color:var(--blue);font-weight:600}
+.release-progress-trail .trail-step.fail{background:color-mix(in srgb,var(--red) 8%,transparent);color:var(--red)}
+.release-progress-trail .trail-step.warn{background:color-mix(in srgb,var(--yellow) 8%,transparent);color:var(--yellow)}
 .release-included{font-size:12px;color:var(--muted);margin-top:4px}
 .release-included ul{margin:4px 0 0 16px;list-style:disc}
 .release-included li{margin:2px 0}
@@ -852,6 +858,7 @@ let batchSelected = new Set();
 let isPromoting = false;
 let releaseSelected = new Set();
 let isCreatingRelease = false;
+let releaseProgressSteps = []; // State-backed progress trail for release/promote operations
 let isFetchingMeta = false;
 
 // Salesforce metadata state
@@ -1106,6 +1113,7 @@ function lockProject() {
   batchSelected = new Set();
   releaseSelected = new Set();
   isCreatingRelease = false;
+  releaseProgressSteps = [];
   isFetchingMeta = false;
   // Reset Salesforce & metadata state to prevent cross-project bleed
   sfState = { token: null, instance: null, user: null };
@@ -1392,6 +1400,8 @@ async function autoDetectEnvs() {
    ═══════════════════════════════════════════════════════ */
 async function refreshData() {
   if (!projectData || !projectData.pat || !projectData.repo || !projectData.envs.length) return;
+  // Skip auto-refresh while long operations are in flight — prevents DOM invalidation
+  if (isCreatingRelease || isPromoting) { logMsg('info', 'refreshData', 'Skipped — operation in progress'); return; }
   const btn = document.getElementById('refreshBtn');
   btn.disabled = true; btn.textContent = '⟳ Loading...';
   try {
@@ -1815,31 +1825,37 @@ async function batchPromote() {
   if (!confirm('Promote (merge) ' + nums.length + ' PR(s)?\n\n' + nums.map(n => '#' + n).join(', ') + '\n\nThis will merge them sequentially. Failed PRs will be skipped.')) return;
 
   isPromoting = true;
+  logMsg('info', 'batchPromote', 'Starting batch promote: ' + nums.length + ' PRs', nums.map(n => '#' + n).join(', '));
   // Immediately disable the button in the DOM
   document.querySelectorAll('[onclick*="batchPromote"]').forEach(b => { b.disabled = true; b.textContent = '⏳ Promoting...'; });
   const results = [];
-  for (let i = 0; i < nums.length; i++) {
-    const num = nums[i];
-    // Update floating progress
-    document.querySelectorAll('[onclick*="batchPromote"]').forEach(b => { b.textContent = '⏳ ' + (i + 1) + '/' + nums.length + '...'; });
-    try {
-      await promotePr(num, false);
-      results.push({ num, ok: true });
-    } catch (e) {
-      results.push({ num, ok: false, err: e.message });
-      logMsg('warn', 'batchPromote', 'PR #' + num + ' failed, skipping', e.message);
-      // Continue to next PR instead of stopping
+  try {
+    for (let i = 0; i < nums.length; i++) {
+      const num = nums[i];
+      // Update floating progress
+      document.querySelectorAll('[onclick*="batchPromote"]').forEach(b => { b.textContent = '⏳ ' + (i + 1) + '/' + nums.length + '...'; });
+      try {
+        await promotePr(num, false);
+        results.push({ num, ok: true });
+        logMsg('success', 'batchPromote', 'PR #' + num + ' merged', (i + 1) + '/' + nums.length);
+      } catch (e) {
+        results.push({ num, ok: false, err: e.message });
+        logMsg('warn', 'batchPromote', 'PR #' + num + ' failed, skipping', e.message);
+        // Continue to next PR instead of stopping
+      }
     }
+    batchSelected.clear();
+    await refreshData();
+  } finally {
+    isPromoting = false;
   }
-  batchSelected.clear();
-  await refreshData();
-  isPromoting = false;
 
   const ok = results.filter(r => r.ok).length;
   const fail = results.filter(r => !r.ok);
   let msg = ok + '/' + results.length + ' PR(s) promoted successfully.';
   if (fail.length) msg += '\n\nSkipped (failed):\n' + fail.map(r => '#' + r.num + ': ' + r.err).join('\n');
   if (fail.length) toast(msg,'warn',6000); else toast(msg,'ok');
+  logMsg(fail.length ? 'warn' : 'success', 'batchPromote', 'Batch complete: ' + ok + '/' + results.length + ' succeeded', fail.length ? fail.map(r => '#' + r.num).join(', ') + ' failed' : '');
   notifyUser('Batch Promote Complete', ok + '/' + results.length + ' PRs merged' + (fail.length ? ', ' + fail.length + ' failed' : ''));
 }
 
@@ -1957,8 +1973,16 @@ function renderReleaseForm(envIndex) {
   html += `<button class="btn" onclick="releaseClear()">Clear Selection</button>`;
   html += '</div>';
 
-  // Progress area
-  html += '<div id="releaseProgress"></div>';
+  // Progress area — rebuild from state if operation is in flight
+  html += '<div id="releaseProgress">';
+  if (isCreatingRelease && releaseProgressSteps.length) {
+    html += '<div class="release-progress-trail">';
+    releaseProgressSteps.forEach(s => {
+      html += '<div class="trail-step ' + s.cls + '">' + s.text + '</div>';
+    });
+    html += '</div>';
+  }
+  html += '</div>';
 
   html += '</div>';
   return html;
@@ -1967,6 +1991,37 @@ function renderReleaseForm(envIndex) {
 /* ═══════════════════════════════════════════════════════
    CREATE RELEASE PR (cherry-pick via Merge API)
    ═══════════════════════════════════════════════════════ */
+
+// Render the full progress trail from releaseProgressSteps into the DOM
+function renderReleaseTrail() {
+  const el = document.getElementById('releaseProgress');
+  if (!el || !releaseProgressSteps.length) return;
+  let html = '<div class="release-progress-trail">';
+  releaseProgressSteps.forEach(s => {
+    html += '<div class="trail-step ' + s.cls + '">' + s.text + '</div>';
+  });
+  html += '</div>';
+  el.innerHTML = html;
+}
+
+// Add a step to the trail and render it
+function trailStep(text, cls) {
+  releaseProgressSteps.push({ text, cls });
+  renderReleaseTrail();
+}
+
+// Update the last step in-place (e.g. "picking 2/3..." → "picking 3/3...")
+function trailUpdateLast(text, cls) {
+  if (releaseProgressSteps.length) {
+    const last = releaseProgressSteps[releaseProgressSteps.length - 1];
+    last.text = text;
+    last.cls = cls;
+  } else {
+    releaseProgressSteps.push({ text, cls });
+  }
+  renderReleaseTrail();
+}
+
 async function createReleasePr(envIndex) {
   const env = projectData.envs[envIndex];
   const nextEnv = projectData.envs[envIndex + 1];
@@ -1981,8 +2036,6 @@ async function createReleasePr(envIndex) {
 
   const branchName = document.getElementById('releaseBranchName').value.trim();
   const prTitle = document.getElementById('releaseTitle').value.trim();
-  const progressEl = document.getElementById('releaseProgress');
-  const btn = document.getElementById('releaseBtn');
 
   if (!branchName) { toast('Enter a branch name', 'warn'); return; }
   if (!prTitle) { toast('Enter a PR title', 'warn'); return; }
@@ -1990,50 +2043,64 @@ async function createReleasePr(envIndex) {
   if (!prsToRelease.length) { toast('No PRs to release', 'warn'); return; }
 
   isCreatingRelease = true;
-  btn.disabled = true;
-  btn.textContent = '⏳ Creating...';
-  const updProg = (text, cls) => { progressEl.innerHTML = '<div class="release-progress ' + cls + '">' + text + '</div>'; };
+  releaseProgressSteps = [];
+  // Use live DOM queries — elements may be re-rendered by auto-refresh
+  const setBtn = (text, disabled) => {
+    const b = document.getElementById('releaseBtn');
+    if (b) { b.textContent = text; b.disabled = disabled; }
+  };
+  setBtn('⏳ Creating...', true);
   const repo = projectData.repo;
   const prBody = getReleaseBodySuggestion(envIndex);
 
+  logMsg('info', 'createReleasePr', 'Starting promote: ' + prsToRelease.length + ' PRs → ' + nextEnv.displayName, branchName);
+
   try {
     // Step 1: Get target branch HEAD SHA
-    updProg('🔍 Resolving ' + esc(nextEnv.branch) + ' branch...', 'loading');
+    trailStep('🔍 Resolving ' + esc(nextEnv.branch) + ' branch...', 'active');
     const refData = await ghFetch('/repos/' + repo + '/git/ref/heads/' + encodeURIComponent(nextEnv.branch));
     const targetSha = refData.object.sha;
+    trailUpdateLast('✓ Resolved ' + esc(nextEnv.branch) + ' (' + targetSha.slice(0, 7) + ')', 'done');
+    logMsg('info', 'createReleasePr', 'Target branch resolved', nextEnv.branch + ' → ' + targetSha.slice(0, 7));
 
     // Step 2: Create release branch from target
-    updProg('🌿 Creating branch ' + esc(branchName) + '...', 'loading');
+    trailStep('🌿 Creating branch ' + esc(branchName) + '...', 'active');
     try {
       await ghFetch('/repos/' + repo + '/git/refs', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ ref: 'refs/heads/' + branchName, sha: targetSha })
       });
+      trailUpdateLast('✓ Branch ' + esc(branchName) + ' created', 'done');
+      logMsg('success', 'createReleasePr', 'Branch created', branchName);
     } catch (e) {
       if (e.message && e.message.includes('422')) {
-        updProg('✕ Branch "' + esc(branchName) + '" already exists. Choose a different name.', 'error');
+        trailUpdateLast('✕ Branch "' + esc(branchName) + '" already exists. Choose a different name.', 'fail');
+        logMsg('error', 'createReleasePr', 'Branch already exists', branchName);
+        setBtn('🚀 Create Promote PR', false);
         isCreatingRelease = false;
-        btn.disabled = false;
-        btn.textContent = '🚀 Create Release PR';
         return;
       }
       throw e;
     }
 
     // Step 3: Cherry-pick each PR using Git Data API
-    // For each PR: fetch changed files, get their content from source env branch,
-    // and commit them onto the release branch (blob → tree → commit)
     const cherryResults = [];
     let currentBranchSha = targetSha;
 
     for (let i = 0; i < prsToRelease.length; i++) {
       const pr = prsToRelease[i];
-      updProg('🍒 Cherry-picking ' + (i + 1) + '/' + prsToRelease.length + ': #' + pr.number + ' ' + esc(pr.title) + '...', 'loading');
+      const label = (i + 1) + '/' + prsToRelease.length + ': #' + pr.number + ' ' + esc(pr.title);
+      trailStep('🍒 Cherry-picking ' + label + '...', 'active');
       try {
         // 3a: Get files changed in this PR
         const prFiles = await ghFetchAll('/repos/' + repo + '/pulls/' + pr.number + '/files');
-        if (!prFiles.length) { cherryResults.push({ num: pr.number, ok: true, note: 'no files' }); continue; }
+        if (!prFiles.length) {
+          cherryResults.push({ num: pr.number, ok: true, note: 'no files' });
+          trailUpdateLast('✓ #' + pr.number + ' — no files changed', 'done');
+          logMsg('info', 'createReleasePr', 'PR #' + pr.number + ' skipped (no files)', '');
+          continue;
+        }
 
         // 3b: Get current commit's tree on release branch
         const currentCommit = await ghFetch('/repos/' + repo + '/git/commits/' + currentBranchSha);
@@ -2041,6 +2108,7 @@ async function createReleasePr(envIndex) {
 
         // 3c: For each file, get content from source env branch
         const treeItems = [];
+        let skippedFiles = 0;
         for (const file of prFiles) {
           if (file.status === 'removed') {
             treeItems.push({ path: file.filename, mode: '100644', type: 'blob', sha: null });
@@ -2053,12 +2121,25 @@ async function createReleasePr(envIndex) {
                 try {
                   const content = await ghFetch('/repos/' + repo + '/contents/' + encodeURIComponent(file.filename) + '?ref=' + pr.merge_commit_sha);
                   treeItems.push({ path: file.filename, mode: file.mode || '100644', type: 'blob', sha: content.sha });
-                } catch { /* skip file */ }
+                } catch {
+                  skippedFiles++;
+                  logMsg('warn', 'createReleasePr', 'File skipped in PR #' + pr.number, file.filename);
+                }
+              } else {
+                skippedFiles++;
+                logMsg('warn', 'createReleasePr', 'File skipped in PR #' + pr.number, file.filename);
               }
             }
           }
+          // Update active step with file progress
+          trailUpdateLast('🍒 Cherry-picking ' + label + ' (' + treeItems.length + '/' + prFiles.length + ' files)...', 'active');
         }
-        if (!treeItems.length) { cherryResults.push({ num: pr.number, ok: true, note: 'no applicable files' }); continue; }
+        if (!treeItems.length) {
+          cherryResults.push({ num: pr.number, ok: true, note: 'no applicable files' });
+          trailUpdateLast('✓ #' + pr.number + ' — no applicable files', 'done');
+          logMsg('info', 'createReleasePr', 'PR #' + pr.number + ' skipped (no applicable files)', '');
+          continue;
+        }
 
         // 3d: Create new tree
         const newTree = await ghFetch('/repos/' + repo + '/git/trees', {
@@ -2087,8 +2168,13 @@ async function createReleasePr(envIndex) {
 
         currentBranchSha = newCommit.sha;
         cherryResults.push({ num: pr.number, ok: true });
+        const skipNote = skippedFiles ? ' (' + skippedFiles + ' files skipped)' : '';
+        trailUpdateLast('✓ #' + pr.number + ' — ' + treeItems.length + ' files applied' + skipNote, 'done');
+        logMsg('success', 'createReleasePr', 'Cherry-picked PR #' + pr.number, treeItems.length + ' files, ' + (i + 1) + '/' + prsToRelease.length);
       } catch (e) {
         cherryResults.push({ num: pr.number, ok: false, err: e.message });
+        trailUpdateLast('✕ #' + pr.number + ' failed: ' + esc(e.message), 'fail');
+        logMsg('warn', 'createReleasePr', 'Cherry-pick failed for PR #' + pr.number, e.message);
       }
     }
 
@@ -2097,17 +2183,15 @@ async function createReleasePr(envIndex) {
     if (failedPicks.length === prsToRelease.length) {
       // All cherry-picks failed — delete the orphaned branch
       try { await ghFetch('/repos/' + repo + '/git/refs/heads/' + encodeURIComponent(branchName), { method: 'DELETE' }); } catch {}
-      updProg('✕ All cherry-picks failed. Branch "' + esc(branchName) + '" was deleted.<br>' +
-        failedPicks.map(r => '#' + r.num + ': ' + esc(r.err)).join('<br>'), 'error');
+      trailStep('✕ All cherry-picks failed. Branch "' + esc(branchName) + '" deleted.', 'fail');
       logMsg('error', 'createReleasePr', 'All cherry-picks failed, branch deleted', branchName);
-      isCreatingRelease = false;
-      btn.disabled = false;
-      btn.textContent = '🚀 Create Release PR';
+      setBtn('🚀 Create Promote PR', false);
+      notifyUser('Promote Failed', 'All ' + prsToRelease.length + ' cherry-picks failed');
       return;
     }
 
     // Step 4: Create PR from release branch to target env
-    updProg('📝 Creating pull request...', 'loading');
+    trailStep('📝 Creating pull request...', 'active');
     const newPr = await ghFetch('/repos/' + repo + '/pulls', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2121,28 +2205,33 @@ async function createReleasePr(envIndex) {
 
     // Success
     const okCount = cherryResults.filter(r => r.ok).length;
-    let successMsg = '✓ Release PR <a href="' + esc(newPr.html_url) + '" target="_blank" rel="noopener noreferrer">#' + newPr.number + '</a> created! ' +
-      okCount + '/' + prsToRelease.length + ' changes cherry-picked into <code>' + esc(branchName) + '</code>.';
+    let successMsg = '✓ PR <a href="' + esc(newPr.html_url) + '" target="_blank" rel="noopener noreferrer">#' + newPr.number + '</a> created — ' +
+      okCount + '/' + prsToRelease.length + ' cherry-picked into <code>' + esc(branchName) + '</code>';
     if (failedPicks.length) {
-      successMsg += '<br>⚠️ Failed: ' + failedPicks.map(r => '#' + r.num + ' (' + esc(r.err) + ')').join(', ');
-      updProg(successMsg, 'warn');
+      successMsg += ' (⚠️ ' + failedPicks.length + ' failed)';
+      trailUpdateLast(successMsg, 'warn');
+      logMsg('warn', 'createReleasePr', 'Promote PR #' + newPr.number + ' created with ' + failedPicks.length + ' failures', branchName);
     } else {
-      updProg(successMsg, 'success');
+      trailUpdateLast(successMsg, 'done');
+      logMsg('success', 'createReleasePr', 'Promote PR #' + newPr.number + ' created', okCount + ' PRs cherry-picked into ' + branchName);
     }
 
-    toast('Release PR #' + newPr.number + ' created — <a href="' + esc(newPr.html_url) + '" target="_blank" style="color:inherit;text-decoration:underline">open PR ↗</a>', 'ok', 10000);
+    toast('Promote PR #' + newPr.number + ' created — <a href="' + esc(newPr.html_url) + '" target="_blank" style="color:inherit;text-decoration:underline">open PR ↗</a>', 'ok', 15000);
     releaseSelected.clear();
-    btn.textContent = '✓ Created';
+    setBtn('✓ Created', true);
+    notifyUser('Promote Complete', 'PR #' + newPr.number + ' created — ' + okCount + '/' + prsToRelease.length + ' changes');
 
     // Refresh data so the released PRs disappear from the Release tab
-    setTimeout(() => refreshData(), 2000);
+    setTimeout(() => refreshData(), 3000);
 
   } catch (e) {
-    updProg('✕ Release failed: ' + esc(e.message), 'error');
-    btn.disabled = false;
-    btn.textContent = '🚀 Create Release PR';
+    trailStep('✕ Promote failed: ' + esc(e.message), 'fail');
+    logMsg('error', 'createReleasePr', 'Promote failed', e.message);
+    setBtn('🚀 Create Promote PR', false);
+    notifyUser('Promote Failed', e.message);
+  } finally {
+    isCreatingRelease = false;
   }
-  isCreatingRelease = false;
 }
 
 /* ═══════════════════════════════════════════════════════

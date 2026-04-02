@@ -67,7 +67,10 @@
 ### 2.5 Batch Operations
 - **Select multiple open PRs** via checkboxes on PR cards
 - **Batch Promote** — merge all selected PRs sequentially
+- **Logging** — `logMsg()` on start, per-PR success/failure, and final summary
+- **`try/finally` safety** — `isPromoting` flag always reset even on unexpected errors
 - Progress toast showing success/failure count
+- Browser notification via `notifyUser()` on completion
 
 ### 2.6 Release Tab (Cherry-pick to Next Environment)
 - **Release tab** appears on env panel for non-last environments with releasable merged PRs
@@ -83,8 +86,16 @@
   2. Create release branch from target (e.g., master)
   3. Merge each selected feature's commit SHA into release branch via GitHub Merges API
   4. Create PR from release branch to target env branch
-- **Progress indicators** — step-by-step: creating branch → merging 1/N → creating PR → done
-- **Error handling** — branch already exists (422), merge conflicts (409 per-PR), protected branch check
+- **Progress trail** — state-backed `releaseProgressSteps[]` array renders full step-by-step trail (not just current step):
+  - Each completed step stays visible (✓ Resolved branch, ✓ Branch created, ✓ #42 — 5 files applied...)
+  - Active step updates in-place with file-level progress (🍒 Cherry-picking 2/3: #45... (12/18 files))
+  - Failed steps shown inline (✕ #50 failed: merge conflict)
+  - Trail survives DOM re-renders — `renderReleaseForm()` rebuilds from `releaseProgressSteps` state
+- **Auto-refresh guard** — `refreshData()` skips when `isCreatingRelease || isPromoting` to prevent DOM invalidation
+- **Resilient DOM references** — all button/progress updates use live `getElementById()` queries, not cached references
+- **Comprehensive logging** — `logMsg()` at every step: operation start, branch resolve, branch create, each cherry-pick result, file-level skips, PR creation, final summary, errors
+- **Error handling** — branch already exists (422), merge conflicts (409 per-PR), protected branch check; `try/finally` guarantees `isCreatingRelease` flag reset
+- **Completion notifications** — `notifyUser()` on both success and failure; toast with 15s duration
 - **Post-release** — clears selection, refreshes data so released PRs no longer appear in Release tab
 
 ### 2.7 Metadata Tab (Salesforce Integration)
@@ -191,6 +202,7 @@ Salesforce ──┐
 | `batchSelected` | Set | PR numbers selected for batch promote |
 | `releaseSelected` | Set | PR numbers selected for release to next env |
 | `isCreatingRelease` | boolean | Lock flag during release PR creation |
+| `releaseProgressSteps` | array | State-backed progress trail: `[{ text, cls }]` — survives DOM re-renders |
 
 ---
 
@@ -226,8 +238,11 @@ Salesforce ──┐
 | `getReleaseBranchSuggestion()` | Auto-generate branch name: `release/<head-ref>` or `release/YYYY-MM-DD` |
 | `getReleaseTitleSuggestion(envIdx)` | Auto-generate PR title based on selection |
 | `getReleaseBodySuggestion(envIdx)` | Auto-generate PR body with included changes list |
-| `renderReleaseForm(envIdx)` | Release form: target env, branch name, title, included PRs, create button |
-| `createReleasePr(envIdx)` | Create branch from target → merge feature SHAs → create PR via GitHub API |
+| `renderReleaseForm(envIdx)` | Release form: target env, branch name, title, included PRs, create button; rebuilds progress trail from `releaseProgressSteps` state |
+| `renderReleaseTrail()` | Render full progress trail from `releaseProgressSteps[]` into `#releaseProgress` DOM |
+| `trailStep(text, cls)` | Append a new step to the trail and render |
+| `trailUpdateLast(text, cls)` | Update the last trail step in-place (e.g., file progress counter) |
+| `createReleasePr(envIdx)` | Create branch from target → cherry-pick PRs → create PR; state-backed progress trail + comprehensive logging |
 
 ### Metadata
 | Function | Purpose |
@@ -301,7 +316,10 @@ Two themes: `dark` (default) and `light`, toggled via `data-theme` attribute on 
 - **401 session detection** — early exit on first 401, shows "Session Expired" card with Reconnect button
 - **Debounced search** — pipeline search and metadata filter inputs use 150ms debounce to avoid excessive re-renders
 - **Persistent type selection** — `metaFetchConfig.types` saved to encrypted project data via `projectData.metaFetchTypes`, restored on project unlock
-- **`isPromoting` / `isCreatingRelease`** — lock flags prevent concurrent batch/release operations
+- **`isPromoting` / `isCreatingRelease`** — lock flags prevent concurrent batch/release operations; reset via `try/finally` to prevent stuck states on unexpected errors
+- **Auto-refresh guard** — `refreshData()` returns early when `isCreatingRelease || isPromoting` to prevent DOM invalidation during long-running operations
+- **State-backed progress trail** — `releaseProgressSteps[]` array survives DOM re-renders; `renderReleaseForm()` rebuilds trail from state; live `getElementById()` queries instead of cached references
+- **Comprehensive logging** — `createReleasePr()` and `batchPromote()` log every step (start, per-PR result, file skips, completion) via `logMsg()` for in-app Logs tab visibility
 - **`_origPath` / `_origExt`** — prevents stale META_QUERIES mutation when switching orgs
 - **sessionStorage cache** for describeMetadata — avoids redundant SOAP calls within a session
 
