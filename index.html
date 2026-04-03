@@ -1209,6 +1209,20 @@ function lockProject() {
   repoBranches = [];
   safeSsRemove('sf_token');
   safeSsRemove('sf_instance');
+  // Clear Compare & Deploy state to prevent cross-project bleed
+  Object.keys(cdConnections).forEach(k => { safeSsRemove('cd_token_' + k); safeSsRemove('cd_instance_' + k); });
+  cdConnections = {};
+  safeSsRemove('cd_oauth_pending');
+  safeSsRemove('cd_oauth_env_idx');
+  cdState = {
+    sourceType: 'org', targetType: 'org', sourceEnvIdx: -1, targetEnvIdx: -1,
+    sourceBranch: '', targetBranch: '',
+    types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC','Flow','CustomObject','CustomField'],
+    datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '',
+    phase: 'config', results: [], progress: { current: 0, total: 0, message: '' },
+    deploySteps: [], resultsFilter: 'all', resultsTypeFilter: '', resultsSearch: '',
+    isComparing: false, isDeploying: false, _deployCancelled: false, _fetchErrors: []
+  };
   document.getElementById('mainNav').style.display = 'none';
   document.getElementById('lockBtn').style.display = 'none';
   document.getElementById('helpBtn').style.display = 'none';
