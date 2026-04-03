@@ -4821,7 +4821,7 @@ function renderCompareDeployView() {
     safeSsRemove('cd_oauth_env_idx');
     if (envIdx >= 0 && sfState.token) {
       cdSetConn(envIdx, sfState.token, sfState.instance);
-      cdFetchUser(cdConnections[envIdx]);
+      cdFetchUser(cdConnections[envIdx]).then(() => renderCompareDeployView());
     }
   }
 
@@ -4968,8 +4968,15 @@ function cdGroupMetaTypes() {
 
 // ── Event Handlers ──
 function cdSetSideType(side, val) {
-  if (side === 'source') cdState.sourceType = val;
-  else cdState.targetType = val;
+  if (side === 'source') {
+    cdState.sourceType = val;
+    if (val === 'org') cdState.sourceBranch = '';
+    else cdState.sourceEnvIdx = -1;
+  } else {
+    cdState.targetType = val;
+    if (val === 'org') cdState.targetBranch = '';
+    else cdState.targetEnvIdx = -1;
+  }
   renderCompareDeployView();
 }
 function cdSetSideEnv(side, idx) {
@@ -5053,6 +5060,7 @@ async function cdRunComparison() {
     const sourceComps = {};
     if (cdState.sourceType === 'org') {
       const conn = cdGetConn(cdState.sourceEnvIdx);
+      if (!conn) throw new Error('Source org not connected — please reconnect and try again');
       for (const q of activeQueries) {
         updateProgress('Source: Fetching ' + q.label + '...');
         const items = await cdFetchTypeFromOrg(conn, q);
@@ -5070,6 +5078,7 @@ async function cdRunComparison() {
     const targetComps = {};
     if (cdState.targetType === 'org') {
       const conn = cdGetConn(cdState.targetEnvIdx);
+      if (!conn) throw new Error('Target org not connected — please reconnect and try again');
       for (const q of activeQueries) {
         updateProgress('Target: Fetching ' + q.label + '...');
         const items = await cdFetchTypeFromOrg(conn, q);
@@ -5124,6 +5133,7 @@ async function cdRunComparison() {
 
 // Fetch a single metadata type from an org
 async function cdFetchTypeFromOrg(conn, q) {
+  if (!conn || !conn.token || !conn.instance) throw new Error('Org not connected — session may have expired');
   const components = [];
   try {
     let soql = q.soql;
@@ -5160,6 +5170,7 @@ async function cdFetchTypeFromOrg(conn, q) {
 
 // Fetch a single metadata type from git
 async function cdFetchTypeFromGit(branch, q) {
+  if (!branch) throw new Error('No branch selected');
   const components = [];
   if (!projectData || !projectData.pat || !projectData.repo) return components;
   try {
