@@ -4718,8 +4718,8 @@ async function cdApiFetch(conn, path, opts = {}) {
     }
     if (res.status === 401) {
       // Token expired — clear cached connection and abort with actionable error
-      for (const [key, c] of cdConnections.entries()) {
-        if (c.token === conn.token) { cdConnections.delete(key); safeSsRemove('cd_token_' + key); safeSsRemove('cd_instance_' + key); break; }
+      for (const key of Object.keys(cdConnections)) {
+        if (cdConnections[key].token === conn.token) { delete cdConnections[key]; safeSsRemove('cd_token_' + key); safeSsRemove('cd_instance_' + key); break; }
       }
       throw new Error('Session expired — please reconnect the org and retry');
     }
@@ -4744,8 +4744,8 @@ async function cdSoapFetch(conn, soapBody) {
   const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=UTF-8', SOAPAction: '""' }, body: envelope });
   if (!res.ok) {
     if (res.status === 401) {
-      for (const [key, c] of cdConnections.entries()) {
-        if (c.token === conn.token) { cdConnections.delete(key); safeSsRemove('cd_token_' + key); safeSsRemove('cd_instance_' + key); break; }
+      for (const key of Object.keys(cdConnections)) {
+        if (cdConnections[key].token === conn.token) { delete cdConnections[key]; safeSsRemove('cd_token_' + key); safeSsRemove('cd_instance_' + key); break; }
       }
       throw new Error('Session expired — please reconnect the org and retry');
     }
@@ -5248,7 +5248,7 @@ async function cdFetchTypeFromGit(branch, q) {
 
 // ── RENDER: Results Grid ──
 function renderCdResults(el) {
-  const results = cdState.results;
+  const results = cdState.results || [];
   const counts = { all: results.length, new: 0, different: 0, deleted: 0, same: 0 };
   results.forEach(r => { counts[r.diffType] = (counts[r.diffType] || 0) + 1; });
 
@@ -5411,6 +5411,8 @@ function cdBackToConfig() {
   cdState.phase = 'config';
   cdState.results = [];
   cdState.deploySteps = [];
+  cdState.isDeploying = false;
+  cdState.isComparing = false;
   // Clear cached git trees
   Object.keys(cdState).forEach(k => { if (k.startsWith('_cdGitTree_')) delete cdState[k]; });
   renderCompareDeployView();
@@ -5829,7 +5831,7 @@ showView = function(name) {
       safeSsRemove('cd_oauth_env_idx');
       if (envIdx >= 0 && sfState.token) {
         cdSetConn(envIdx, sfState.token, sfState.instance);
-        cdFetchUser(cdConnections[envIdx]);
+        cdFetchUser(cdConnections[envIdx]).then(() => renderCompareDeployView());
       }
     }
     renderCompareDeployView();
