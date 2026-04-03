@@ -4845,6 +4845,7 @@ function renderCompareDeployView() {
   }
   if (cdState.phase === 'comparing') {
     el.innerHTML = '<div class="cd-container"><div class="cd-progress"><h3>🔄 Comparing metadata...</h3>' +
+      cdComparisonBanner() +
       '<div class="cd-progress-bar"><div class="cd-progress-fill" id="cdProgressBar" style="width:0%"></div></div>' +
       '<div id="cdProgressMsg" style="font-size:12px;color:var(--muted)">Starting...</div></div></div>';
     return;
@@ -5273,6 +5274,7 @@ function renderCdResults(el) {
   html += '<div style="margin-left:auto;display:flex;gap:8px">';
   html += '<button class="btn btn-sm" onclick="cdBackToConfig()">← Back to Config</button>';
   html += '</div></div>';
+  html += cdComparisonBanner();
 
   // Show fetch errors warning
   if (cdState._fetchErrors && cdState._fetchErrors.length) {
@@ -5402,6 +5404,19 @@ function renderCdResults(el) {
   el.innerHTML = html;
 }
 
+function cdComparisonBanner() {
+  const srcLabel = cdState.sourceType === 'org'
+    ? '🏢 Org: ' + (projectData.envs[cdState.sourceEnvIdx]?.displayName || 'Unknown')
+    : '🌿 Git: ' + (cdState.sourceBranch || 'Unknown');
+  const tgtLabel = cdState.targetType === 'org'
+    ? '🏢 Org: ' + (projectData.envs[cdState.targetEnvIdx]?.displayName || 'Unknown')
+    : '🌿 Git: ' + (cdState.targetBranch || 'Unknown');
+  return '<div style="display:flex;align-items:center;gap:12px;padding:10px 16px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;margin-bottom:14px;font-size:13px">' +
+    '<span style="font-weight:600">📤 ' + esc(srcLabel) + '</span>' +
+    '<span style="color:var(--muted);font-size:16px">→</span>' +
+    '<span style="font-weight:600">📥 ' + esc(tgtLabel) + '</span></div>';
+}
+
 // ── Result Actions ──
 function cdSetResultsFilter(f) { cdState.resultsFilter = f; renderCdResults(document.getElementById('cdContent')); }
 function cdToggleItem(idx, checked) { cdState.results[idx].selected = checked; renderCdResults(document.getElementById('cdContent')); }
@@ -5441,6 +5456,15 @@ function cdShowItemDiff(idx) {
 
   if (r.diffType === 'same') {
     document.getElementById('cdDiffBody').innerHTML = '<div style="text-align:center;padding:48px;color:var(--green)"><div style="font-size:40px;margin-bottom:12px">✓</div><div style="font-size:16px;font-weight:600">Identical</div></div>';
+    return;
+  }
+
+  // If neither side has body content, show info message
+  if (!r.sourceBody && !r.targetBody) {
+    const msg = r.diffType === 'new' ? 'This component exists only in the source. Body content is not available for this metadata type.'
+      : r.diffType === 'deleted' ? 'This component exists only in the target. Body content is not available for this metadata type.'
+      : 'Both sides exist but body content is not available for this metadata type — comparison was by name/presence only.';
+    document.getElementById('cdDiffBody').innerHTML = '<div style="text-align:center;padding:48px;color:var(--muted)"><div style="font-size:40px;margin-bottom:12px">📄</div><div style="font-size:14px">' + esc(msg) + '</div></div>';
     return;
   }
 
