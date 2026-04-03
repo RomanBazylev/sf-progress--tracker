@@ -4980,6 +4980,7 @@ function cdSetSideEnv(side, idx) {
 function cdSetSideBranch(side, val) {
   if (side === 'source') cdState.sourceBranch = val;
   else cdState.targetBranch = val;
+  renderCompareDeployView();
 }
 function cdToggleType(type, checked) {
   if (checked && !cdState.types.includes(type)) cdState.types.push(type);
