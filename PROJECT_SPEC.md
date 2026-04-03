@@ -134,7 +134,40 @@
   - Commit progress steps: resolving branch → uploading files → creating tree → committing → updating ref
   - Creates blobs, tree, commit via GitHub Git Data API
 
-### 2.8 Logs Tab (In-App Diagnostics)
+### 2.8 Compare & Deploy Tab (Gearset-style)
+- **Purpose** — compare metadata between any combination of SF orgs and Git branches, then deploy selected changes
+- **Comparison modes**: Org→Org, Org→Git, Git→Org, Git→Git
+- **Multi-org OAuth** — `cdConnections` map stores per-environment tokens independently from the global `sfState`; `cdOAuthLogin(envIdx)` triggers OAuth with return context saved in `sessionStorage`
+- **Parameterized API** — `cdApiFetch(conn, path, opts)` and `cdSoapFetch(conn, soapBody)` accept explicit connection objects (instance URL + token) instead of relying on global state, enabling simultaneous connections to multiple orgs
+- **Source / Target panels** — each side selectable as "Org" (with environment dropdown from `projectData.sfEnvs`) or "Git" (with branch dropdown from GitHub API)
+- **Metadata type filter** — compact grid of 60+ types (same `META_QUERIES` definitions used by Metadata tab), organized by category with group-level toggles; "All / None" shortcuts
+- **Date range filter** — presets (All time, Today, 2 days, Week, Month, Custom) with From/To date inputs
+- **Comparison engine** (`cdRunComparison`):
+  - Fetches selected metadata types from both sides in parallel
+  - Org fetch: SOQL via Tooling API (reuses `META_QUERIES[].soql`)
+  - Git fetch: GitHub Contents API per type directory, then individual file fetch
+  - Compares by component name; classifies as Added, Removed, Modified, or Unchanged
+  - Progress indicator: "Fetching ApexClass from source… (2/N)"
+- **Results grid** (`renderCdResults`):
+  - Tabs: All, Added, Removed, Modified, Unchanged — with counts
+  - Left sidebar: type filter list with per-type counts
+  - Search box for component name filtering
+  - Selectable rows with checkbox (for deploy selection)
+  - Select All / Deselect All
+- **Side-by-side diff viewer** (`cdShowItemDiff`) — modal overlay showing source vs target code in scrollable panels
+- **Deploy to SF Org** (`cdDeployToOrg`):
+  - Builds `package.xml` from selected components
+  - Creates ZIP file (via JSZip) with component source files laid out in MDAPI structure
+  - SOAP `deploy()` call with `checkOnly` option for validation-only runs
+  - Polls `checkDeployStatus()` until completion
+  - Progress steps: Building package → Uploading → Deploying → Complete/Failed
+- **Deploy to Git** (`cdDeployToGit`):
+  - Creates blobs for each selected component via GitHub Git Database API
+  - Builds tree, creates commit, updates branch ref
+  - Progress steps: Creating blobs → Building tree → Committing → Updating ref
+- **Validate button** — runs check-only deployment to verify changes without actually deploying
+
+### 2.10 Logs Tab (In-App Diagnostics)
 - **Application log buffer** — `appLogs[]` array (max 500 entries, FIFO)
 - **`logMsg(level, source, message, detail)`** — pushes to buffer + mirrors to browser console
 - **Log levels**: info (ℹ️), success (✅), warn (⚠️), error (❌) with color-coded rows
@@ -144,13 +177,13 @@
 - **Sources**: describeMetadata, buildSfdxPath, ensureFullMetadata, fetchMetadata, gitTree, and more
 - All 17+ former `console.log`/`console.warn` calls rewired to `logMsg()` for in-app visibility
 
-### 2.9 UX System
+### 2.11 UX System
 - **Toast notifications** — all user feedback via animated toasts (ok/err/warn/info), no browser alerts
 - **Help modal** (press `?`) — keyboard shortcuts table + quick tips
 - **Keyboard shortcuts**: R=refresh, T=theme, S=settings, M=metadata, P=pipeline, /=search, ?=help, Esc=close
 - **Project name badge** in header when unlocked
 - **⬅ Switch project button** — returns to project selector from any view
-- **Nav icons** — 📦 Pipeline, ☁️ Metadata, ⚙️ Settings
+- **Nav icons** — 📦 Pipeline, ☁️ Metadata, 🔀 Compare, ⚙️ Settings
 - **Step numbers** on Settings sections (1/4 → 4/4) and Fetch Config (1/3 → 3/3)
 - **Required field indicators** — red `*` on mandatory fields
 - **Outside-click-to-close** on Create/Unlock/Help modals

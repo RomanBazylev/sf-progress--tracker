@@ -516,8 +516,85 @@ input,select{font-family:inherit}
 .tooltip .tt-author{color:var(--muted)}
 .tooltip .tt-status{display:inline-block;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:600;margin-top:4px}
 
+/* ── COMPARE & DEPLOY ── */
+.cd-container{max-width:1100px;margin:0 auto}
+.cd-source-target{display:grid;grid-template-columns:1fr 60px 1fr;gap:0;margin-bottom:20px;align-items:start}
+.cd-panel{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.cd-panel h3{font-size:14px;margin-bottom:14px;display:flex;align-items:center;gap:8px}
+.cd-arrow{display:flex;align-items:center;justify-content:center;font-size:24px;color:var(--muted);padding-top:40px}
+.cd-panel .field{margin-bottom:12px}
+.cd-panel .field label{display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--muted)}
+.cd-panel .field select,.cd-panel .field input{width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px}
+.cd-panel .field select:focus,.cd-panel .field input:focus{outline:none;border-color:var(--accent)}
+.cd-conn-status{font-size:11px;padding:4px 10px;border-radius:6px;display:inline-flex;align-items:center;gap:5px;margin-top:6px}
+.cd-conn-status.connected{background:var(--green-dim);color:var(--green)}
+.cd-conn-status.disconnected{background:var(--red-dim);color:var(--red)}
+.cd-actions{display:flex;gap:12px;justify-content:center;margin:20px 0}
+.cd-type-filter{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.cd-type-filter h3{font-size:14px;margin-bottom:14px}
+.cd-type-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:2px}
+.cd-type-group{margin-bottom:8px}
+.cd-type-group-hdr{display:flex;align-items:center;gap:6px;padding:4px 8px;font-size:12px;font-weight:600;color:var(--accent);cursor:pointer}
+.cd-type-group-hdr input{accent-color:var(--accent);width:14px;height:14px}
+.cd-type-opt{display:flex;align-items:center;gap:6px;padding:3px 8px 3px 24px;font-size:12px;cursor:pointer}
+.cd-type-opt:hover{background:var(--surface2);border-radius:4px}
+.cd-type-opt input{accent-color:var(--accent);width:13px;height:13px}
+.cd-progress{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
+.cd-progress-bar{width:100%;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;margin:10px 0}
+.cd-progress-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .3s}
+.cd-results{margin-bottom:20px}
+.cd-results-tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0}
+.cd-results-tabs button{padding:10px 18px;font-size:13px;font-weight:500;border:none;background:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
+.cd-results-tabs button.active{color:var(--accent);border-bottom-color:var(--accent)}
+.cd-results-tabs button .badge{font-size:11px;padding:1px 7px;border-radius:10px;background:var(--surface2);color:var(--muted);margin-left:6px}
+.cd-results-tabs button.active .badge{background:var(--accent-dim);color:var(--accent)}
+.cd-sidebar{display:flex;gap:0}
+.cd-type-list{width:200px;border-right:1px solid var(--border);overflow-y:auto;max-height:calc(100vh - 360px);flex-shrink:0}
+.cd-type-list-item{padding:8px 12px;font-size:12px;cursor:pointer;display:flex;justify-content:space-between;align-items:center;transition:background .15s}
+.cd-type-list-item:hover{background:var(--surface2)}
+.cd-type-list-item.active{background:var(--accent-dim);color:var(--accent);font-weight:600}
+.cd-type-list-item .cnt{font-size:10px;padding:1px 6px;border-radius:8px;background:var(--surface2);color:var(--muted)}
+.cd-result-grid{flex:1;overflow-y:auto;max-height:calc(100vh - 360px)}
+.cd-result-row{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:13px;cursor:pointer;border-bottom:1px solid var(--border);transition:all .15s}
+.cd-result-row:hover{background:var(--surface2)}
+.cd-result-row.selected{background:var(--accent-dim)}
+.cd-result-row .cd-cb{width:16px;height:16px;accent-color:var(--accent);flex-shrink:0}
+.cd-result-row .cd-name{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cd-result-row .cd-type-badge{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--muted);flex-shrink:0}
+.cd-result-row .cd-diff-type{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;flex-shrink:0;width:75px;text-align:center}
+.cd-result-row .cd-diff-type.new{background:var(--green-dim);color:var(--green)}
+.cd-result-row .cd-diff-type.different{background:var(--yellow-dim);color:var(--yellow)}
+.cd-result-row .cd-diff-type.deleted{background:var(--red-dim);color:var(--red)}
+.cd-result-row .cd-diff-type.same{background:var(--surface2);color:var(--muted)}
+.cd-result-header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;z-index:2;border-bottom:2px solid var(--border)}
+.cd-result-header .cd-cb{width:16px;height:16px}
+.cd-result-header .cd-name{flex:1}
+.cd-result-header .cd-type-badge{width:90px;text-align:center;background:none}
+.cd-result-header .cd-diff-type{width:75px;text-align:center;background:none}
+.cd-deploy-bar{display:flex;align-items:center;gap:12px;padding:14px 16px;background:var(--surface);border:1px solid var(--border);border-radius:10px;margin-top:16px;flex-wrap:wrap}
+.cd-deploy-bar .cd-sel-count{font-size:13px;font-weight:600;margin-right:auto}
+.cd-deploy-status{margin-top:16px;background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px}
+.cd-deploy-status h3{font-size:14px;margin-bottom:12px}
+.cd-deploy-step{display:flex;align-items:center;gap:8px;font-size:12px;padding:4px 0}
+.cd-deploy-step.ok{color:var(--green)}
+.cd-deploy-step.fail{color:var(--red)}
+.cd-deploy-step.running{color:var(--accent)}
+.cd-diff-side{display:grid;grid-template-columns:1fr 1fr;gap:0;border:1px solid var(--border);border-radius:8px;overflow:hidden;max-height:400px}
+.cd-diff-pane{overflow:auto;max-height:400px}
+.cd-diff-pane-header{padding:8px 12px;font-size:11px;font-weight:600;color:var(--muted);background:var(--surface2);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:1}
+.cd-diff-pane pre{padding:12px;margin:0;font-size:12px;line-height:1.6;white-space:pre-wrap;word-break:break-all}
+@media(max-width:768px){
+  .cd-source-target{grid-template-columns:1fr}
+  .cd-arrow{transform:rotate(90deg);padding:10px 0}
+  .cd-type-grid{grid-template-columns:1fr 1fr}
+  .cd-sidebar{flex-direction:column}
+  .cd-type-list{width:100%;max-height:150px;border-right:none;border-bottom:1px solid var(--border)}
+  .cd-diff-side{grid-template-columns:1fr}
+}
+
 /* ── COLORS FOR ENV STRIPES (legacy compat) ── */
 </style>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HoI/xNIDFo5450Wb5HjZziA7MATgSFGBFDeXN4IfpDBVqXqSUvUFMa7yZqjMBLag==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 </head>
 <body>
 <!-- ── HEADER ── -->
@@ -529,6 +606,7 @@ input,select{font-family:inherit}
   <nav id="mainNav" style="display:none">
     <button onclick="showView('pipeline')" id="navPipeline">📦 Pipeline</button>
     <button onclick="showView('metadata')" id="navMetadata">☁️ Metadata</button>
+    <button onclick="showView('compare')" id="navCompare">🔀 Compare</button>
     <button onclick="showView('logs')" id="navLogs">📋 Logs</button>
     <button onclick="showView('settings')" id="navSettings">⚙️ Settings</button>
   </nav>
@@ -645,6 +723,11 @@ input,select{font-family:inherit}
   <div id="pipelineContent">
     <div class="loading"><div class="spinner"></div><p>Loading pipeline...</p></div>
   </div>
+</div>
+
+<!-- ── COMPARE & DEPLOY VIEW ── -->
+<div class="view" id="compareView">
+  <div id="cdContent"></div>
 </div>
 
 <!-- ── LOGS VIEW ── -->
@@ -923,6 +1006,7 @@ function showView(name) {
   const nb = document.getElementById('nav' + name.charAt(0).toUpperCase() + name.slice(1));
   if (nb) nb.classList.add('active');
   if (name === 'logs') renderLogsView();
+  if (name === 'compare') renderCompareDeployView();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1089,7 +1173,10 @@ function enterProject() {
   updateConnBadge();
   renderEnvList();
   if (projectData.pat && projectData.repo && projectData.envs.length) {
-    if (safeSsGet('sf_oauth_pending')) {
+    if (safeSsGet('cd_oauth_pending')) {
+      // Returning from Compare & Deploy OAuth — navigate to Compare tab
+      showView('compare');
+    } else if (safeSsGet('sf_oauth_pending')) {
       safeSsRemove('sf_oauth_pending');
       showView('metadata');
     } else {
@@ -4591,6 +4678,1040 @@ async function doCommit() {
 }
 
 /* ═══════════════════════════════════════════════════════
+   COMPARE & DEPLOY — CORE ENGINE
+   ═══════════════════════════════════════════════════════ */
+
+// ── Multi-Org Connection State ──
+let cdConnections = {};  // { [envIdx]: { token, instance, user } }
+function cdGetConn(envIdx) { return cdConnections[envIdx] || null; }
+function cdSetConn(envIdx, token, instance) {
+  cdConnections[envIdx] = { token, instance, user: null };
+  safeSsSet('cd_token_' + envIdx, token);
+  safeSsSet('cd_instance_' + envIdx, instance);
+}
+function cdRestoreConns() {
+  if (!projectData || !projectData.envs) return;
+  projectData.envs.forEach((env, i) => {
+    const t = safeSsGet('cd_token_' + i);
+    const inst = safeSsGet('cd_instance_' + i);
+    if (t && inst) cdConnections[i] = { token: t, instance: inst, user: null };
+  });
+}
+function safeSsSet(k, v) { try { sessionStorage.setItem(k, v); } catch {} }
+
+// Parameterized API fetches — accept explicit connection instead of global sfState
+async function cdApiFetch(conn, path, opts = {}) {
+  const baseUrl = conn.instance + path;
+  const proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.replace(/\/+$/, '') : '';
+  const url = proxy ? proxy + '/' + baseUrl : baseUrl;
+  const method = (opts.method || 'GET').toUpperCase();
+  const headers = { Authorization: 'Bearer ' + conn.token, ...(opts.headers || {}) };
+  if (method !== 'GET' && method !== 'HEAD' && method !== 'DELETE')
+    headers['Content-Type'] = headers['Content-Type'] || 'application/json';
+  for (let attempt = 0; attempt <= 2; attempt++) {
+    let res;
+    try { res = await fetch(url, { ...opts, method, headers }); }
+    catch (e) { if (attempt < 2) { await _sleep(500 * (attempt + 1)); continue; } throw new Error('Network: ' + e.message); }
+    if ((res.status === 429 || res.status === 503) && attempt < 2) {
+      await _sleep(parseInt(res.headers.get('Retry-After') || '0') * 1000 || 1000 * (attempt + 1));
+      continue;
+    }
+    if (!res.ok) {
+      let detail = res.status + ' ' + res.statusText;
+      try { const b = await res.json(); detail += ' — ' + (b[0]?.message || b.message || ''); } catch {}
+      throw new Error(detail);
+    }
+    if (opts._raw) return res;
+    return res.json();
+  }
+}
+
+async function cdSoapFetch(conn, soapBody) {
+  const envelope = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:meta="http://soap.sforce.com/2006/04/metadata">' +
+    '<soapenv:Header><meta:SessionHeader><meta:sessionId>' + conn.token + '</meta:sessionId></meta:SessionHeader></soapenv:Header>' +
+    '<soapenv:Body>' + soapBody + '</soapenv:Body></soapenv:Envelope>';
+  const baseUrl = conn.instance + '/services/Soap/m/' + SF_API_VERSION;
+  const proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.replace(/\/+$/, '') : '';
+  const url = proxy ? proxy + '/' + baseUrl : baseUrl;
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=UTF-8', SOAPAction: '""' }, body: envelope });
+  if (!res.ok) throw new Error('SOAP error: ' + res.status + ' ' + res.statusText);
+  return new DOMParser().parseFromString(await res.text(), 'text/xml');
+}
+
+async function cdFetchUser(conn) {
+  try {
+    const info = await cdApiFetch(conn, '/services/oauth2/userinfo');
+    conn.user = info.preferred_username || info.name || 'Connected';
+  } catch { conn.user = '(OAuth)'; }
+}
+
+// OAuth for Compare & Deploy — stores return context in sessionStorage
+function cdOAuthLogin(envIdx) {
+  if (!projectData || !projectData.envs[envIdx]) return;
+  const env = projectData.envs[envIdx];
+  const instance = (env.orgUrl || '').replace(/\/+$/, '');
+  const clientId = env.sfClientId || projectData.sfClientId || '';
+  if (!instance) { toast('Set Org URL for ' + (env.displayName || env.branch) + ' in Settings → Environments', 'warn'); return; }
+  if (!clientId) { toast('Set Consumer Key for ' + (env.displayName || env.branch), 'warn'); return; }
+  safeSsSet('cd_oauth_pending', '1');
+  safeSsSet('cd_oauth_env_idx', String(envIdx));
+  safeSsSet('sf_oauth_pending', '1');
+  safeSsSet('sf_oauth_project_idx', String(currentProjectIndex));
+  safeSsSet('sf_instance_pending', instance);
+  const redirect = location.origin + location.pathname;
+  location.href = instance + '/services/oauth2/authorize?response_type=token&client_id=' +
+    encodeURIComponent(clientId) + '&redirect_uri=' + encodeURIComponent(redirect) + '&scope=api';
+}
+
+// ── Compare & Deploy State ──
+let cdState = {
+  sourceType: 'org',  // 'org' | 'git'
+  targetType: 'org',  // 'org' | 'git'
+  sourceEnvIdx: -1,
+  targetEnvIdx: -1,
+  sourceBranch: '',
+  targetBranch: '',
+  types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC','Flow','CustomObject','CustomField'],
+  datePreset: 'all',
+  dateFrom: '',
+  dateTo: '',
+  phase: 'config',  // 'config' | 'comparing' | 'results' | 'deploying' | 'deployed'
+  results: [],       // { name, type, fullName, diffType, sourceBody, targetBody, selected }
+  progress: { current: 0, total: 0, message: '' },
+  deploySteps: [],
+  resultsFilter: 'all',  // 'all' | 'new' | 'different' | 'deleted'
+  resultsTypeFilter: '',
+  resultsSearch: '',
+  isComparing: false,
+  isDeploying: false
+};
+
+// ── RENDER: Compare & Deploy View ──
+function renderCompareDeployView() {
+  const el = document.getElementById('cdContent');
+  if (!projectData) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">Open a project first.</p>'; return; }
+  cdRestoreConns();
+
+  // Check if returning from CD OAuth
+  if (safeSsGet('cd_oauth_pending')) {
+    const envIdx = parseInt(safeSsGet('cd_oauth_env_idx') || '-1');
+    safeSsRemove('cd_oauth_pending');
+    safeSsRemove('cd_oauth_env_idx');
+    if (envIdx >= 0 && sfState.token) {
+      cdSetConn(envIdx, sfState.token, sfState.instance);
+      cdFetchUser(cdConnections[envIdx]);
+    }
+  }
+
+  if (cdState.phase === 'results' || cdState.phase === 'deploying' || cdState.phase === 'deployed') {
+    renderCdResults(el);
+    return;
+  }
+  if (cdState.phase === 'comparing') {
+    el.innerHTML = '<div class="cd-container"><div class="cd-progress"><h3>🔄 Comparing metadata...</h3>' +
+      '<div class="cd-progress-bar"><div class="cd-progress-fill" id="cdProgressBar" style="width:0%"></div></div>' +
+      '<div id="cdProgressMsg" style="font-size:12px;color:var(--muted)">Starting...</div></div></div>';
+    return;
+  }
+
+  // CONFIG phase
+  let html = '<div class="cd-container">';
+  html += '<h2 style="margin-bottom:20px">🔀 Compare & Deploy</h2>';
+
+  // Source / Target panels
+  html += '<div class="cd-source-target">';
+  html += buildCdPanelHtml('source', '📤 Source', cdState.sourceType, cdState.sourceEnvIdx, cdState.sourceBranch);
+  html += '<div class="cd-arrow">→</div>';
+  html += buildCdPanelHtml('target', '📥 Target', cdState.targetType, cdState.targetEnvIdx, cdState.targetBranch);
+  html += '</div>'; // source-target
+
+  // Type filter
+  html += '<div class="cd-type-filter">';
+  html += '<h3>📋 Metadata Types <span style="font-weight:normal;font-size:12px;color:var(--muted)">(' + cdState.types.length + ' selected)</span></h3>';
+  html += '<div style="display:flex;gap:8px;margin-bottom:10px">';
+  html += '<button class="btn btn-sm" onclick="cdSelectAllTypes(true)">Select All</button>';
+  html += '<button class="btn btn-sm" onclick="cdSelectAllTypes(false)">Deselect All</button>';
+  html += '<button class="btn btn-sm" onclick="cdSelectPreset(\'code\')">Code Only</button>';
+  html += '<button class="btn btn-sm" onclick="cdSelectPreset(\'config\')">Config Only</button>';
+  html += '</div>';
+  html += '<div class="cd-type-grid">';
+  const groups = cdGroupMetaTypes();
+  for (const [group, items] of Object.entries(groups)) {
+    const allChecked = items.every(t => cdState.types.includes(t.type));
+    html += '<div class="cd-type-group">';
+    html += '<label class="cd-type-group-hdr"><input type="checkbox" ' + (allChecked ? 'checked' : '') +
+      ' onchange="cdToggleGroup(\'' + esc(group) + '\',this.checked)"> ' + esc(group) + '</label>';
+    items.forEach(t => {
+      const checked = cdState.types.includes(t.type) ? 'checked' : '';
+      html += '<label class="cd-type-opt"><input type="checkbox" value="' + esc(t.type) + '" ' + checked +
+        ' onchange="cdToggleType(\'' + esc(t.type) + '\',this.checked)" title="' + esc(t.desc) + '"> ' + esc(t.label) + '</label>';
+    });
+    html += '</div>';
+  }
+  html += '</div></div>'; // type-grid, type-filter
+
+  // Date filter
+  html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px">';
+  html += '<span style="font-size:13px;font-weight:600">Date filter:</span>';
+  ['all','today','7d','30d','custom'].forEach(p => {
+    const labels = {all:'All time',today:'Today','7d':'Last 7 days','30d':'Last 30 days',custom:'Custom'};
+    html += '<button class="date-preset' + (cdState.datePreset === p ? ' active' : '') + '" onclick="cdSetDatePreset(\'' + p + '\')">' + labels[p] + '</button>';
+  });
+  if (cdState.datePreset === 'custom') {
+    html += ' <input type="date" class="meta-date" value="' + esc(cdState.dateFrom) + '" onchange="cdState.dateFrom=this.value">';
+    html += ' — <input type="date" class="meta-date" value="' + esc(cdState.dateTo) + '" onchange="cdState.dateTo=this.value">';
+  }
+  html += '</div>';
+
+  // Compare button
+  const canCompare = cdCanCompare();
+  html += '<div class="cd-actions">';
+  html += '<button class="btn btn-primary btn-lg" ' + (canCompare ? '' : 'disabled') + ' onclick="cdRunComparison()">🔍 Compare Now</button>';
+  html += '</div>';
+
+  html += '</div>'; // cd-container
+  el.innerHTML = html;
+}
+
+function buildCdPanelHtml(side, title, type, envIdx, branch) {
+  let html = '<div class="cd-panel">';
+  html += '<h3>' + title + '</h3>';
+  // Type selector
+  html += '<div class="field"><label>Location</label>';
+  html += '<select onchange="cdSetSideType(\'' + side + '\',this.value)">';
+  html += '<option value="org"' + (type === 'org' ? ' selected' : '') + '>Salesforce Org</option>';
+  html += '<option value="git"' + (type === 'git' ? ' selected' : '') + '>Git Branch</option>';
+  html += '</select></div>';
+
+  if (type === 'org') {
+    // Environment selector
+    html += '<div class="field"><label>Environment</label>';
+    html += '<select onchange="cdSetSideEnv(\'' + side + '\',parseInt(this.value))">';
+    html += '<option value="-1">— select environment —</option>';
+    if (projectData && projectData.envs) {
+      projectData.envs.forEach((env, i) => {
+        const label = (env.displayName || env.branch) + (env.orgUrl ? ' (' + env.orgUrl.replace(/https?:\/\//, '').split('.')[0] + ')' : '');
+        html += '<option value="' + i + '"' + (envIdx === i ? ' selected' : '') + '>' + esc(label) + '</option>';
+      });
+    }
+    html += '</select></div>';
+    // Connection status
+    const conn = cdGetConn(envIdx);
+    if (envIdx >= 0) {
+      if (conn) {
+        html += '<div class="cd-conn-status connected">✓ Connected' + (conn.user ? ' as ' + esc(conn.user) : '') + '</div>';
+      } else {
+        html += '<div class="cd-conn-status disconnected">✕ Not connected</div>';
+        html += '<button class="btn btn-sf btn-sm" style="margin-top:8px" onclick="cdOAuthLogin(' + envIdx + ')">🔑 Connect</button>';
+      }
+    }
+  } else {
+    // Git branch selector
+    html += '<div class="field"><label>Branch</label>';
+    html += '<select onchange="cdSetSideBranch(\'' + side + '\',this.value)">';
+    html += '<option value="">— select branch —</option>';
+    if (pipelineCache.branches && pipelineCache.branches.length) {
+      pipelineCache.branches.forEach(b => {
+        html += '<option value="' + esc(b) + '"' + (branch === b ? ' selected' : '') + '>' + esc(b) + '</option>';
+      });
+    }
+    html += '</select></div>';
+    if (!pipelineCache.branches || !pipelineCache.branches.length) {
+      html += '<button class="btn btn-sm" style="margin-top:4px" onclick="loadBranches().then(()=>renderCompareDeployView())">Load branches</button>';
+    }
+  }
+  html += '</div>';
+  return html;
+}
+
+function cdGroupMetaTypes() {
+  const groups = {};
+  const groupMap = {
+    'Code': ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC','ApexTestSuite','StaticResource'],
+    'Objects & Fields': ['CustomObject','CustomField','RecordType','CompactLayout','FieldSet','CustomMetadata','PlatformEvent','ExternalObject'],
+    'Automation': ['Flow','ValidationRule','WorkflowRule','WorkflowFieldUpdate','WorkflowAlert','ApprovalProcess','QuickAction','BusinessProcess'],
+    'UI & Layout': ['Layout','FlexiPage','ListView','CustomTab','CustomApplication','HomePageLayout','PathAssistant','WebLink'],
+    'Security': ['PermissionSet','PermissionSetGroup','CustomPermission','Profile'],
+    'Picklists & Labels': ['StandardValueSet','GlobalValueSet','CustomLabel'],
+    'Rules': ['AssignmentRule','AutoResponseRule','EscalationRule','MatchingRule','DuplicateRule'],
+    'Integration': ['NamedCredential','ExternalDataSource','RemoteSiteSetting','ConnectedApp'],
+    'Other': ['Queue','EmailTemplate','Letterhead','Report','Dashboard','ReportType','CustomNotificationType','FlowCategory']
+  };
+  for (const [group, types] of Object.entries(groupMap)) {
+    const items = types.map(t => META_QUERIES.find(q => q.type === t)).filter(Boolean);
+    if (items.length) groups[group] = items;
+  }
+  return groups;
+}
+
+// ── Event Handlers ──
+function cdSetSideType(side, val) {
+  if (side === 'source') cdState.sourceType = val;
+  else cdState.targetType = val;
+  renderCompareDeployView();
+}
+function cdSetSideEnv(side, idx) {
+  if (side === 'source') cdState.sourceEnvIdx = idx;
+  else cdState.targetEnvIdx = idx;
+  renderCompareDeployView();
+}
+function cdSetSideBranch(side, val) {
+  if (side === 'source') cdState.sourceBranch = val;
+  else cdState.targetBranch = val;
+}
+function cdToggleType(type, checked) {
+  if (checked && !cdState.types.includes(type)) cdState.types.push(type);
+  else cdState.types = cdState.types.filter(t => t !== type);
+}
+function cdToggleGroup(group, checked) {
+  const groups = cdGroupMetaTypes();
+  const items = groups[group] || [];
+  items.forEach(t => {
+    if (checked && !cdState.types.includes(t.type)) cdState.types.push(t.type);
+    else if (!checked) cdState.types = cdState.types.filter(x => x !== t.type);
+  });
+  renderCompareDeployView();
+}
+function cdSelectAllTypes(checked) {
+  if (checked) cdState.types = META_QUERIES.map(q => q.type);
+  else cdState.types = [];
+  renderCompareDeployView();
+}
+function cdSelectPreset(preset) {
+  const code = ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC','StaticResource','ApexTestSuite'];
+  const config = META_QUERIES.map(q => q.type).filter(t => !code.includes(t));
+  cdState.types = preset === 'code' ? [...code] : [...config];
+  renderCompareDeployView();
+}
+function cdSetDatePreset(p) {
+  cdState.datePreset = p;
+  if (p === 'today') { const d = new Date().toISOString().slice(0,10); cdState.dateFrom = d; cdState.dateTo = d; }
+  else if (p === '7d') { const d = new Date(); d.setDate(d.getDate()-7); cdState.dateFrom = d.toISOString().slice(0,10); cdState.dateTo = new Date().toISOString().slice(0,10); }
+  else if (p === '30d') { const d = new Date(); d.setDate(d.getDate()-30); cdState.dateFrom = d.toISOString().slice(0,10); cdState.dateTo = new Date().toISOString().slice(0,10); }
+  else if (p === 'all') { cdState.dateFrom = ''; cdState.dateTo = ''; }
+  renderCompareDeployView();
+}
+
+function cdCanCompare() {
+  if (!cdState.types.length) return false;
+  if (cdState.sourceType === 'org' && (cdState.sourceEnvIdx < 0 || !cdGetConn(cdState.sourceEnvIdx))) return false;
+  if (cdState.sourceType === 'git' && !cdState.sourceBranch) return false;
+  if (cdState.targetType === 'org' && (cdState.targetEnvIdx < 0 || !cdGetConn(cdState.targetEnvIdx))) return false;
+  if (cdState.targetType === 'git' && !cdState.targetBranch) return false;
+  return true;
+}
+
+// ── COMPARISON ENGINE ──
+async function cdRunComparison() {
+  if (cdState.isComparing) return;
+  cdState.isComparing = true;
+  cdState.phase = 'comparing';
+  cdState.results = [];
+  renderCompareDeployView();
+  logMsg('info', 'compare', 'Starting comparison: ' + cdState.sourceType + ' → ' + cdState.targetType);
+
+  try {
+    const activeQueries = META_QUERIES.filter(q => cdState.types.includes(q.type));
+    const total = activeQueries.length * 2;
+    let done = 0;
+    const updateProgress = (msg) => {
+      done++;
+      cdState.progress = { current: done, total, message: msg };
+      const bar = document.getElementById('cdProgressBar');
+      const msgEl = document.getElementById('cdProgressMsg');
+      if (bar) bar.style.width = Math.round(done / total * 100) + '%';
+      if (msgEl) msgEl.textContent = msg;
+    };
+
+    // Fetch source
+    const sourceComps = {};
+    if (cdState.sourceType === 'org') {
+      const conn = cdGetConn(cdState.sourceEnvIdx);
+      for (const q of activeQueries) {
+        updateProgress('Source: Fetching ' + q.label + '...');
+        const items = await cdFetchTypeFromOrg(conn, q);
+        items.forEach(c => { sourceComps[c.type + '::' + c.name] = c; });
+      }
+    } else {
+      for (const q of activeQueries) {
+        updateProgress('Source: Reading ' + q.label + ' from git...');
+        const items = await cdFetchTypeFromGit(cdState.sourceBranch, q);
+        items.forEach(c => { sourceComps[c.type + '::' + c.name] = c; });
+      }
+    }
+
+    // Fetch target
+    const targetComps = {};
+    if (cdState.targetType === 'org') {
+      const conn = cdGetConn(cdState.targetEnvIdx);
+      for (const q of activeQueries) {
+        updateProgress('Target: Fetching ' + q.label + '...');
+        const items = await cdFetchTypeFromOrg(conn, q);
+        items.forEach(c => { targetComps[c.type + '::' + c.name] = c; });
+      }
+    } else {
+      for (const q of activeQueries) {
+        updateProgress('Target: Reading ' + q.label + ' from git...');
+        const items = await cdFetchTypeFromGit(cdState.targetBranch, q);
+        items.forEach(c => { targetComps[c.type + '::' + c.name] = c; });
+      }
+    }
+
+    // Compare
+    const allKeys = new Set([...Object.keys(sourceComps), ...Object.keys(targetComps)]);
+    const results = [];
+    for (const key of allKeys) {
+      const s = sourceComps[key];
+      const t = targetComps[key];
+      const [type, name] = key.split('::');
+      const qDef = META_QUERIES.find(q => q.type === type);
+      if (s && !t) {
+        results.push({ name, type, label: qDef?.label || type, fullName: s.fullName, diffType: 'new', sourceBody: s.body || '', targetBody: '', lastModified: s.lastModified, selected: false, _source: s, _target: null });
+      } else if (!s && t) {
+        results.push({ name, type, label: qDef?.label || type, fullName: t.fullName, diffType: 'deleted', sourceBody: '', targetBody: t.body || '', lastModified: t.lastModified, selected: false, _source: null, _target: t });
+      } else if (s && t) {
+        const sBody = (s.body || '').trim();
+        const tBody = (t.body || '').trim();
+        const diffType = sBody === tBody ? 'same' : 'different';
+        results.push({ name, type, label: qDef?.label || type, fullName: s.fullName, diffType, sourceBody: s.body || '', targetBody: t.body || '', lastModified: s.lastModified || t.lastModified, selected: false, _source: s, _target: t });
+      }
+    }
+
+    // Sort: different first, then new, then deleted, then same
+    const order = { different: 0, new: 1, deleted: 2, same: 3 };
+    results.sort((a, b) => (order[a.diffType] ?? 3) - (order[b.diffType] ?? 3) || a.name.localeCompare(b.name));
+
+    cdState.results = results;
+    cdState.phase = 'results';
+    const changed = results.filter(r => r.diffType !== 'same').length;
+    logMsg('info', 'compare', 'Comparison complete: ' + results.length + ' items, ' + changed + ' differences');
+    toast('Comparison complete: ' + changed + ' differences found', 'ok');
+  } catch (e) {
+    logMsg('error', 'compare', 'Comparison failed', e.message);
+    toast('Comparison failed: ' + e.message, 'error');
+    cdState.phase = 'config';
+  } finally {
+    cdState.isComparing = false;
+  }
+  renderCompareDeployView();
+}
+
+// Fetch a single metadata type from an org
+async function cdFetchTypeFromOrg(conn, q) {
+  const components = [];
+  try {
+    let soql = q.soql;
+    // Apply date filter
+    if (cdState.dateFrom) soql += " AND LastModifiedDate >= " + cdState.dateFrom + "T00:00:00Z";
+    if (cdState.dateTo) soql += " AND LastModifiedDate <= " + cdState.dateTo + "T23:59:59Z";
+    const endpoint = q.api === 'tooling' ? '/services/data/v' + SF_API_VERSION + '/tooling/query' : '/services/data/v' + SF_API_VERSION + '/query';
+    let url = endpoint + '?q=' + encodeURIComponent(soql);
+    let records = [];
+    while (url) {
+      const data = await cdApiFetch(conn, url);
+      if (data.records) records = records.concat(data.records);
+      url = data.nextRecordsUrl || null;
+    }
+    for (const rec of records) {
+      const name = rec.DeveloperName || rec.Name || rec.ValidationName || rec.TestSuiteName || rec.Definition?.DeveloperName || '';
+      const body = rec.Body || rec.Markup || (rec.Metadata ? metadataJsonToXml(rec.Metadata, q.type) : '') || '';
+      const obj = rec.TableEnumOrId || rec.SobjectType || rec.EntityDefinition?.DeveloperName || '';
+      const displayName = obj ? obj + '.' + name : name;
+      const fullName = buildSfdxPath(q.type, displayName, q.path, q.ext);
+      components.push({
+        type: q.type, name: displayName, fullName, body,
+        lastModified: rec.LastModifiedDate || '', sfId: rec.Id,
+        _rec: rec, _query: q, _conn: conn
+      });
+    }
+  } catch (e) {
+    logMsg('warn', 'compare', 'Failed to fetch ' + q.type + ' from org: ' + e.message);
+  }
+  return components;
+}
+
+// Fetch a single metadata type from git
+async function cdFetchTypeFromGit(branch, q) {
+  const components = [];
+  if (!projectData || !projectData.pat || !projectData.repo) return components;
+  try {
+    // Get the tree if not cached
+    const cacheKey = '_cdGitTree_' + branch;
+    if (!cdState[cacheKey]) {
+      const treeData = await ghFetch('/repos/' + projectData.repo + '/git/trees/' + encodeURIComponent(branch) + '?recursive=1');
+      const tree = {};
+      if (treeData.tree) treeData.tree.forEach(item => { if (item.type === 'blob') tree[item.path] = item.sha; });
+      cdState[cacheKey] = tree;
+    }
+    const tree = cdState[cacheKey];
+
+    // Find files matching this type's path and extension
+    const basePaths = ['force-app/main/default/', 'src/', ''];
+    const typeDir = q.path;
+    const ext = q.ext;
+    for (const [filePath, sha] of Object.entries(tree)) {
+      let matched = false;
+      for (const base of basePaths) {
+        const prefix = base + typeDir + '/';
+        if (filePath.startsWith(prefix)) {
+          // Check extension match (or bundle directory)
+          if (ext && !filePath.endsWith(ext) && !filePath.endsWith(ext + '-meta.xml')) continue;
+          if (!ext && q.type !== 'LWC' && q.type !== 'AuraBundle') continue;
+          matched = true;
+          break;
+        }
+      }
+      if (!matched) continue;
+      // Skip -meta.xml companion files
+      if (ext && filePath.endsWith('-meta.xml') && !ext.endsWith('-meta.xml')) continue;
+
+      // Extract component name from path
+      const parts = filePath.split('/');
+      let name = parts[parts.length - 1];
+      if (ext) name = name.replace(new RegExp(ext.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '$'), '');
+
+      // For bundles (LWC/Aura), group by directory
+      if (q.type === 'LWC' || q.type === 'AuraBundle') {
+        const dirIdx = parts.indexOf(typeDir);
+        if (dirIdx < 0) continue;
+        name = parts[dirIdx + 1];
+        // Only process primary file
+        const fileName = parts[parts.length - 1];
+        if (q.type === 'LWC' && !fileName.endsWith('.js')) continue;
+        if (q.type === 'AuraBundle' && !fileName.endsWith('.cmp') && !fileName.endsWith('Controller.js')) continue;
+      }
+
+      // For object child types (CustomField, ValidationRule, etc.)
+      if (OBJECT_CHILD_FOLDERS && OBJECT_CHILD_FOLDERS[q.type]) {
+        const objDirIdx = parts.indexOf('objects');
+        if (objDirIdx >= 0 && parts.length > objDirIdx + 2) {
+          const obj = parts[objDirIdx + 1];
+          name = obj + '.' + name;
+        }
+      }
+
+      // Fetch body content
+      try {
+        const blob = await ghFetch('/repos/' + projectData.repo + '/git/blobs/' + sha);
+        const body = atob(blob.content.replace(/\n/g, ''));
+        components.push({ type: q.type, name, fullName: filePath, body, lastModified: '', _gitSha: sha });
+      } catch {
+        components.push({ type: q.type, name, fullName: filePath, body: '', lastModified: '', _gitSha: sha });
+      }
+    }
+  } catch (e) {
+    logMsg('warn', 'compare', 'Failed to fetch ' + q.type + ' from git: ' + e.message);
+  }
+  return components;
+}
+
+// ── RENDER: Results Grid ──
+function renderCdResults(el) {
+  const results = cdState.results;
+  const counts = { all: results.length, new: 0, different: 0, deleted: 0, same: 0 };
+  results.forEach(r => { counts[r.diffType] = (counts[r.diffType] || 0) + 1; });
+
+  let html = '<div class="cd-container">';
+  html += '<div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">';
+  html += '<h2>🔀 Comparison Results</h2>';
+  html += '<span style="font-size:13px;color:var(--muted)">' + results.length + ' items</span>';
+  html += '<div style="margin-left:auto;display:flex;gap:8px">';
+  html += '<button class="btn btn-sm" onclick="cdBackToConfig()">← Back to Config</button>';
+  html += '</div></div>';
+
+  // Tabs
+  html += '<div class="cd-results-tabs">';
+  ['all','new','different','deleted'].forEach(tab => {
+    const labels = { all: 'All Items', new: 'New', different: 'Changed', deleted: 'Deleted' };
+    const active = cdState.resultsFilter === tab ? ' active' : '';
+    html += '<button class="' + active + '" onclick="cdSetResultsFilter(\'' + tab + '\')">' + labels[tab] +
+      '<span class="badge">' + counts[tab] + '</span></button>';
+  });
+  html += '</div>';
+
+  // Search bar
+  html += '<div style="display:flex;align-items:center;gap:10px;padding:10px 0">';
+  html += '<input placeholder="🔍 Search components..." value="' + esc(cdState.resultsSearch) + '" oninput="cdState.resultsSearch=this.value;renderCdResults(document.getElementById(\'cdContent\'))" style="flex:1;padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">';
+  html += '<select onchange="cdState.resultsTypeFilter=this.value;renderCdResults(document.getElementById(\'cdContent\'))" style="padding:8px 12px;background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">';
+  html += '<option value="">All Types</option>';
+  const seenTypes = [...new Set(results.map(r => r.type))].sort();
+  seenTypes.forEach(t => {
+    const qDef = META_QUERIES.find(q => q.type === t);
+    html += '<option value="' + esc(t) + '"' + (cdState.resultsTypeFilter === t ? ' selected' : '') + '>' + esc(qDef?.label || t) + '</option>';
+  });
+  html += '</select></div>';
+
+  // Filter results
+  let filtered = results;
+  if (cdState.resultsFilter !== 'all') filtered = filtered.filter(r => r.diffType === cdState.resultsFilter);
+  if (cdState.resultsTypeFilter) filtered = filtered.filter(r => r.type === cdState.resultsTypeFilter);
+  if (cdState.resultsSearch) {
+    const q = cdState.resultsSearch.toLowerCase();
+    filtered = filtered.filter(r => r.name.toLowerCase().includes(q) || r.type.toLowerCase().includes(q));
+  }
+
+  // Sidebar + grid
+  html += '<div class="cd-sidebar" style="border:1px solid var(--border);border-radius:8px;overflow:hidden">';
+
+  // Type sidebar
+  html += '<div class="cd-type-list">';
+  html += '<div class="cd-type-list-item' + (!cdState.resultsTypeFilter ? ' active' : '') + '" onclick="cdState.resultsTypeFilter=\'\';renderCdResults(document.getElementById(\'cdContent\'))">All types <span class="cnt">' + results.filter(r => cdState.resultsFilter === 'all' || r.diffType === cdState.resultsFilter).length + '</span></div>';
+  seenTypes.forEach(t => {
+    const qDef = META_QUERIES.find(q => q.type === t);
+    const cnt = results.filter(r => r.type === t && (cdState.resultsFilter === 'all' || r.diffType === cdState.resultsFilter)).length;
+    if (!cnt) return;
+    html += '<div class="cd-type-list-item' + (cdState.resultsTypeFilter === t ? ' active' : '') + '" onclick="cdState.resultsTypeFilter=\'' + esc(t) + '\';renderCdResults(document.getElementById(\'cdContent\'))">' + esc(qDef?.label || t) + ' <span class="cnt">' + cnt + '</span></div>';
+  });
+  html += '</div>';
+
+  // Results grid
+  html += '<div class="cd-result-grid">';
+  // Header
+  html += '<div class="cd-result-header">';
+  html += '<input type="checkbox" class="cd-cb" onchange="cdSelectAllVisible(this.checked)" ' +
+    (filtered.filter(r => r.diffType !== 'same').every(r => r.selected) && filtered.some(r => r.diffType !== 'same') ? 'checked' : '') + '>';
+  html += '<span class="cd-name">Name</span>';
+  html += '<span class="cd-type-badge">Type</span>';
+  html += '<span class="cd-diff-type">Difference</span>';
+  html += '</div>';
+
+  // Rows
+  if (!filtered.length) {
+    html += '<div style="padding:40px;text-align:center;color:var(--muted)">No items match the current filter.</div>';
+  }
+  filtered.forEach((r, fi) => {
+    const idx = results.indexOf(r);
+    const selectable = r.diffType !== 'same';
+    html += '<div class="cd-result-row' + (r.selected ? ' selected' : '') + '" onclick="cdShowItemDiff(' + idx + ')">';
+    html += '<input type="checkbox" class="cd-cb" ' + (r.selected ? 'checked' : '') + ' ' + (selectable ? '' : 'disabled') +
+      ' onclick="event.stopPropagation();cdToggleItem(' + idx + ',this.checked)">';
+    html += '<span class="cd-name">' + esc(r.name) + '</span>';
+    html += '<span class="cd-type-badge">' + esc(r.label) + '</span>';
+    html += '<span class="cd-diff-type ' + r.diffType + '">' + ({ new: 'New', different: 'Changed', deleted: 'Deleted', same: 'Same' }[r.diffType] || r.diffType) + '</span>';
+    html += '</div>';
+  });
+  html += '</div></div>'; // grid, sidebar
+
+  // Deploy bar
+  const selectedCount = results.filter(r => r.selected).length;
+  html += '<div class="cd-deploy-bar">';
+  html += '<span class="cd-sel-count">' + selectedCount + ' item' + (selectedCount !== 1 ? 's' : '') + ' selected</span>';
+  html += '<button class="btn btn-sm" onclick="cdSelectAllChanged()">Select All Changed</button>';
+  html += '<button class="btn btn-sm" onclick="cdDeselectAll()">Deselect All</button>';
+  if (cdState.targetType === 'org') {
+    html += '<button class="btn btn-primary" ' + (selectedCount ? '' : 'disabled') + ' onclick="cdValidateDeploy()" title="Check-only deployment: run tests without applying changes">✓ Validate</button>';
+    html += '<button class="btn btn-primary" style="background:var(--green);border-color:var(--green)" ' + (selectedCount ? '' : 'disabled') + ' onclick="cdDeployToOrg()">🚀 Deploy to Org</button>';
+  }
+  if (cdState.targetType === 'git') {
+    html += '<button class="btn btn-primary" ' + (selectedCount ? '' : 'disabled') + ' onclick="cdDeployToGit()">📝 Commit to Git</button>';
+  }
+  html += '</div>';
+
+  // Deploy status
+  if (cdState.deploySteps.length) {
+    html += '<div class="cd-deploy-status">';
+    html += '<h3>' + (cdState.isDeploying ? '🔄 Deployment in progress...' : (cdState.phase === 'deployed' ? '✅ Deployment complete' : '📋 Deployment Log')) + '</h3>';
+    cdState.deploySteps.forEach(step => {
+      const cls = step.status === 'ok' ? 'ok' : step.status === 'fail' ? 'fail' : 'running';
+      const icon = step.status === 'ok' ? '✓' : step.status === 'fail' ? '✕' : '⏳';
+      html += '<div class="cd-deploy-step ' + cls + '">' + icon + ' ' + esc(step.message) + '</div>';
+    });
+    if (cdState.isDeploying) {
+      html += '<div class="cd-progress-bar" style="margin-top:12px"><div class="cd-progress-fill" id="cdDeployBar" style="width:' +
+        (cdState.progress.total ? Math.round(cdState.progress.current / cdState.progress.total * 100) : 0) + '%"></div></div>';
+    }
+    html += '</div>';
+  }
+
+  html += '</div>'; // cd-container
+
+  // Diff modal
+  html += '<div id="cdDiffModal" class="meta-diff-modal" style="display:none" onclick="if(event.target===this)this.style.display=\'none\'">';
+  html += '<div class="meta-diff-content" style="max-width:1100px">';
+  html += '<div class="meta-diff-header"><h3 id="cdDiffTitle"></h3><button class="btn btn-sm" onclick="document.getElementById(\'cdDiffModal\').style.display=\'none\'">✕ Close</button></div>';
+  html += '<div id="cdDiffBody" class="meta-diff-body"></div>';
+  html += '</div></div>';
+
+  el.innerHTML = html;
+}
+
+// ── Result Actions ──
+function cdSetResultsFilter(f) { cdState.resultsFilter = f; renderCdResults(document.getElementById('cdContent')); }
+function cdToggleItem(idx, checked) { cdState.results[idx].selected = checked; renderCdResults(document.getElementById('cdContent')); }
+function cdSelectAllChanged() {
+  cdState.results.forEach(r => { if (r.diffType !== 'same') r.selected = true; });
+  renderCdResults(document.getElementById('cdContent'));
+}
+function cdDeselectAll() {
+  cdState.results.forEach(r => { r.selected = false; });
+  renderCdResults(document.getElementById('cdContent'));
+}
+function cdSelectAllVisible(checked) {
+  let filtered = cdState.results;
+  if (cdState.resultsFilter !== 'all') filtered = filtered.filter(r => r.diffType === cdState.resultsFilter);
+  if (cdState.resultsTypeFilter) filtered = filtered.filter(r => r.type === cdState.resultsTypeFilter);
+  if (cdState.resultsSearch) { const q = cdState.resultsSearch.toLowerCase(); filtered = filtered.filter(r => r.name.toLowerCase().includes(q)); }
+  filtered.forEach(r => { if (r.diffType !== 'same') r.selected = checked; });
+  renderCdResults(document.getElementById('cdContent'));
+}
+function cdBackToConfig() {
+  cdState.phase = 'config';
+  cdState.results = [];
+  cdState.deploySteps = [];
+  // Clear cached git trees
+  Object.keys(cdState).forEach(k => { if (k.startsWith('_cdGitTree_')) delete cdState[k]; });
+  renderCompareDeployView();
+}
+
+// ── Diff viewer ──
+function cdShowItemDiff(idx) {
+  const r = cdState.results[idx];
+  const modal = document.getElementById('cdDiffModal');
+  document.getElementById('cdDiffTitle').textContent = r.name + ' (' + r.diffType + ')';
+  modal.style.display = '';
+
+  if (r.diffType === 'same') {
+    document.getElementById('cdDiffBody').innerHTML = '<div style="text-align:center;padding:48px;color:var(--green)"><div style="font-size:40px;margin-bottom:12px">✓</div><div style="font-size:16px;font-weight:600">Identical</div></div>';
+    return;
+  }
+
+  const sLines = (r.sourceBody || '').split('\n');
+  const tLines = (r.targetBody || '').split('\n');
+
+  let sourceHtml = '', targetHtml = '';
+  const maxLen = Math.max(sLines.length, tLines.length);
+  for (let i = 0; i < maxLen; i++) {
+    const sl = i < sLines.length ? sLines[i] : undefined;
+    const tl = i < tLines.length ? tLines[i] : undefined;
+    const ln = String(i + 1).padStart(4, ' ') + ' ';
+    if (sl === undefined) {
+      sourceHtml += '<div style="min-height:1.6em">\u00a0</div>';
+      targetHtml += '<div class="diff-add">' + ln + esc(tl) + '</div>';
+    } else if (tl === undefined) {
+      sourceHtml += '<div class="diff-del">' + ln + esc(sl) + '</div>';
+      targetHtml += '<div style="min-height:1.6em">\u00a0</div>';
+    } else if (sl !== tl) {
+      sourceHtml += '<div class="diff-del">' + ln + esc(sl) + '</div>';
+      targetHtml += '<div class="diff-add">' + ln + esc(tl) + '</div>';
+    } else {
+      sourceHtml += '<div>' + ln + esc(sl) + '</div>';
+      targetHtml += '<div>' + ln + esc(tl) + '</div>';
+    }
+  }
+
+  const srcLabel = cdState.sourceType === 'org' ? ('Org: ' + (projectData.envs[cdState.sourceEnvIdx]?.displayName || '')) : ('Git: ' + cdState.sourceBranch);
+  const tgtLabel = cdState.targetType === 'org' ? ('Org: ' + (projectData.envs[cdState.targetEnvIdx]?.displayName || '')) : ('Git: ' + cdState.targetBranch);
+
+  document.getElementById('cdDiffBody').innerHTML =
+    '<div class="cd-diff-side">' +
+    '<div class="cd-diff-pane"><div class="cd-diff-pane-header">📤 ' + esc(srcLabel) + '</div><pre>' + sourceHtml + '</pre></div>' +
+    '<div class="cd-diff-pane"><div class="cd-diff-pane-header">📥 ' + esc(tgtLabel) + '</div><pre>' + targetHtml + '</pre></div>' +
+    '</div>';
+}
+
+// ── DEPLOY TO SALESFORCE ORG (Metadata API) ──
+async function cdDeployToOrg(checkOnly) {
+  if (cdState.isDeploying) return;
+  const selected = cdState.results.filter(r => r.selected);
+  if (!selected.length) { toast('Select at least one item', 'warn'); return; }
+  const conn = cdGetConn(cdState.targetEnvIdx);
+  if (!conn) { toast('Target org not connected', 'warn'); return; }
+
+  cdState.isDeploying = true;
+  cdState.phase = 'deploying';
+  cdState.deploySteps = [];
+  renderCdResults(document.getElementById('cdContent'));
+
+  const addStep = (msg, status) => {
+    cdState.deploySteps.push({ message: msg, status });
+    renderCdResults(document.getElementById('cdContent'));
+  };
+
+  try {
+    addStep('Building deployment package...', 'running');
+
+    // Build package.xml
+    const typeMap = {};
+    selected.forEach(r => {
+      if (r.diffType === 'deleted') return; // handled by destructiveChanges
+      const xmlName = TYPE_TO_XML_NAME[r.type] || r.type;
+      if (!typeMap[xmlName]) typeMap[xmlName] = [];
+      // Extract member name (without path/extension)
+      let memberName = r.name;
+      typeMap[xmlName].push(memberName);
+    });
+
+    let packageXml = '<?xml version="1.0" encoding="UTF-8"?>\n<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n';
+    for (const [typeName, members] of Object.entries(typeMap)) {
+      packageXml += '  <types>\n';
+      members.forEach(m => { packageXml += '    <members>' + escXmlStr(m) + '</members>\n'; });
+      packageXml += '    <name>' + escXmlStr(typeName) + '</name>\n';
+      packageXml += '  </types>\n';
+    }
+    packageXml += '  <version>' + SF_API_VERSION + '</version>\n</Package>\n';
+
+    // Build destructiveChanges for deleted items
+    const deletedItems = selected.filter(r => r.diffType === 'deleted');
+    let destructiveXml = '';
+    if (deletedItems.length) {
+      const delTypeMap = {};
+      deletedItems.forEach(r => {
+        const xmlName = TYPE_TO_XML_NAME[r.type] || r.type;
+        if (!delTypeMap[xmlName]) delTypeMap[xmlName] = [];
+        delTypeMap[xmlName].push(r.name);
+      });
+      destructiveXml = '<?xml version="1.0" encoding="UTF-8"?>\n<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n';
+      for (const [typeName, members] of Object.entries(delTypeMap)) {
+        destructiveXml += '  <types>\n';
+        members.forEach(m => { destructiveXml += '    <members>' + escXmlStr(m) + '</members>\n'; });
+        destructiveXml += '    <name>' + escXmlStr(typeName) + '</name>\n';
+        destructiveXml += '  </types>\n';
+      }
+      destructiveXml += '  <version>' + SF_API_VERSION + '</version>\n</Package>\n';
+    }
+
+    // Build ZIP
+    if (typeof JSZip === 'undefined') { throw new Error('JSZip not loaded. Check CDN connectivity.'); }
+    const zip = new JSZip();
+    zip.file('package.xml', packageXml);
+    if (destructiveXml) zip.file('destructiveChangesPost.xml', destructiveXml);
+
+    // Add component files
+    const addedItems = selected.filter(r => r.diffType !== 'deleted');
+    for (const item of addedItems) {
+      const q = META_QUERIES.find(mq => mq.type === item.type);
+      if (!q) continue;
+      // Compute MDAPI path  
+      let mdapiPath = q.path + '/';
+      if (OBJECT_CHILD_FOLDERS && OBJECT_CHILD_FOLDERS[item.type]) {
+        const parts = item.name.split('.');
+        if (parts.length >= 2) {
+          mdapiPath = 'objects/' + parts[0] + '/' + OBJECT_CHILD_FOLDERS[item.type] + '/' + parts.slice(1).join('.') + q.ext;
+        } else {
+          mdapiPath += item.name + q.ext;
+        }
+      } else if (item.type === 'LWC' || item.type === 'AuraBundle') {
+        mdapiPath += item.name + '/' + item.name + (item.type === 'LWC' ? '.js' : '.cmp');
+      } else {
+        mdapiPath += item.name + q.ext;
+      }
+      // Ensure full body is loaded
+      let body = item.sourceBody;
+      if (!body && item._source && item._source._conn && item._source.sfId) {
+        try {
+          const sObj = getToolingSObject(q);
+          if (sObj) {
+            const full = await cdApiFetch(item._source._conn, '/services/data/v' + SF_API_VERSION + '/tooling/sobjects/' + sObj + '/' + item._source.sfId);
+            body = full.Body || full.Markup || (full.Metadata ? metadataJsonToXml(full.Metadata, item.type) : '') || '';
+          }
+        } catch {}
+      }
+      if (body) zip.file(mdapiPath, body);
+    }
+
+    const zipBlob = await zip.generateAsync({ type: 'base64' });
+    addStep('Package built: ' + (addedItems.length) + ' files' + (deletedItems.length ? ', ' + deletedItems.length + ' destructive' : ''), 'ok');
+
+    // Deploy via SOAP Metadata API
+    addStep('Deploying to Salesforce' + (checkOnly ? ' (validation only)' : '') + '...', 'running');
+    const deployOpts = '<meta:DeployOptions>' +
+      '<meta:rollbackOnError>true</meta:rollbackOnError>' +
+      '<meta:singlePackage>true</meta:singlePackage>' +
+      (checkOnly ? '<meta:checkOnly>true</meta:checkOnly>' : '') +
+      '<meta:testLevel>NoTestRun</meta:testLevel>' +
+      '</meta:DeployOptions>';
+    const deploySoap = '<meta:deploy><meta:ZipFile>' + zipBlob + '</meta:ZipFile>' + deployOpts + '</meta:deploy>';
+    const deployRes = await cdSoapFetch(conn, deploySoap);
+
+    // Extract async id
+    const idNode = deployRes.querySelector('id') || deployRes.getElementsByTagName('id')[0];
+    if (!idNode) throw new Error('No deploy ID returned');
+    const asyncId = idNode.textContent;
+    addStep('Deploy queued: ID ' + asyncId, 'ok');
+
+    // Poll checkDeployStatus
+    let pollCount = 0;
+    let deployDone = false;
+    let lastStatus = '';
+    while (!deployDone && pollCount < 60) {
+      pollCount++;
+      await _sleep(Math.min(2000 * Math.pow(1.3, pollCount - 1), 30000));
+      const statusSoap = '<meta:checkDeployStatus><meta:asyncProcessId>' + asyncId + '</meta:asyncProcessId><meta:includeDetails>true</meta:includeDetails></meta:checkDeployStatus>';
+      const statusRes = await cdSoapFetch(conn, statusSoap);
+      const doneNode = statusRes.querySelector('done') || statusRes.getElementsByTagName('done')[0];
+      const statusNode = statusRes.querySelector('status') || statusRes.getElementsByTagName('status')[0];
+      const numDeployed = statusRes.querySelector('numberComponentsDeployed') || statusRes.getElementsByTagName('numberComponentsDeployed')[0];
+      const numTotal = statusRes.querySelector('numberComponentsTotal') || statusRes.getElementsByTagName('numberComponentsTotal')[0];
+      const numErrors = statusRes.querySelector('numberComponentErrors') || statusRes.getElementsByTagName('numberComponentErrors')[0];
+
+      const status = statusNode ? statusNode.textContent : 'Unknown';
+      const deployed = numDeployed ? parseInt(numDeployed.textContent) : 0;
+      const total = numTotal ? parseInt(numTotal.textContent) : 0;
+      const errors = numErrors ? parseInt(numErrors.textContent) : 0;
+
+      if (status !== lastStatus) {
+        addStep('Status: ' + status + (total ? ' (' + deployed + '/' + total + ' components)' : ''), 'running');
+        lastStatus = status;
+      }
+
+      // Update progress bar
+      if (total > 0) {
+        cdState.progress = { current: deployed, total, message: status };
+        const bar = document.getElementById('cdDeployBar');
+        if (bar) bar.style.width = Math.round(deployed / total * 100) + '%';
+      }
+
+      if (doneNode && doneNode.textContent === 'true') {
+        deployDone = true;
+        const successNode = statusRes.querySelector('success') || statusRes.getElementsByTagName('success')[0];
+        const success = successNode && successNode.textContent === 'true';
+
+        if (success) {
+          addStep('✅ Deployment ' + (checkOnly ? 'validation' : '') + ' succeeded! (' + deployed + ' components)', 'ok');
+          toast('Deployment ' + (checkOnly ? 'validated' : 'succeeded'), 'ok');
+          notifyUser('SF Deploy', (checkOnly ? 'Validation' : 'Deployment') + ' succeeded: ' + deployed + ' components');
+        } else {
+          // Parse failures
+          const failures = statusRes.querySelectorAll ? statusRes.querySelectorAll('componentFailures') : statusRes.getElementsByTagName('componentFailures');
+          const failMsgs = [];
+          for (let i = 0; i < (failures?.length || 0); i++) {
+            const f = failures[i];
+            const fname = (f.querySelector('fullName') || f.getElementsByTagName('fullName')[0])?.textContent || '';
+            const prob = (f.querySelector('problem') || f.getElementsByTagName('problem')[0])?.textContent || '';
+            const line = (f.querySelector('lineNumber') || f.getElementsByTagName('lineNumber')[0])?.textContent || '';
+            failMsgs.push(fname + (line ? ':' + line : '') + ' — ' + prob);
+          }
+          addStep('❌ Deployment failed' + (errors ? ' (' + errors + ' errors)' : ''), 'fail');
+          failMsgs.forEach(m => addStep(m, 'fail'));
+          toast('Deployment failed: ' + errors + ' errors', 'error');
+          notifyUser('SF Deploy Failed', errors + ' errors');
+        }
+      }
+    }
+    if (!deployDone) {
+      addStep('⏰ Polling timeout — check deployment status in Salesforce Setup', 'fail');
+    }
+
+    cdState.phase = 'deployed';
+  } catch (e) {
+    addStep('Error: ' + e.message, 'fail');
+    logMsg('error', 'deploy', 'Deploy failed', e.message);
+    toast('Deploy failed: ' + e.message, 'error');
+    cdState.phase = 'results';
+  } finally {
+    cdState.isDeploying = false;
+    renderCdResults(document.getElementById('cdContent'));
+  }
+}
+
+function cdValidateDeploy() { cdDeployToOrg(true); }
+
+function escXmlStr(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ── DEPLOY TO GIT ──
+async function cdDeployToGit() {
+  if (cdState.isDeploying) return;
+  const selected = cdState.results.filter(r => r.selected);
+  if (!selected.length) { toast('Select at least one item', 'warn'); return; }
+  if (!projectData || !projectData.pat || !projectData.repo) { toast('GitHub not configured', 'warn'); return; }
+  const branch = cdState.targetBranch;
+  if (!branch) { toast('No target branch selected', 'warn'); return; }
+
+  cdState.isDeploying = true;
+  cdState.phase = 'deploying';
+  cdState.deploySteps = [];
+  renderCdResults(document.getElementById('cdContent'));
+
+  const addStep = (msg, status) => {
+    cdState.deploySteps.push({ message: msg, status });
+    renderCdResults(document.getElementById('cdContent'));
+  };
+
+  try {
+    addStep('Getting branch reference...', 'running');
+    const refData = await ghFetch('/repos/' + projectData.repo + '/git/ref/heads/' + encodeURIComponent(branch));
+    const latestSha = refData.object.sha;
+    addStep('Branch ' + branch + ' at ' + latestSha.slice(0, 7), 'ok');
+
+    // Get base tree
+    const commitData = await ghFetch('/repos/' + projectData.repo + '/git/commits/' + latestSha);
+    const baseTreeSha = commitData.tree.sha;
+
+    // Detect base path
+    const treeData = await ghFetch('/repos/' + projectData.repo + '/git/trees/' + baseTreeSha + '?recursive=1');
+    let basePath = '';
+    if (treeData.tree) {
+      for (const item of treeData.tree) {
+        if (item.path.startsWith('force-app/main/default/')) { basePath = 'force-app/main/default/'; break; }
+        if (item.path.startsWith('src/')) { basePath = 'src/'; break; }
+      }
+    }
+
+    addStep('Creating blobs for ' + selected.length + ' files...', 'running');
+    const treeItems = [];
+    for (const item of selected) {
+      if (item.diffType === 'deleted') continue; // TODO: handle deletions
+      const q = META_QUERIES.find(mq => mq.type === item.type);
+      if (!q) continue;
+
+      // Compute git path
+      let gitPath = basePath + q.path + '/';
+      if (OBJECT_CHILD_FOLDERS && OBJECT_CHILD_FOLDERS[item.type]) {
+        const parts = item.name.split('.');
+        if (parts.length >= 2) {
+          gitPath = basePath + 'objects/' + parts[0] + '/' + OBJECT_CHILD_FOLDERS[item.type] + '/' + parts.slice(1).join('.') + q.ext;
+        } else {
+          gitPath += item.name + q.ext;
+        }
+      } else if (item.type === 'LWC' || item.type === 'AuraBundle') {
+        gitPath += item.name + '/' + item.name + (item.type === 'LWC' ? '.js' : '.cmp');
+      } else {
+        gitPath += item.name + q.ext;
+      }
+
+      const body = item.sourceBody || '';
+      if (!body) continue;
+      const blob = await ghFetch('/repos/' + projectData.repo + '/git/blobs', {
+        method: 'POST', body: JSON.stringify({ content: body, encoding: 'utf-8' })
+      });
+      treeItems.push({ path: gitPath, mode: '100644', type: 'blob', sha: blob.sha });
+    }
+
+    if (!treeItems.length) { addStep('No files to commit', 'fail'); return; }
+
+    addStep('Creating tree with ' + treeItems.length + ' files...', 'running');
+    const newTree = await ghFetch('/repos/' + projectData.repo + '/git/trees', {
+      method: 'POST', body: JSON.stringify({ base_tree: baseTreeSha, tree: treeItems })
+    });
+
+    const msg = 'Compare & Deploy: ' + selected.length + ' component' + (selected.length !== 1 ? 's' : '') + ' from ' +
+      (cdState.sourceType === 'org' ? (projectData.envs[cdState.sourceEnvIdx]?.displayName || 'org') : cdState.sourceBranch);
+    addStep('Creating commit...', 'running');
+    const newCommit = await ghFetch('/repos/' + projectData.repo + '/git/commits', {
+      method: 'POST', body: JSON.stringify({ message: msg, tree: newTree.sha, parents: [latestSha] })
+    });
+
+    await ghFetch('/repos/' + projectData.repo + '/git/refs/heads/' + encodeURIComponent(branch), {
+      method: 'PATCH', body: JSON.stringify({ sha: newCommit.sha })
+    });
+
+    addStep('✅ Committed to ' + branch + ' (' + newCommit.sha.slice(0, 7) + ')', 'ok');
+    toast('Committed ' + selected.length + ' components to ' + branch, 'ok');
+    notifyUser('Git Commit', selected.length + ' components committed to ' + branch);
+    cdState.phase = 'deployed';
+  } catch (e) {
+    addStep('Error: ' + e.message, 'fail');
+    toast('Commit failed: ' + e.message, 'error');
+    logMsg('error', 'deploy', 'Git commit failed', e.message);
+    cdState.phase = 'results';
+  } finally {
+    cdState.isDeploying = false;
+    renderCdResults(document.getElementById('cdContent'));
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
    METADATA VIEW INIT HOOK
    ═══════════════════════════════════════════════════════ */
 const origShowView = showView;
@@ -4603,6 +5724,20 @@ showView = function(name) {
     } else {
       renderMetadataView();
     }
+  }
+  if (name === 'compare') {
+    cdRestoreConns();
+    // If returning from CD OAuth, capture the token
+    if (safeSsGet('cd_oauth_pending')) {
+      const envIdx = parseInt(safeSsGet('cd_oauth_env_idx') || '-1');
+      safeSsRemove('cd_oauth_pending');
+      safeSsRemove('cd_oauth_env_idx');
+      if (envIdx >= 0 && sfState.token) {
+        cdSetConn(envIdx, sfState.token, sfState.instance);
+        cdFetchUser(cdConnections[envIdx]);
+      }
+    }
+    renderCompareDeployView();
   }
 };
 
