@@ -1189,6 +1189,7 @@ function enterProject() {
 }
 
 function lockProject() {
+  if (cdState.isComparing || cdState.isDeploying) { toast('Cannot lock while comparison or deployment is in progress', 'warn'); return; }
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
   currentProjectIndex = -1;
   currentPassword = '';
@@ -4835,7 +4836,7 @@ function renderCompareDeployView() {
     safeSsRemove('cd_oauth_env_idx');
     if (envIdx >= 0 && sfState.token) {
       cdSetConn(envIdx, sfState.token, sfState.instance);
-      cdFetchUser(cdConnections[envIdx]).then(() => renderCompareDeployView());
+      cdFetchUser(cdConnections[envIdx]).then(() => renderCompareDeployView()).catch(e => { toast('Failed to load user info: ' + e.message, 'warn'); renderCompareDeployView(); });
     }
   }
 
@@ -5440,6 +5441,7 @@ function cdBackToConfig() {
   cdState.phase = 'config';
   cdState.results = [];
   cdState.deploySteps = [];
+  cdState._fetchErrors = [];
   cdState.isDeploying = false;
   cdState.isComparing = false;
   // Clear cached git trees
@@ -5869,7 +5871,7 @@ showView = function(name) {
       safeSsRemove('cd_oauth_env_idx');
       if (envIdx >= 0 && sfState.token) {
         cdSetConn(envIdx, sfState.token, sfState.instance);
-        cdFetchUser(cdConnections[envIdx]).then(() => renderCompareDeployView());
+        cdFetchUser(cdConnections[envIdx]).then(() => renderCompareDeployView()).catch(e => { toast('Failed to load user info: ' + e.message, 'warn'); renderCompareDeployView(); });
       }
     }
     renderCompareDeployView();
