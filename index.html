@@ -4905,6 +4905,10 @@ function renderCompareDeployView() {
   const canCompare = cdCanCompare();
   html += '<div class="cd-actions">';
   html += '<button class="btn btn-primary btn-lg" ' + (canCompare ? '' : 'disabled') + ' onclick="cdRunComparison()">🔍 Compare Now</button>';
+  if (!canCompare) {
+    const reasons = cdWhyCannotCompare();
+    html += '<div style="margin-top:8px;font-size:12px;color:var(--yellow)">⚠️ ' + reasons.join(' · ') + '</div>';
+  }
   html += '</div>';
 
   html += '</div>'; // cd-container
@@ -5045,6 +5049,17 @@ function cdCanCompare() {
   if (cdState.targetType === 'org' && (cdState.targetEnvIdx < 0 || !cdGetConn(cdState.targetEnvIdx))) return false;
   if (cdState.targetType === 'git' && !cdState.targetBranch) return false;
   return true;
+}
+function cdWhyCannotCompare() {
+  const r = [];
+  if (!cdState.types.length) r.push('Select at least one metadata type');
+  if (cdState.sourceType === 'org' && cdState.sourceEnvIdx < 0) r.push('Select source environment');
+  else if (cdState.sourceType === 'org' && !cdGetConn(cdState.sourceEnvIdx)) r.push('Connect source org (click 🔑 Connect)');
+  if (cdState.sourceType === 'git' && !cdState.sourceBranch) r.push('Select source branch');
+  if (cdState.targetType === 'org' && cdState.targetEnvIdx < 0) r.push('Select target environment');
+  else if (cdState.targetType === 'org' && !cdGetConn(cdState.targetEnvIdx)) r.push('Connect target org (click 🔑 Connect)');
+  if (cdState.targetType === 'git' && !cdState.targetBranch) r.push('Select target branch');
+  return r;
 }
 
 // ── COMPARISON ENGINE ──
