@@ -4756,7 +4756,15 @@ async function cdSoapFetch(conn, soapBody) {
   const baseUrl = conn.instance + '/services/Soap/m/' + SF_API_VERSION;
   const proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.replace(/\/+$/, '') : '';
   const url = proxy ? proxy + '/' + baseUrl : baseUrl;
-  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=UTF-8', SOAPAction: '""' }, body: envelope });
+  let res;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=UTF-8', SOAPAction: '""' }, body: envelope });
+    if (res.status === 429 || res.status === 503) {
+      await new Promise(r => setTimeout(r, 2000 * (attempt + 1)));
+      continue;
+    }
+    break;
+  }
   if (!res.ok) {
     if (res.status === 401) {
       for (const key of Object.keys(cdConnections)) {
