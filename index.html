@@ -1616,7 +1616,9 @@ function buildFeatures() {
   pipelineCache.features = Array.from(featureMap.values()).sort((a, b) => new Date(b.lastUpdated) - new Date(a.lastUpdated));
 
   // Build releasable PRs per environment
-  // A merged PR in env X is "releasable" to env X+1 if its feature has no open/merged PR targeting env X+1
+  // A merged PR in env X is "releasable" to env X+1 if:
+  // - No promote PR exists in env X+1 for this feature, OR
+  // - The PR was merged AFTER the latest promote PR was created (new changes not yet promoted)
   const releasable = {};
   for (let i = 0; i < envBranches.length - 1; i++) {
     const envBranch = envBranches[i];
@@ -1626,8 +1628,16 @@ function buildFeatures() {
       const prsInCurrent = feat.prs.get(envBranch) || [];
       const prsInNext = feat.prs.get(nextEnvBranch) || [];
       const mergedInCurrent = prsInCurrent.filter(pr => pr.merged_at);
-      if (mergedInCurrent.length && !prsInNext.length) {
+      if (!mergedInCurrent.length) return;
+
+      if (!prsInNext.length) {
+        // No promote PR exists — all merged PRs are releasable
         eligible.push(...mergedInCurrent);
+      } else {
+        // Promote PR(s) exist — only include merged PRs that were merged AFTER the latest promote PR was created
+        const latestPromoteTime = Math.max(...prsInNext.map(pr => new Date(pr.created_at).getTime()));
+        const newMerged = mergedInCurrent.filter(pr => new Date(pr.merged_at).getTime() > latestPromoteTime);
+        if (newMerged.length) eligible.push(...newMerged);
       }
     });
     if (eligible.length) releasable[envBranch] = eligible;
