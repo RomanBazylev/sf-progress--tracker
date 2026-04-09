@@ -1601,10 +1601,9 @@ function buildFeatures() {
     }
     const feat = featureMap.get(featureName);
     const targetEnv = pr.base.ref;
-    // Keep the most recent PR for each env
-    if (!feat.prs.has(targetEnv) || new Date(pr.updated_at) > new Date(feat.prs.get(targetEnv).updated_at)) {
-      feat.prs.set(targetEnv, pr);
-    }
+    // Keep all PRs per env (multiple PRs from same branch)
+    if (!feat.prs.has(targetEnv)) feat.prs.set(targetEnv, []);
+    feat.prs.get(targetEnv).push(pr);
     if (new Date(pr.updated_at) > new Date(feat.lastUpdated)) {
       feat.lastUpdated = pr.updated_at;
     }
@@ -1624,10 +1623,11 @@ function buildFeatures() {
     const nextEnvBranch = envBranches[i + 1];
     const eligible = [];
     pipelineCache.features.forEach(feat => {
-      const prInCurrent = feat.prs.get(envBranch);
-      const prInNext = feat.prs.get(nextEnvBranch);
-      if (prInCurrent && prInCurrent.merged_at && !prInNext) {
-        eligible.push(prInCurrent);
+      const prsInCurrent = feat.prs.get(envBranch) || [];
+      const prsInNext = feat.prs.get(nextEnvBranch) || [];
+      const mergedInCurrent = prsInCurrent.filter(pr => pr.merged_at);
+      if (mergedInCurrent.length && !prsInNext.length) {
+        eligible.push(...mergedInCurrent);
       }
     });
     if (eligible.length) releasable[envBranch] = eligible;
@@ -1882,12 +1882,12 @@ function renderMiniJourney(pr) {
 
   let html = '<div class="mini-journey" title="Feature journey">';
   envs.forEach((env, i) => {
-    const envPr = feat.prs.get(env.branch);
+    const envPrs = feat.prs.get(env.branch) || [];
     let cls = 'future';
-    if (envPr && envPr.merged_at) cls = 'reached';
-    else if (envPr && envPr.draft) cls = 'draft';
-    else if (envPr) cls = 'current';
-    html += `<div class="mj-dot ${cls}" title="${esc(env.displayName)}${envPr && envPr.draft ? ' (Draft)' : ''}"></div>`;
+    if (envPrs.some(p => p.merged_at)) cls = 'reached';
+    else if (envPrs.some(p => p.draft)) cls = 'draft';
+    else if (envPrs.length) cls = 'current';
+    html += `<div class="mj-dot ${cls}" title="${esc(env.displayName)}${envPrs.some(p => p.draft) ? ' (Draft)' : ''}"></div>`;
     if (i < envs.length - 1) html += '<span class="mj-arrow">›</span>';
   });
   html += '</div>';
@@ -2405,7 +2405,7 @@ function renderOverview() {
    ═══════════════════════════════════════════════════════ */
 function renderSummary() {
   const openFeatures = pipelineCache.features.filter(f => {
-    return Array.from(f.prs.values()).some(pr => !pr.merged_at);
+    return Array.from(f.prs.values()).some(prs => prs.some(pr => !pr.merged_at));
   }).length;
   const totalOpenPrs = pipelineCache.prs.length;
   const envs = projectData.envs;
@@ -2608,10 +2608,10 @@ function renderFeatureJourney(pr) {
   const envs = projectData.envs;
   let html = '<div class="sp-section"><div class="sp-section-title">Feature Journey</div><div class="sp-journey">';
   envs.forEach((env, i) => {
-    const envPr = feat.prs.get(env.branch);
+    const envPrs = feat.prs.get(env.branch) || [];
     let cls = '';
-    if (envPr && envPr.merged_at) cls = 'reached';
-    else if (envPr) cls = 'current';
+    if (envPrs.some(p => p.merged_at)) cls = 'reached';
+    else if (envPrs.length) cls = 'current';
     html += `<div class="j-node"><div class="j-dot ${cls}">${cls === 'reached' ? '✓' : cls === 'current' ? '○' : ''}</div><div class="j-name">${esc(env.displayName)}</div></div>`;
     if (i < envs.length - 1) html += '<div class="j-arrow">→</div>';
   });

@@ -200,7 +200,7 @@ GitHub API ──┐
              │     ├─ merged PRs (ghFetch)
              │     └─ drift comparisons (ghFetch per env pair)
              │
-             └── buildFeatures() ──→ feature grouping by head branch
+             └── buildFeatures() ──→ feature grouping by head branch (supports multiple PRs per env)
 
 Salesforce ──┐
              ├── sfOAuthLogin(envIdx) → OAuth implicit → token in sessionStorage
