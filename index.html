@@ -2001,7 +2001,7 @@ function getReleaseBranchSuggestion() {
   const nextEnv = projectData.envs[activeEnvIndex + 1];
   const suffix = nextEnv ? '_' + nextEnv.branch : '';
   if (selected.length === 1) {
-    return 'promote/' + selected[0].head.ref + suffix;
+    return 'promote/' + selected[0].head.ref + '_pr' + selected[0].number + suffix;
   }
   const today = new Date().toISOString().slice(0, 10);
   return 'promote/' + today + suffix;
