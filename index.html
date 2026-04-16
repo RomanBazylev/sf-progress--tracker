@@ -592,6 +592,19 @@ input,select{font-family:inherit}
   .cd-diff-side{grid-template-columns:1fr}
 }
 
+/* ── BOOTSTRAP: Deploy Connected App ── */
+.bs-section{margin-top:20px;background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:16px}
+.bs-section summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--accent)}
+.bs-section .field{margin-top:12px}
+.bs-section .field label{display:block;font-size:12px;font-weight:600;margin-bottom:4px}
+.bs-section .field input{width:100%;padding:7px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface2);color:var(--text);font-size:13px}
+.bs-deploy-steps{margin-top:12px}
+.bs-deploy-step{display:flex;align-items:flex-start;gap:8px;font-size:12px;padding:3px 0;line-height:1.5}
+.bs-deploy-step.ok{color:var(--green)}
+.bs-deploy-step.fail{color:var(--red)}
+.bs-deploy-step.running{color:var(--accent)}
+.bs-deploy-step .bs-icon{flex-shrink:0;width:16px;text-align:center}
+.bs-warn-box{margin-top:10px;padding:10px 12px;background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:8px;font-size:12px;color:var(--text);line-height:1.5}
 /* ── COLORS FOR ENV STRIPES (legacy compat) ── */
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HoI/xNIDFo5450Wb5HjZziA7MATgSFGBFDeXN4IfpDBVqXqSUvUFMa7yZqjMBLag==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -768,7 +781,7 @@ input,select{font-family:inherit}
       </div>
 
       <details style="margin-top:20px;font-size:12px;color:var(--muted)">
-        <summary style="cursor:pointer;font-weight:600">Setup Instructions</summary>
+        <summary style="cursor:pointer;font-weight:600">Setup Instructions (Manual)</summary>
         <ol style="margin-top:8px;padding-left:20px;line-height:2">
           <li>In Salesforce: Setup → App Manager → New Connected App</li>
           <li>Enable OAuth Settings</li>
@@ -778,6 +791,32 @@ input,select{font-family:inherit}
           <li>Copy the Consumer Key into the field above</li>
           <li>For CORS Proxy: deploy a Cloudflare Worker that forwards requests and adds CORS headers</li>
         </ol>
+      </details>
+
+      <details class="bs-section" id="bsSection">
+        <summary>⚡ Quick Setup: Auto-Deploy Connected App</summary>
+        <p style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5">Automatically create a Connected App on your Salesforce org. Requires admin credentials for one-time setup. After deployment, the Consumer Key is auto-filled.</p>
+        <div class="field">
+          <label>Org URL <span style="color:var(--red);font-weight:400">*</span></label>
+          <input id="bsOrgUrl" placeholder="https://mycompany.my.salesforce.com">
+        </div>
+        <div class="field">
+          <label>Username <span style="color:var(--red);font-weight:400">*</span></label>
+          <input id="bsUsername" placeholder="admin@company.com">
+        </div>
+        <div class="field">
+          <label>Password <span style="color:var(--red);font-weight:400">*</span></label>
+          <input id="bsPassword" type="password" placeholder="Your password" autocomplete="off">
+        </div>
+        <div class="field">
+          <label>Security Token <span style="color:var(--muted);font-weight:normal">(if required by org)</span></label>
+          <input id="bsSecToken" type="password" placeholder="Append to password for API access" autocomplete="off">
+          <div style="font-size:11px;color:var(--muted);margin-top:3px">Setup → My Personal Information → Reset Security Token</div>
+        </div>
+        <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
+          <button class="btn btn-primary" onclick="bsDeployConnectedApp()" id="bsDeployBtn">🚀 Deploy Connected App</button>
+        </div>
+        <div id="bsDeploySteps" class="bs-deploy-steps"></div>
       </details>
     </div>
   </div>
@@ -5765,6 +5804,271 @@ async function cdDeployToOrg(checkOnly) {
 function cdValidateDeploy() { cdDeployToOrg(true); }
 
 function escXmlStr(s) { return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;'); }
+
+// ══════════════════════════════════════════════════════════
+//   BOOTSTRAP: Deploy Connected App to Org
+// ══════════════════════════════════════════════════════════
+
+let _bsDeploying = false;
+
+/** SOAP Login via Partner API — no Connected App needed */
+async function bsSoapLogin(orgUrl, username, password) {
+  const proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.replace(/\/+$/, '') : '';
+  if (!proxy) throw new Error('CORS Proxy is required. Fill in the CORS Proxy field first.');
+  const endpoint = orgUrl.replace(/\/+$/, '') + '/services/Soap/u/' + SF_API_VERSION;
+  const url = proxy + '/' + endpoint;
+  const soapEnv = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:urn="urn:partner.soap.sforce.com">' +
+    '<soapenv:Body><urn:login>' +
+    '<urn:username>' + escXmlStr(username) + '</urn:username>' +
+    '<urn:password>' + escXmlStr(password) + '</urn:password>' +
+    '</urn:login></soapenv:Body></soapenv:Envelope>';
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'Content-Type': 'text/xml; charset=UTF-8', SOAPAction: '""' },
+    body: soapEnv
+  });
+  const txt = await res.text();
+  const doc = new DOMParser().parseFromString(txt, 'text/xml');
+  const fault = doc.querySelector('faultstring') || doc.getElementsByTagName('faultstring')[0];
+  if (fault) throw new Error(fault.textContent);
+  const getTag = (tag) => (doc.querySelector(tag) || doc.getElementsByTagNameNS('*', tag)[0] || {}).textContent || '';
+  const sessionId = getTag('sessionId');
+  const serverUrl = getTag('serverUrl');
+  const userEmail = getTag('userEmail');
+  if (!sessionId) throw new Error('No sessionId returned from login');
+  // Derive instance URL from serverUrl (e.g. https://cs123.salesforce.com/services/Soap/u/65.0/00D...)
+  const m = serverUrl.match(/^(https:\/\/[^/]+)/);
+  const instanceUrl = m ? m[1] : orgUrl.replace(/\/+$/, '');
+  return { token: sessionId, instance: instanceUrl, email: userEmail };
+}
+
+/** SOAP Metadata API call using a bootstrap connection */
+async function bsMetaSoapFetch(conn, soapBody) {
+  const envelope = '<?xml version="1.0" encoding="UTF-8"?>' +
+    '<soapenv:Envelope xmlns:soapenv="http://schemas.xmlsoap.org/soap/envelope/" xmlns:meta="http://soap.sforce.com/2006/04/metadata">' +
+    '<soapenv:Header><meta:SessionHeader><meta:sessionId>' + conn.token + '</meta:sessionId></meta:SessionHeader></soapenv:Header>' +
+    '<soapenv:Body>' + soapBody + '</soapenv:Body></soapenv:Envelope>';
+  const baseUrl = conn.instance + '/services/Soap/m/' + SF_API_VERSION;
+  const proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.replace(/\/+$/, '') : '';
+  const url = proxy ? proxy + '/' + baseUrl : baseUrl;
+  const res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'text/xml; charset=UTF-8', SOAPAction: '""' }, body: envelope });
+  if (!res.ok) throw new Error('SOAP error: ' + res.status + ' ' + res.statusText);
+  const doc = new DOMParser().parseFromString(await res.text(), 'text/xml');
+  const fault = doc.querySelector('faultstring') || doc.getElementsByTagName('faultstring')[0];
+  if (fault) throw new Error('SOAP Fault: ' + fault.textContent);
+  return doc;
+}
+
+/** REST API call using bootstrap connection (for Tooling API) */
+async function bsApiFetch(conn, path) {
+  const baseUrl = conn.instance + path;
+  const proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.replace(/\/+$/, '') : '';
+  const url = proxy ? proxy + '/' + baseUrl : baseUrl;
+  const res = await fetch(url, { headers: { Authorization: 'Bearer ' + conn.token, Accept: 'application/json' } });
+  if (!res.ok) {
+    let detail = res.status + ' ' + res.statusText;
+    try { const b = await res.json(); detail += ' — ' + (b[0]?.message || b.message || ''); } catch {}
+    throw new Error(detail);
+  }
+  return res.json();
+}
+
+/** Build a zip with ConnectedApp metadata */
+async function bsBuildConnectedAppZip(callbackUrl, contactEmail) {
+  if (typeof JSZip === 'undefined') throw new Error('JSZip not loaded. Check CDN connectivity.');
+  const appName = 'SFPipelineTracker';
+  const zip = new JSZip();
+  const packageXml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+    '  <types>\n' +
+    '    <members>' + appName + '</members>\n' +
+    '    <name>ConnectedApp</name>\n' +
+    '  </types>\n' +
+    '  <version>' + SF_API_VERSION + '</version>\n' +
+    '</Package>\n';
+  const connectedAppXml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<ConnectedApp xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+    '  <label>SF Pipeline Tracker</label>\n' +
+    '  <contactEmail>' + escXmlStr(contactEmail || 'admin@example.com') + '</contactEmail>\n' +
+    '  <oauthConfig>\n' +
+    '    <callbackUrl>' + escXmlStr(callbackUrl) + '</callbackUrl>\n' +
+    '    <scopes>Api</scopes>\n' +
+    '    <scopes>RefreshToken</scopes>\n' +
+    '    <isAdminApproved>false</isAdminApproved>\n' +
+    '    <isConsumerSecretOptional>true</isConsumerSecretOptional>\n' +
+    '    <isIntrospectAllTokens>false</isIntrospectAllTokens>\n' +
+    '  </oauthConfig>\n' +
+    '  <oauthPolicy>\n' +
+    '    <ipRelaxation>BYPASS</ipRelaxation>\n' +
+    '    <refreshTokenPolicy>infinite</refreshTokenPolicy>\n' +
+    '  </oauthPolicy>\n' +
+    '</ConnectedApp>\n';
+  zip.file('package.xml', packageXml);
+  zip.file('connectedApps/' + appName + '.connectedApp', connectedAppXml);
+  return zip.generateAsync({ type: 'base64' });
+}
+
+/** Main bootstrap flow — deploy Connected App and retrieve Consumer Key */
+async function bsDeployConnectedApp() {
+  if (_bsDeploying) return;
+  const orgUrl = (document.getElementById('bsOrgUrl')?.value || '').trim().replace(/\/+$/, '');
+  const username = (document.getElementById('bsUsername')?.value || '').trim();
+  const password = (document.getElementById('bsPassword')?.value || '');
+  const secToken = (document.getElementById('bsSecToken')?.value || '');
+  if (!orgUrl || !username || !password) { toast('Fill in Org URL, Username, and Password', 'warn'); return; }
+
+  // Pre-fill CORS proxy from the setting field
+  if (projectData) {
+    const proxyEl = document.getElementById('sfCorsProxy');
+    if (proxyEl) projectData.sfCorsProxy = proxyEl.value.trim().replace(/\/+$/, '');
+  }
+
+  _bsDeploying = true;
+  const btn = document.getElementById('bsDeployBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Deploying...'; }
+  const stepsEl = document.getElementById('bsDeploySteps');
+  const steps = [];
+  const addStep = (msg, status) => {
+    steps.push({ message: msg, status });
+    if (stepsEl) stepsEl.innerHTML = steps.map(s =>
+      '<div class="bs-deploy-step ' + s.status + '"><span class="bs-icon">' +
+      (s.status === 'ok' ? '✓' : s.status === 'fail' ? '✕' : '⏳') +
+      '</span><span>' + s.message + '</span></div>'
+    ).join('');
+  };
+
+  try {
+    // Step 1: SOAP Login
+    addStep('Logging in to ' + orgUrl + '...', 'running');
+    const conn = await bsSoapLogin(orgUrl, username, password + secToken);
+    steps[steps.length - 1] = { message: 'Logged in as ' + (conn.email || username), status: 'ok' };
+    addStep('', 'running'); steps.pop(); // re-render last
+    addStep('Building Connected App package...', 'running');
+
+    // Step 2: Build zip
+    const callbackUrl = location.origin + location.pathname;
+    const zipBase64 = await bsBuildConnectedAppZip(callbackUrl, conn.email);
+    steps[steps.length - 1].status = 'ok';
+    steps[steps.length - 1].message = 'Package built (connectedApps/SFPipelineTracker)';
+    addStep('Deploying to Salesforce...', 'running');
+
+    // Step 3: Deploy via SOAP Metadata API
+    const deployOpts = '<meta:DeployOptions>' +
+      '<meta:rollbackOnError>true</meta:rollbackOnError>' +
+      '<meta:singlePackage>true</meta:singlePackage>' +
+      '<meta:testLevel>NoTestRun</meta:testLevel>' +
+      '</meta:DeployOptions>';
+    const deploySoap = '<meta:deploy><meta:ZipFile>' + zipBase64 + '</meta:ZipFile>' + deployOpts + '</meta:deploy>';
+    const deployRes = await bsMetaSoapFetch(conn, deploySoap);
+    const idNode = deployRes.querySelector('id') || deployRes.getElementsByTagName('id')[0];
+    if (!idNode) throw new Error('No deploy ID returned');
+    const asyncId = idNode.textContent;
+
+    // Step 4: Poll checkDeployStatus
+    let pollCount = 0, deployDone = false;
+    while (!deployDone && pollCount < 40) {
+      pollCount++;
+      await _sleep(Math.min(2000 * Math.pow(1.3, pollCount - 1), 15000));
+      const statusSoap = '<meta:checkDeployStatus><meta:asyncProcessId>' + asyncId + '</meta:asyncProcessId><meta:includeDetails>true</meta:includeDetails></meta:checkDeployStatus>';
+      const statusRes = await bsMetaSoapFetch(conn, statusSoap);
+      const doneNode = statusRes.querySelector('done') || statusRes.getElementsByTagName('done')[0];
+      const statusNode = statusRes.querySelector('status') || statusRes.getElementsByTagName('status')[0];
+      const status = statusNode ? statusNode.textContent : 'Unknown';
+      steps[steps.length - 1].message = 'Deploying... (' + status + ')';
+      addStep('', 'running'); steps.pop();
+
+      if (doneNode && doneNode.textContent === 'true') {
+        deployDone = true;
+        const successNode = statusRes.querySelector('success') || statusRes.getElementsByTagName('success')[0];
+        if (successNode && successNode.textContent === 'true') {
+          steps[steps.length - 1] = { message: 'Connected App deployed successfully!', status: 'ok' };
+        } else {
+          // Parse failure messages
+          const failures = statusRes.querySelectorAll ? statusRes.querySelectorAll('componentFailures') : statusRes.getElementsByTagName('componentFailures');
+          let failMsgs = [];
+          for (let i = 0; i < (failures?.length || 0); i++) {
+            const f = failures[i];
+            const prob = (f.querySelector('problem') || f.getElementsByTagName('problem')[0])?.textContent || 'Unknown error';
+            failMsgs.push(prob);
+          }
+          const errText = failMsgs.join('; ') || 'Deployment failed';
+          // Check for Spring '26 restriction
+          if (errText.toLowerCase().includes('connected app') && (errText.toLowerCase().includes('creation') || errText.toLowerCase().includes('blocked') || errText.toLowerCase().includes('restricted') || errText.toLowerCase().includes('not allowed'))) {
+            steps[steps.length - 1] = { message: 'Deployment failed: ' + errText, status: 'fail' };
+            addStep('⚠️ Salesforce Spring \'26 blocks new Connected App creation by default. Contact Salesforce Support to enable it, or create the Connected App manually via Setup → App Manager.', 'fail');
+          } else {
+            steps[steps.length - 1] = { message: '❌ Deployment failed: ' + errText, status: 'fail' };
+          }
+          addStep('', 'running'); steps.pop();
+          toast('Connected App deployment failed', 'error');
+          return;
+        }
+      }
+    }
+    if (!deployDone) { addStep('Polling timeout — check Setup → Deployment Status', 'fail'); return; }
+
+    // Step 5: Retrieve Consumer Key via Tooling API
+    addStep('Retrieving Consumer Key...', 'running');
+    await _sleep(2000); // brief pause for metadata to be queryable
+    let consumerKey = '';
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try {
+        const soql = "SELECT Id, Name FROM ConnectedApplication WHERE Name = 'SFPipelineTracker' ORDER BY CreatedDate DESC LIMIT 1";
+        const data = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(soql));
+        if (data.records && data.records.length > 0) {
+          // Fetch full detail to get Options (contains ConsumerKey)
+          const appId = data.records[0].Id;
+          const detail = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/sobjects/ConnectedApplication/' + appId);
+          consumerKey = detail.Options?.consumerKey || detail.Options?.ConsumerKey || '';
+          // If Options approach doesn't work, try querying via REST
+          if (!consumerKey) {
+            try {
+              const soql2 = "SELECT Id, Name, MasterLabel FROM ConnectedApplication WHERE Name = 'SFPipelineTracker'";
+              const data2 = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(soql2));
+              // The consumer key might not be available via Tooling API directly
+              // In that case, user needs to copy it manually
+            } catch {}
+          }
+          break;
+        }
+      } catch (e) {
+        if (attempt < 2) { await _sleep(3000); continue; }
+      }
+    }
+
+    if (consumerKey) {
+      steps[steps.length - 1] = { message: 'Consumer Key retrieved!', status: 'ok' };
+      // Auto-fill Consumer Key field
+      const clientIdField = document.getElementById('sfClientId');
+      if (clientIdField) clientIdField.value = consumerKey;
+      if (projectData) { projectData.sfClientId = consumerKey; persistProject(); }
+      // Also fill Instance URL
+      const instanceField = document.getElementById('sfInstance');
+      if (instanceField && !instanceField.value) instanceField.value = orgUrl;
+      if (projectData && !projectData.sfInstance) { projectData.sfInstance = orgUrl; persistProject(); }
+      addStep('✅ Consumer Key auto-filled! Wait ~2 min for activation, then click "Login with Salesforce".', 'ok');
+    } else {
+      steps[steps.length - 1] = { message: 'Connected App deployed, but Consumer Key could not be auto-retrieved.', status: 'ok' };
+      addStep('Go to Salesforce Setup → App Manager → SF Pipeline Tracker → View → copy the Consumer Key into the field above.', 'ok');
+      // Still fill Instance URL
+      const instanceField = document.getElementById('sfInstance');
+      if (instanceField && !instanceField.value) instanceField.value = orgUrl;
+      if (projectData && !projectData.sfInstance) { projectData.sfInstance = orgUrl; persistProject(); }
+    }
+
+    toast('Connected App deployed to ' + orgUrl, 'ok');
+    logMsg('info', 'bootstrap', 'Connected App deployed', orgUrl);
+
+  } catch (e) {
+    addStep('Error: ' + e.message, 'fail');
+    logMsg('error', 'bootstrap', 'Deploy failed', e.message);
+    toast('Bootstrap failed: ' + e.message, 'error');
+  } finally {
+    _bsDeploying = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🚀 Deploy Connected App'; }
+  }
+}
 
 // ── DEPLOY TO GIT ──
 async function cdDeployToGit() {

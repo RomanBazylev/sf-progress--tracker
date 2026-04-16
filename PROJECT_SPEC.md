@@ -103,6 +103,14 @@
 - **Per-environment SF connections** — each pipeline environment can have its own Org URL, Consumer Key, and CORS Proxy configured in Settings → Environments
 - **Connect screen** — Instance URL, Consumer Key, CORS Proxy fields; env-specific OAuth with `sfOAuthLogin(envIdx)`
 - **OAuth Implicit Flow** — redirects to SF login, captures token from URL hash
+- **Bootstrap: Auto-Deploy Connected App** — collapsible "Quick Setup" section in Metadata view:
+  - SOAP Login via Partner API (`/services/Soap/u/`) with username + password + security token (no Connected App needed)
+  - Builds and deploys a `ConnectedApp` metadata package (`SFPipelineTracker`) via SOAP Metadata API `deploy()`
+  - OAuth scopes: Api + RefreshToken; `isConsumerSecretOptional=true` (public client); `ipRelaxation=BYPASS`
+  - Polls `checkDeployStatus` with exponential backoff; shows step-by-step progress trail
+  - After successful deploy, queries Tooling API for the auto-generated Consumer Key and auto-fills it
+  - Handles Spring '26 Connected App creation restriction: surfaces a clear error message if blocked
+  - Functions: `bsSoapLogin()`, `bsMetaSoapFetch()`, `bsApiFetch()`, `bsBuildConnectedAppZip()`, `bsDeployConnectedApp()`
 - **Smart redirect recovery** — `sf_oauth_pending` flag in `sessionStorage` auto-navigates back to Metadata tab after OAuth redirect
 - **SOAP describeMetadata** — `sfSoapFetch()` calls the Metadata API `describeMetadata()` to dynamically discover:
   - Directory names (`describeTypeDir`) and file suffixes (`describeTypeSuffix`) for each type
