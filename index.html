@@ -605,6 +605,20 @@ input,select{font-family:inherit}
 .bs-deploy-step.running{color:var(--accent)}
 .bs-deploy-step .bs-icon{flex-shrink:0;width:16px;text-align:center}
 .bs-warn-box{margin-top:10px;padding:10px 12px;background:var(--yellow-dim);border:1px solid var(--yellow);border-radius:8px;font-size:12px;color:var(--text);line-height:1.5}
+/* ── ENV INSTALL MODAL & BADGES ── */
+.env-install-badge{display:inline-flex;align-items:center;gap:4px;font-size:11px;padding:2px 8px;border-radius:10px;font-weight:600;cursor:pointer;border:none;white-space:nowrap}
+.env-install-badge.installed{background:var(--green-dim);color:var(--green)}
+.env-install-badge.missing{background:var(--yellow-dim);color:var(--yellow)}
+.env-install-badge.unknown{background:var(--surface2);color:var(--muted)}
+.env-install-badge:hover{filter:brightness(1.2)}
+.env-modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;display:flex;align-items:center;justify-content:center;padding:20px}
+.env-modal{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:100%;max-width:540px;max-height:90vh;overflow-y:auto;padding:24px}
+.env-modal h3{font-size:16px;margin-bottom:16px}
+.env-modal .field{margin-bottom:12px}
+.env-modal .field label{display:block;font-size:12px;font-weight:600;margin-bottom:4px;color:var(--muted)}
+.env-modal .field input{width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px}
+.env-modal .field input:focus{outline:none;border-color:var(--accent)}
+.env-modal-footer{display:flex;gap:8px;margin-top:16px}
 /* ── COLORS FOR ENV STRIPES (legacy compat) ── */
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HoI/xNIDFo5450Wb5HjZziA7MATgSFGBFDeXN4IfpDBVqXqSUvUFMa7yZqjMBLag==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -1101,7 +1115,7 @@ function toast(msg, type = 'info', ms = 3500) {
   const t = document.createElement('div');
   t.className = 'toast ' + type;
   const icon = { ok: '✓', err: '✗', warn: '⚠', info: 'ℹ' }[type] || '';
-  t.innerHTML = '<span style="font-size:16px">' + icon + '</span><span>' + msg + '</span>';
+  t.innerHTML = '<span style="font-size:16px">' + icon + '</span><span>' + esc(msg) + '</span>';
   c.appendChild(t);
   setTimeout(() => { t.classList.add('out'); setTimeout(() => t.remove(), 300); }, ms);
 }
@@ -1536,7 +1550,17 @@ function renderEnvList() {
     el.innerHTML = '<div style="font-size:12px;color:var(--muted);padding:8px">No environments configured yet.</div>';
     return;
   }
-  el.innerHTML = projectData.envs.map((env, i) => `
+  el.innerHTML = projectData.envs.map((env, i) => {
+    // Determine install badge
+    let badge = '';
+    if (env.sfClientId) {
+      const st = env.connectedAppStatus || 'unknown';
+      if (st === 'installed') badge = '<span class="env-install-badge installed" title="OAuth app installed" onclick="openEnvInstallModal(' + i + ')">✓ App</span>';
+      else badge = '<span class="env-install-badge unknown" title="Client ID set — click to verify" onclick="openEnvInstallModal(' + i + ')">? App</span>';
+    } else {
+      badge = '<button class="env-install-badge missing" title="Install OAuth app on this org" onclick="openEnvInstallModal(' + i + ')">⚡ Install App</button>';
+    }
+    return `
     <div class="env-item">
       <div class="env-color" style="background:${ENV_COLORS[i % ENV_COLORS.length]}"></div>
       <div class="env-fields">
@@ -1544,15 +1568,16 @@ function renderEnvList() {
         <span class="env-branch">${esc(env.branch)}</span>
         <input value="${esc(env.orgLabel || '')}" onchange="updateEnv(${i},'orgLabel',this.value)" placeholder="SF Org label" style="width:110px">
         <input class="env-url" value="${esc(env.orgUrl || '')}" onchange="updateEnv(${i},'orgUrl',this.value)" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">
-        <input value="${esc(env.sfClientId || '')}" onchange="updateEnv(${i},'sfClientId',this.value)" placeholder="Client ID override (optional)" style="width:170px;font-size:11px">
+        <input value="${esc(env.sfClientId || '')}" onchange="updateEnv(${i},'sfClientId',this.value)" placeholder="Client ID (auto-filled on install)" style="width:170px;font-size:11px">
+        ${badge}
       </div>
       <div class="env-actions">
         <button onclick="moveEnv(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
         <button onclick="moveEnv(${i},1)" ${i === projectData.envs.length - 1 ? 'disabled' : ''}>▼</button>
         <button onclick="removeEnv(${i})">✕</button>
       </div>
-    </div>
-  `).join('');
+    </div>`;
+  }).join('');
 }
 
 function addEnv() {
@@ -3111,7 +3136,14 @@ function sfOAuthLogin(envIdx) {
     clientId = document.getElementById('sfClientId').value.trim();
   }
   if (!instance) { toast('Enter your org Instance URL','warn'); return; }
-  if (!clientId) { toast('Enter the Consumer Key from your Connected App','warn'); return; }
+  if (!clientId) {
+    if (envIdx !== undefined) {
+      toast('No Consumer Key for ' + (projectData.envs[envIdx].displayName || projectData.envs[envIdx].branch) + '. Click ⚡ Install App in Settings → Environments.', 'warn');
+    } else {
+      toast('Enter the Consumer Key from your Connected App or External Client App','warn');
+    }
+    return;
+  }
 
   // Save CORS proxy from field if present
   if (projectData) {
@@ -3547,10 +3579,18 @@ function buildMetaConnectHtml() {
       const color = ENV_COLORS[i % ENV_COLORS.length];
       const cid = env.sfClientId || (projectData && projectData.sfClientId) || '';
       const disabled = !cid;
-      h += '<button class="btn" onclick="sfOAuthLogin(' + i + ')" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 16px;border-left:3px solid ' + color + ';min-width:160px;text-align:left' + (disabled ? ';opacity:0.5;cursor:not-allowed' : '') + '"' + (disabled ? ' disabled title="No Client ID configured — set it in project settings or per-env"' : '') + '>';
-      h += '<span style="font-weight:600;font-size:13px">' + esc(env.displayName || env.branch) + '</span>';
-      h += '<span style="font-size:11px;color:var(--muted)">' + esc(env.orgLabel || env.orgUrl.replace(/^https?:\/\//, '').split('.')[0]) + '</span>';
-      h += '</button>';
+      if (disabled) {
+        h += '<div style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 16px;border-left:3px solid ' + color + ';min-width:160px;text-align:left;border:1px solid var(--border);border-radius:8px;opacity:0.7">';
+        h += '<span style="font-weight:600;font-size:13px">' + esc(env.displayName || env.branch) + '</span>';
+        h += '<span style="font-size:11px;color:var(--muted)">' + esc(env.orgLabel || env.orgUrl.replace(/^https?:\/\//, '').split('.')[0]) + '</span>';
+        h += '<button class="env-install-badge missing" onclick="openEnvInstallModal(' + i + ');" style="margin-top:4px">⚡ Install App</button>';
+        h += '</div>';
+      } else {
+        h += '<button class="btn" onclick="sfOAuthLogin(' + i + ')" style="display:flex;flex-direction:column;align-items:flex-start;gap:4px;padding:12px 16px;border-left:3px solid ' + color + ';min-width:160px;text-align:left">';
+        h += '<span style="font-weight:600;font-size:13px">' + esc(env.displayName || env.branch) + '</span>';
+        h += '<span style="font-size:11px;color:var(--muted)">' + esc(env.orgLabel || env.orgUrl.replace(/^https?:\/\//, '').split('.')[0]) + '</span>';
+        h += '</button>';
+      }
     });
     h += '</div>';
     if (!envs.some(e => e.sfClientId) && !(projectData && projectData.sfClientId)) {
@@ -3590,11 +3630,10 @@ function buildMetaConnectHtml() {
   h += '<details style="margin-top:20px;font-size:12px;color:var(--muted)">';
   h += '<summary style="cursor:pointer;font-weight:600">Setup Instructions</summary>';
   h += '<ol style="margin-top:8px;padding-left:20px;line-height:2">';
-  h += '<li>In Salesforce: Setup → App Manager → New Connected App</li>';
-  h += '<li>Enable OAuth Settings</li>';
-  h += '<li>Callback URL: <code id="oauthCallback2"></code></li>';
-  h += '<li>Selected OAuth Scopes: <strong>Manage user data via APIs (api)</strong></li>';
-  h += '<li>Save, wait ~10 min for activation</li>';
+  h += '<li>In Salesforce: Setup → App Manager → <strong>New External Client App</strong> (or New Connected App on older orgs)</li>';
+  h += '<li>Enable OAuth plugin, set Callback URL: <code id="oauthCallback2"></code></li>';
+  h += '<li>OAuth Scopes: <strong>Api</strong> and <strong>RefreshToken</strong></li>';
+  h += '<li>Save, wait ~2 min for activation</li>';
   h += '<li>Copy the Consumer Key into the field above</li>';
   h += '<li>Deploy a Cloudflare Worker as CORS proxy (see below)</li>';
   h += '</ol>';
@@ -6011,7 +6050,7 @@ async function bsDeployConnectedApp() {
     if (stepsEl) stepsEl.innerHTML = steps.map(s =>
       '<div class="bs-deploy-step ' + s.status + '"><span class="bs-icon">' +
       (s.status === 'ok' ? '✓' : s.status === 'fail' ? '✕' : '⏳') +
-      '</span><span>' + s.message + '</span></div>'
+      '</span><span>' + esc(s.message) + '</span></div>'
     ).join('');
   };
 
@@ -6145,6 +6184,364 @@ async function bsDeployConnectedApp() {
     _bsDeploying = false;
     if (btn) { btn.disabled = false; btn.textContent = '🚀 Deploy Connected App'; }
   }
+}
+
+// ══════════════════════════════════════════════════════════
+//   PER-ENV: Install OAuth App (ECA → Connected App fallback)
+// ══════════════════════════════════════════════════════════
+
+let _envInstallIdx = -1;
+
+function openEnvInstallModal(envIdx) {
+  if (!projectData || !projectData.envs[envIdx]) return;
+  _envInstallIdx = envIdx;
+  const env = projectData.envs[envIdx];
+  const orgUrl = env.orgUrl || '';
+  const envName = env.displayName || env.branch || 'Environment';
+  let h = '<div class="env-modal-overlay" id="envInstallOverlay" onclick="if(event.target===this)closeEnvInstallModal()">';
+  h += '<div class="env-modal">';
+  h += '<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">';
+  h += '<h3 style="margin:0">⚡ Install OAuth App — ' + esc(envName) + '</h3>';
+  h += '<button onclick="closeEnvInstallModal()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>';
+  h += '</div>';
+  h += '<p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5">Deploy an External Client App (or Connected App as fallback) to this Salesforce org. This is a one-time setup per org — requires admin credentials.</p>';
+  h += '<div class="field"><label>Org URL <span style="color:var(--red);font-weight:400">*</span></label>';
+  h += '<input id="eiOrgUrl" value="' + esc(orgUrl) + '" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com"' + (orgUrl ? '' : '') + '></div>';
+  h += '<div class="field"><label>Username <span style="color:var(--red);font-weight:400">*</span></label>';
+  h += '<input id="eiUsername" placeholder="admin@company.com.sandbox" autocomplete="username"></div>';
+  h += '<div class="field"><label>Password <span style="color:var(--red);font-weight:400">*</span></label>';
+  h += '<input id="eiPassword" type="password" placeholder="Password" autocomplete="current-password"></div>';
+  h += '<div class="field"><label>Security Token <span style="color:var(--muted);font-weight:normal">(optional if IP whitelisted)</span></label>';
+  h += '<input id="eiSecToken" type="password" placeholder="Security token"></div>';
+  h += '<div id="eiSteps" class="bs-deploy-steps"></div>';
+  h += '<div class="env-modal-footer">';
+  h += '<button class="btn btn-sf" id="eiActionBtn" onclick="envCheckAndInstall()">🔍 Check & Install</button>';
+  h += '<button class="btn btn-sm" onclick="closeEnvInstallModal()">Cancel</button>';
+  h += '</div>';
+  h += '</div></div>';
+  document.body.insertAdjacentHTML('beforeend', h);
+}
+
+function closeEnvInstallModal() {
+  const overlay = document.getElementById('envInstallOverlay');
+  if (overlay) overlay.remove();
+  _envInstallIdx = -1;
+}
+
+/** Per-env Check & Install flow */
+async function envCheckAndInstall() {
+  if (_bsDeploying) return;
+  const envIdx = _envInstallIdx;
+  if (envIdx < 0 || !projectData || !projectData.envs[envIdx]) return;
+  const env = projectData.envs[envIdx];
+  const orgUrl = (document.getElementById('eiOrgUrl')?.value || '').trim().replace(/\/+$/, '');
+  const username = (document.getElementById('eiUsername')?.value || '').trim();
+  const password = (document.getElementById('eiPassword')?.value || '');
+  const secToken = (document.getElementById('eiSecToken')?.value || '');
+  if (!orgUrl || !username || !password) { toast('Fill in Org URL, Username, and Password', 'warn'); return; }
+  if (!/^https:\/\//.test(orgUrl)) { toast('Org URL must start with https://', 'warn'); return; }
+
+  // Ensure CORS proxy is set
+  if (!projectData.sfCorsProxy) {
+    toast('CORS Proxy is required. Set it in Metadata → CORS Proxy field first.', 'warn');
+    return;
+  }
+
+  // Save orgUrl to env if changed
+  if (env.orgUrl !== orgUrl) { env.orgUrl = orgUrl; persistProject(); }
+
+  _bsDeploying = true;
+  const btn = document.getElementById('eiActionBtn');
+  if (btn) { btn.disabled = true; btn.textContent = '⏳ Working...'; }
+  const stepsEl = document.getElementById('eiSteps');
+  const steps = [];
+  const _renderSteps = () => {
+    if (stepsEl) stepsEl.innerHTML = steps.map(s =>
+      '<div class="bs-deploy-step ' + s.status + '"><span class="bs-icon">' +
+      (s.status === 'ok' ? '✓' : s.status === 'fail' ? '✕' : '⏳') +
+      '</span><span>' + esc(s.message) + '</span></div>'
+    ).join('');
+  };
+  const addStep = (msg, status) => { steps.push({ message: msg, status }); _renderSteps(); };
+  const updateLast = (msg, status) => {
+    if (steps.length) { steps[steps.length - 1] = { message: msg, status }; }
+    _renderSteps();
+  };
+
+  try {
+    // Step 1: SOAP Login
+    addStep('Logging in to ' + orgUrl + '...', 'running');
+    const conn = await bsSoapLogin(orgUrl, username, password + secToken);
+    updateLast('Logged in as ' + (conn.email || username), 'ok');
+
+    // Step 2: Check for existing app (ECA first, then Connected App)
+    addStep('Checking for existing OAuth app...', 'running');
+    let consumerKey = '';
+    let appFound = false;
+
+    // 2a: Check External Client Apps
+    try {
+      const ecaSoql = "SELECT Id, DeveloperName, Label FROM ExternalClientAppId WHERE DeveloperName = 'SFPipelineTracker' LIMIT 1";
+      const ecaData = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(ecaSoql));
+      if (ecaData.records && ecaData.records.length > 0) {
+        appFound = true;
+        updateLast('Found External Client App: SFPipelineTracker', 'ok');
+        // Try to get consumer key from OAuth settings
+        consumerKey = await _eiRetrieveEcaConsumerKey(conn);
+      }
+    } catch (e) {
+      // ExternalClientAppId may not exist on older orgs — skip
+    }
+
+    // 2b: Check Connected Apps (legacy)
+    if (!appFound) {
+      try {
+        const caSoql = "SELECT Id, Name FROM ConnectedApplication WHERE Name = 'SFPipelineTracker' ORDER BY CreatedDate DESC LIMIT 1";
+        const caData = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(caSoql));
+        if (caData.records && caData.records.length > 0) {
+          appFound = true;
+          updateLast('Found Connected App: SFPipelineTracker', 'ok');
+          const appId = caData.records[0].Id;
+          try {
+            const detail = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/sobjects/ConnectedApplication/' + appId);
+            consumerKey = detail.Options?.consumerKey || detail.Options?.ConsumerKey || '';
+          } catch {}
+        }
+      } catch {}
+    }
+
+    // Step 3: If found — auto-fill and done
+    if (appFound && consumerKey) {
+      addStep('Consumer Key retrieved!', 'ok');
+      env.sfClientId = consumerKey;
+      env.connectedAppStatus = 'installed';
+      persistProject();
+      renderEnvList();
+      addStep('✅ Done! Consumer Key auto-filled for ' + esc(env.displayName || env.branch) + '.', 'ok');
+      toast('OAuth app found and configured', 'ok');
+      logMsg('info', 'env-install', 'App found on ' + orgUrl, env.displayName || env.branch);
+      return;
+    }
+    if (appFound && !consumerKey) {
+      updateLast('App found but Consumer Key could not be auto-retrieved.', 'ok');
+      addStep('Go to Salesforce Setup → App Manager → SF Pipeline Tracker → copy the Consumer Key.', 'ok');
+      env.connectedAppStatus = 'installed';
+      persistProject();
+      renderEnvList();
+      return;
+    }
+
+    // Step 4: Not found — deploy
+    updateLast('No existing OAuth app found. Will deploy now.', 'ok');
+
+    // 4a: Try External Client App first
+    addStep('Deploying External Client App...', 'running');
+    const callbackUrl = location.origin + location.pathname;
+    let ecaDeployed = false;
+    try {
+      const ecaZip = await _eiBuildEcaZip(callbackUrl, conn.email);
+      const deployId = await _eiMetaDeploy(conn, ecaZip);
+      const deployOk = await _eiPollDeploy(conn, deployId, (msg) => updateLast(msg, 'running'));
+      if (deployOk) {
+        ecaDeployed = true;
+        updateLast('External Client App deployed successfully!', 'ok');
+      }
+    } catch (e) {
+      const msg = e.message || '';
+      updateLast('ECA deploy failed: ' + msg, 'fail');
+    }
+
+    // 4b: If ECA failed, try Connected App (legacy fallback)
+    if (!ecaDeployed) {
+      addStep('Trying Connected App (legacy fallback)...', 'running');
+      try {
+        const caZip = await bsBuildConnectedAppZip(callbackUrl, conn.email);
+        const deployId = await _eiMetaDeploy(conn, caZip);
+        const deployOk = await _eiPollDeploy(conn, deployId, (msg) => updateLast(msg, 'running'));
+        if (deployOk) {
+          updateLast('Connected App deployed successfully!', 'ok');
+        } else {
+          updateLast('Deployment failed. Connected App creation may be blocked (Spring \'26+).', 'fail');
+          addStep('Create the app manually: Setup → App Manager → New External Client App.', 'fail');
+          env.connectedAppStatus = 'missing';
+          persistProject();
+          renderEnvList();
+          return;
+        }
+      } catch (e2) {
+        updateLast('Legacy deploy also failed: ' + e2.message, 'fail');
+        addStep('⚠️ Spring \'26 blocks new app creation by default. Create manually via Setup → App Manager → New External Client App.', 'fail');
+        env.connectedAppStatus = 'missing';
+        persistProject();
+        renderEnvList();
+        return;
+      }
+    }
+
+    // Step 5: Retrieve Consumer Key after deploy
+    addStep('Retrieving Consumer Key...', 'running');
+    await _sleep(2500);
+    consumerKey = '';
+
+    if (ecaDeployed) {
+      // Try ECA consumer key retrieval
+      for (let att = 0; att < 3; att++) {
+        try { consumerKey = await _eiRetrieveEcaConsumerKey(conn); } catch {}
+        if (consumerKey) break;
+        await _sleep(3000);
+      }
+    }
+    if (!consumerKey) {
+      // Fallback: try Connected App consumer key
+      for (let att = 0; att < 3; att++) {
+        try {
+          const soql = "SELECT Id, Name FROM ConnectedApplication WHERE Name = 'SFPipelineTracker' ORDER BY CreatedDate DESC LIMIT 1";
+          const data = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(soql));
+          if (data.records && data.records.length > 0) {
+            const appId = data.records[0].Id;
+            const detail = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/sobjects/ConnectedApplication/' + appId);
+            consumerKey = detail.Options?.consumerKey || detail.Options?.ConsumerKey || '';
+          }
+        } catch {}
+        if (consumerKey) break;
+        await _sleep(3000);
+      }
+    }
+
+    if (consumerKey) {
+      updateLast('Consumer Key retrieved!', 'ok');
+      env.sfClientId = consumerKey;
+      env.connectedAppStatus = 'installed';
+      persistProject();
+      renderEnvList();
+      addStep('✅ Done! Wait ~2 min for activation, then connect via Metadata view.', 'ok');
+    } else {
+      updateLast('App deployed, but Consumer Key not auto-retrieved.', 'ok');
+      addStep('Go to Setup → App Manager → SF Pipeline Tracker → copy Consumer Key into env settings.', 'ok');
+      env.connectedAppStatus = 'installed';
+      persistProject();
+      renderEnvList();
+    }
+
+    toast('OAuth app deployed to ' + orgUrl, 'ok');
+    logMsg('info', 'env-install', 'App deployed on ' + orgUrl, env.displayName || env.branch);
+
+  } catch (e) {
+    addStep('Error: ' + e.message, 'fail');
+    logMsg('error', 'env-install', 'Install failed', e.message);
+    toast('Install failed: ' + e.message, 'error');
+  } finally {
+    _bsDeploying = false;
+    if (btn) { btn.disabled = false; btn.textContent = '🔍 Check & Install'; }
+  }
+}
+
+/** Build ECA metadata zip */
+async function _eiBuildEcaZip(callbackUrl, contactEmail) {
+  if (typeof JSZip === 'undefined') throw new Error('JSZip not loaded');
+  const appName = 'SFPipelineTracker';
+  const zip = new JSZip();
+  const packageXml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+    '  <types><members>' + appName + '</members><name>ExternalClientApplication</name></types>\n' +
+    '  <types><members>' + appName + '</members><name>ExtlClntAppOauthSettings</name></types>\n' +
+    '  <types><members>' + appName + '</members><name>ExtlClntAppGlobalOauthSettings</name></types>\n' +
+    '  <version>' + SF_API_VERSION + '</version>\n' +
+    '</Package>\n';
+  const ecaXml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<ExternalClientApplication xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+    '  <contactEmail>' + escXmlStr(contactEmail || 'admin@example.com') + '</contactEmail>\n' +
+    '  <description>SF Pipeline Tracker OAuth integration</description>\n' +
+    '  <distributionState>Local</distributionState>\n' +
+    '  <label>SF Pipeline Tracker</label>\n' +
+    '  <isProtected>false</isProtected>\n' +
+    '</ExternalClientApplication>\n';
+  const oauthSettingsXml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<ExtlClntAppOauthSettings xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+    '  <externalClientApplication>' + appName + '</externalClientApplication>\n' +
+    '  <label>' + appName + ' OAuth</label>\n' +
+    '  <commaSeparatedOauthScopes>Api,RefreshToken</commaSeparatedOauthScopes>\n' +
+    '</ExtlClntAppOauthSettings>\n';
+  const globalOauthXml = '<?xml version="1.0" encoding="UTF-8"?>\n' +
+    '<ExtlClntAppGlobalOauthSettings xmlns="http://soap.sforce.com/2006/04/metadata">\n' +
+    '  <callbackUrl>' + escXmlStr(callbackUrl) + '</callbackUrl>\n' +
+    '  <externalClientApplication>' + appName + '</externalClientApplication>\n' +
+    '  <isConsumerSecretOptional>true</isConsumerSecretOptional>\n' +
+    '  <isIntrospectAllTokens>false</isIntrospectAllTokens>\n' +
+    '  <isPkceRequired>false</isPkceRequired>\n' +
+    '  <isSecretRequiredForRefreshToken>false</isSecretRequiredForRefreshToken>\n' +
+    '  <label>' + appName + ' Global OAuth</label>\n' +
+    '  <shouldRotateConsumerKey>false</shouldRotateConsumerKey>\n' +
+    '  <shouldRotateConsumerSecret>false</shouldRotateConsumerSecret>\n' +
+    '</ExtlClntAppGlobalOauthSettings>\n';
+  zip.file('package.xml', packageXml);
+  zip.file('externalClientApps/' + appName + '.eca', ecaXml);
+  zip.file('extlClntAppOauthSettings/' + appName + '.ecaOauth', oauthSettingsXml);
+  zip.file('extlClntAppGlobalOauthSets/' + appName + '.ecaGlblOauth', globalOauthXml);
+  return zip.generateAsync({ type: 'base64' });
+}
+
+/** Deploy a zip via SOAP Metadata API, return asyncId */
+async function _eiMetaDeploy(conn, zipBase64) {
+  const deployOpts = '<meta:DeployOptions>' +
+    '<meta:rollbackOnError>true</meta:rollbackOnError>' +
+    '<meta:singlePackage>true</meta:singlePackage>' +
+    '<meta:testLevel>NoTestRun</meta:testLevel>' +
+    '</meta:DeployOptions>';
+  const deploySoap = '<meta:deploy><meta:ZipFile>' + zipBase64 + '</meta:ZipFile>' + deployOpts + '</meta:deploy>';
+  const deployRes = await bsMetaSoapFetch(conn, deploySoap);
+  const idNode = deployRes.querySelector('id') || deployRes.getElementsByTagName('id')[0];
+  if (!idNode) throw new Error('No deploy ID returned');
+  return idNode.textContent;
+}
+
+/** Poll deploy status, call onProgress(msg). Returns true if success. */
+async function _eiPollDeploy(conn, asyncId, onProgress) {
+  let pollCount = 0;
+  while (pollCount < 40) {
+    pollCount++;
+    await _sleep(Math.min(2000 * Math.pow(1.3, pollCount - 1), 15000));
+    const statusSoap = '<meta:checkDeployStatus><meta:asyncProcessId>' + asyncId + '</meta:asyncProcessId><meta:includeDetails>true</meta:includeDetails></meta:checkDeployStatus>';
+    const statusRes = await bsMetaSoapFetch(conn, statusSoap);
+    const doneNode = statusRes.querySelector('done') || statusRes.getElementsByTagName('done')[0];
+    const statusNode = statusRes.querySelector('status') || statusRes.getElementsByTagName('status')[0];
+    const status = statusNode ? statusNode.textContent : 'Unknown';
+    if (onProgress) onProgress('Deploying... (' + status + ')');
+    if (doneNode && doneNode.textContent === 'true') {
+      const successNode = statusRes.querySelector('success') || statusRes.getElementsByTagName('success')[0];
+      if (successNode && successNode.textContent === 'true') return true;
+      // Parse failure
+      const failures = statusRes.querySelectorAll ? statusRes.querySelectorAll('componentFailures') : statusRes.getElementsByTagName('componentFailures');
+      let msgs = [];
+      for (let i = 0; i < (failures?.length || 0); i++) {
+        const prob = (failures[i].querySelector('problem') || failures[i].getElementsByTagName('problem')[0])?.textContent || '';
+        if (prob) msgs.push(prob);
+      }
+      throw new Error(msgs.join('; ') || 'Deployment failed');
+    }
+  }
+  throw new Error('Polling timeout');
+}
+
+/** Try to retrieve ECA consumer key via Tooling API */
+async function _eiRetrieveEcaConsumerKey(conn) {
+  // Query ExtlClntAppGlobalOauthSettings is not available via Tooling, try REST retrieve approach
+  // Fall back to querying the standard object
+  try {
+    const soql = "SELECT Id, DeveloperName FROM ExternalClientAppId WHERE DeveloperName = 'SFPipelineTracker' LIMIT 1";
+    const data = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(soql));
+    if (data.records && data.records.length > 0) {
+      // Consumer key may be available via the external client app's linked settings
+      // Try reading it via metadata retrieve
+      const ecaId = data.records[0].Id;
+      // Attempt via composite: /services/data/vXX/tooling/sobjects/ExternalClientAppId/<id>
+      try {
+        const detail = await bsApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/sobjects/ExternalClientAppId/' + ecaId);
+        if (detail.ConsumerKey) return detail.ConsumerKey;
+      } catch {}
+    }
+  } catch {}
+  return '';
 }
 
 // ── DEPLOY TO GIT ──

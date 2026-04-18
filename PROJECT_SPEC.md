@@ -102,9 +102,21 @@
 
 ### 2.7 Metadata Tab (Salesforce Integration)
 - **Per-environment SF connections** — each pipeline environment can have its own Org URL, Consumer Key, and CORS Proxy configured in Settings → Environments
+- **Per-environment OAuth App Install (Gearset-style)** — each environment row in Settings shows an install badge:
+  - `✓ App` (green) if `env.sfClientId` is set and `env.connectedAppStatus === 'installed'`
+  - `? App` (grey) if `env.sfClientId` is set but status unverified
+  - `⚡ Install App` (yellow) if no Consumer Key — opens the install modal
+  - Install modal: Org URL (pre-filled from env), Username, Password, Security Token → "Check & Install" button
+  - **Check flow**: SOAP login → Tooling API query for `ExternalClientAppId` (ECA) → fallback query for `ConnectedApplication` (legacy CA)
+  - **Install flow** (if not found): tries External Client App deployment first (Spring '26+), falls back to Connected App deployment (legacy)
+  - ECA metadata types: `ExternalClientApplication`, `ExtlClntAppOauthSettings`, `ExtlClntAppGlobalOauthSettings` — deployed as a zip via SOAP Metadata API `deploy()`
+  - After deploy, retrieves Consumer Key and auto-fills `env.sfClientId`; updates `env.connectedAppStatus`
+  - Functions: `openEnvInstallModal()`, `closeEnvInstallModal()`, `envCheckAndInstall()`, `_eiBuildEcaZip()`, `_eiMetaDeploy()`, `_eiPollDeploy()`, `_eiRetrieveEcaConsumerKey()`
+  - Reuses: `bsSoapLogin()`, `bsMetaSoapFetch()`, `bsApiFetch()`, `bsBuildConnectedAppZip()` (for legacy fallback)
+- **Quick Connect cards** (Metadata view) — environments without a Consumer Key show an inline `⚡ Install App` button instead of being disabled
 - **Connect screen** — Instance URL, Consumer Key, CORS Proxy fields; env-specific OAuth with `sfOAuthLogin(envIdx)`
 - **OAuth Implicit Flow** — redirects to SF login, captures token from URL hash
-- **Bootstrap: Auto-Deploy Connected App** — collapsible "Quick Setup" section in Metadata view:
+- **Bootstrap: Auto-Deploy Connected App (legacy)** — collapsible "Quick Setup" section in Metadata view:
   - SOAP Login via Partner API (`/services/Soap/u/`) with username + password + security token (no Connected App needed)
   - Builds and deploys a `ConnectedApp` metadata package (`SFPipelineTracker`) via SOAP Metadata API `deploy()`
   - OAuth scopes: Api + RefreshToken; `isConsumerSecretOptional=true` (public client); `ipRelaxation=BYPASS`
