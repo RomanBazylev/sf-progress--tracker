@@ -26,11 +26,12 @@
 - **Password-protected** — each project encrypted with its own password (AES-256-GCM)
 - **Auto-persist** — settings and data saved to `localStorage` after each change
 
-### 2.2 Settings (4 sections)
-1. **GitHub Connection** (1/4) — PAT + repo name → "Test Connection" validates & loads branches
-2. **Salesforce Cases** (2/4) — Production org URL for linking Case numbers from PR descriptions
-3. **Pipeline Environments** (3/4) — Ordered list of environment branches (e.g., dev → staging → uat → main); presets: Standard, Extended, Auto-detect from Gearset `gs-pipeline/*` branches
-4. **Security** (4/4) — Change password, export project JSON, delete project
+### 2.2 Settings (5 sections)
+1. **GitHub Connection** (1/5) — PAT + repo name → "Test Connection" validates & loads branches
+2. **Salesforce Cases** (2/5) — Production org URL for linking Case numbers from PR descriptions
+3. **Pipeline Environments** (3/5) — Ordered list of environment branches (e.g., dev → staging → uat → main); presets: Standard, Extended, Auto-detect from Gearset `gs-pipeline/*` branches
+4. **Merge Options** (4/5) — Default merge method (merge/squash/rebase) for promoting PRs
+5. **Security** (5/5) — Change password, export project JSON, delete project
 
 ### 2.3 Pipeline View
 - **Gearset-style horizontal flow** — environments shown as connected stage cards with colored accent bars and arrow connectors
@@ -192,7 +193,7 @@
 - **Project name badge** in header when unlocked
 - **⬅ Switch project button** — returns to project selector from any view
 - **Nav icons** — 📦 Pipeline, ☁️ Metadata, 🔀 Compare, ⚙️ Settings
-- **Step numbers** on Settings sections (1/4 → 4/4) and Fetch Config (1/3 → 3/3)
+- **Step numbers** on Settings sections (1/5 → 5/5) and Fetch Config (1/3 → 3/3)
 - **Required field indicators** — red `*` on mandatory fields
 - **Outside-click-to-close** on Create/Unlock/Help modals
 - **Dark/light theme** toggle with persistence

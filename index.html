@@ -649,7 +649,7 @@ input,select{font-family:inherit}
   <h2 style="margin-bottom:20px">⚙️ Project Settings</h2>
 
   <div class="settings-section">
-    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">1/4</span>🔗 GitHub Connection</h3>
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">1/5</span>🔗 GitHub Connection</h3>
     <div class="field">
       <label>Personal Access Token <span style="color:var(--red);font-weight:400">*</span></label>
       <div class="secret-wrap" style="position:relative">
@@ -657,6 +657,18 @@ input,select{font-family:inherit}
         <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
       </div>
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Needs <code>repo</code> scope for private repos. Stored encrypted.</div>
+      <details style="margin-top:8px;font-size:12px;color:var(--muted)">
+        <summary style="cursor:pointer;font-weight:600">📖 How to create a GitHub PAT</summary>
+        <ol style="margin-top:8px;padding-left:20px;line-height:2">
+          <li>Go to <strong>GitHub → Settings → Developer settings → Personal access tokens → Tokens (classic)</strong></li>
+          <li>Click <strong>Generate new token (classic)</strong></li>
+          <li>Give it a descriptive name (e.g. "SF Pipeline Tracker")</li>
+          <li>Under <strong>Select scopes</strong>, check <code>repo</code> (full control of private repositories)</li>
+          <li>Click <strong>Generate token</strong> and copy the value immediately</li>
+          <li>Paste the token into the field above</li>
+        </ol>
+        <p style="margin-top:6px;line-height:1.5">⚠️ The token is shown only once. If you lose it, you'll need to generate a new one.<br>Direct link: <code>https://github.com/settings/tokens</code></p>
+      </details>
     </div>
     <div class="field">
       <label>Repository <span style="color:var(--red);font-weight:400">*</span></label>
@@ -667,23 +679,44 @@ input,select{font-family:inherit}
   </div>
 
   <div class="settings-section">
-    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/4</span>🎫 Salesforce Cases</h3>
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/5</span>🎫 Salesforce Cases</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Case numbers in PR titles/descriptions will link to the Case record in your org.</p>
     <div class="field">
       <label>Production Org URL</label>
       <input id="cfgCaseUrl" placeholder="https://mycompany.lightning.force.com">
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Case numbers like <code>00012345</code> will open as <code>.../lightning/r/Case/00012345/view</code></div>
+      <details style="margin-top:8px;font-size:12px;color:var(--muted)">
+        <summary style="cursor:pointer;font-weight:600">📖 How to find your Org URL</summary>
+        <ol style="margin-top:8px;padding-left:20px;line-height:2">
+          <li>Log into your <strong>Salesforce production</strong> org</li>
+          <li>Copy the URL from the browser address bar (e.g. <code>https://mycompany.lightning.force.com</code>)</li>
+          <li>Remove any page path after the domain — keep only the base URL</li>
+        </ol>
+      </details>
     </div>
   </div>
 
   <div class="settings-section">
-    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">3/4</span>🔀 Pipeline Environments</h3>
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">3/5</span>🔀 Pipeline Environments</h3>
     <p style="font-size:12px;color:var(--muted);margin-bottom:12px">Define your environment branches from left (earliest) to right (production).</p>
     <div class="presets">
       <button onclick="applyPreset('standard')">Standard (dev → staging → main)</button>
       <button onclick="applyPreset('extended')">Extended (dev → int → uat → main)</button>
       <button onclick="autoDetectEnvs()">🔍 Auto-detect from Gearset</button>
     </div>
+    <details style="margin-top:8px;margin-bottom:12px;font-size:12px;color:var(--muted)">
+      <summary style="cursor:pointer;font-weight:600">📖 What are Gearset-style branches?</summary>
+      <div style="margin-top:8px;line-height:1.8">
+        <p>Gearset uses a specific branch naming convention: <code>gs-pipeline/&lt;env-name&gt;_-_&lt;display-name&gt;</code></p>
+        <p style="margin-top:4px"><strong>Examples:</strong></p>
+        <ul style="padding-left:20px">
+          <li><code>gs-pipeline/dev_-_Development</code></li>
+          <li><code>gs-pipeline/uat_-_UAT</code></li>
+          <li><code>gs-pipeline/prod_-_Production</code></li>
+        </ul>
+        <p style="margin-top:6px">If your repo doesn't use Gearset, use the <strong>Standard</strong> or <strong>Extended</strong> presets above, or add environments manually below.</p>
+      </div>
+    </details>
     <div id="envList" class="env-list"></div>
     <div class="env-add-row">
       <select id="branchSelect"><option value="">— select branch —</option></select>
@@ -772,6 +805,40 @@ input,select{font-family:inherit}
         <label>CORS Proxy <span style="color:var(--yellow);font-weight:600;font-size:10px;background:var(--yellow-dim);padding:1px 5px;border-radius:3px;margin-left:4px">REQUIRED</span> <span style="color:var(--muted);font-weight:normal">(for API calls)</span></label>
         <input id="sfCorsProxy" placeholder="https://your-worker.workers.dev">
         <div style="font-size:11px;color:var(--muted);margin-top:3px">Cloudflare Worker for CORS. Required for API calls after OAuth login.</div>
+        <details style="margin-top:8px;font-size:12px;color:var(--muted)">
+          <summary style="cursor:pointer;font-weight:600">📖 How to deploy a CORS Proxy (Cloudflare Worker)</summary>
+          <ol style="margin-top:8px;padding-left:20px;line-height:2">
+            <li>Go to <strong>Cloudflare Dashboard → Workers & Pages → Create Application → Create Worker</strong></li>
+            <li>Give it a name (e.g. <code>sf-cors-proxy</code>) and click <strong>Deploy</strong></li>
+            <li>Click <strong>Edit Code</strong> and replace the contents with the code below</li>
+            <li>Click <strong>Save and Deploy</strong></li>
+            <li>Copy the Worker URL (e.g. <code>https://sf-cors-proxy.your-account.workers.dev</code>) into the field above</li>
+          </ol>
+          <details style="margin-top:10px">
+            <summary style="cursor:pointer">Cloudflare Worker code (copy &amp; paste)</summary>
+            <pre style="background:var(--surface);padding:12px;border-radius:8px;margin-top:8px;font-size:11px;overflow-x:auto">export default {
+  async fetch(request) {
+    const cors = {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Headers': '*',
+      'Access-Control-Allow-Methods': '*',
+    };
+    if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
+    const url = new URL(request.url);
+    const target = url.pathname.substring(1) + url.search;
+    if (!target.startsWith('https://')) return new Response('Bad URL', { status: 400 });
+    const resp = await fetch(target, {
+      method: request.method,
+      headers: request.headers,
+      body: request.method !== 'GET' ? await request.text() : undefined,
+    });
+    const newHeaders = new Headers(resp.headers);
+    Object.entries(cors).forEach(([k,v]) => newHeaders.set(k, v));
+    return new Response(resp.body, { status: resp.status, headers: newHeaders });
+  }
+}</pre>
+          </details>
+        </details>
       </div>
 
       <div id="sfConnStatus"></div>
@@ -789,7 +856,7 @@ input,select{font-family:inherit}
           <li>Selected OAuth Scopes: <strong>Manage user data via APIs (api)</strong></li>
           <li>Save and wait ~10 min for activation</li>
           <li>Copy the Consumer Key into the field above</li>
-          <li>For CORS Proxy: deploy a Cloudflare Worker that forwards requests and adds CORS headers</li>
+          <li>For CORS Proxy: deploy a Cloudflare Worker that forwards requests and adds CORS headers (expand the "How to deploy a CORS Proxy" section above for code)</li>
         </ol>
       </details>
 
@@ -812,6 +879,16 @@ input,select{font-family:inherit}
           <label>Security Token <span style="color:var(--muted);font-weight:normal">(if required by org)</span></label>
           <input id="bsSecToken" type="password" placeholder="Append to password for API access" autocomplete="off">
           <div style="font-size:11px;color:var(--muted);margin-top:3px">Setup → My Personal Information → Reset Security Token</div>
+          <details style="margin-top:8px;font-size:12px;color:var(--muted)">
+            <summary style="cursor:pointer;font-weight:600">📖 How to get your Security Token</summary>
+            <ol style="margin-top:8px;padding-left:20px;line-height:2">
+              <li>In Salesforce: go to <strong>Setup → My Personal Information → Reset My Security Token</strong></li>
+              <li>Click <strong>Reset Security Token</strong> — a new token will be emailed to you</li>
+              <li>The token is appended to your password when making API calls (e.g. <code>myPassword</code> + <code>TOKEN123</code> = <code>myPasswordTOKEN123</code>)</li>
+              <li>Paste only the token into the field above — the app handles concatenation automatically</li>
+            </ol>
+            <p style="margin-top:6px;line-height:1.5">💡 If your org uses <strong>Trusted IP Ranges</strong> (Setup → Network Access), the security token may not be required — try leaving this field empty first.</p>
+          </details>
         </div>
         <div style="margin-top:14px;display:flex;gap:8px;align-items:center">
           <button class="btn btn-primary" onclick="bsDeployConnectedApp()" id="bsDeployBtn">🚀 Deploy Connected App</button>
