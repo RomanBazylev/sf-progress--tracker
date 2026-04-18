@@ -187,6 +187,18 @@
   - Builds tree, creates commit, updates branch ref
   - Progress steps: Creating blobs → Building tree → Committing → Updating ref
 - **Validate button** — runs check-only deployment to verify changes without actually deploying
+- **Quick Deploy** (`cdQuickDeploy`) — after successful validation (`checkOnly=true`), the validated deploy ID is cached (`cdState._lastValidation`); the ⚡ Quick Deploy button calls SOAP `deployRecentValidation()` to deploy without re-running tests (valid for 10 days per Salesforce)
+- **Test Results** — deploy status polling now parses `runTestResult` from SOAP `checkDeployStatus` response; displays test summary (passed/failed/total) inline; expandable table with class, method, outcome, time, and failure message for each test
+- **Deployment History** — persistent log of all deployments stored in `projectData.deployHistory[]` (max 50, FIFO); each entry records: timestamp, type (validate/deploy/quickDeploy), target env, component count, status, test results; displayed as a collapsible table at the bottom of Compare & Deploy config view
+- **Org Health** (`fetchEnvHealth`) — button on connected org panels fetches `/services/data/v65.0/limits/` and displays a modal with grid of limit cards showing used/max, remaining, and color-coded progress bars (green <70%, yellow 70-90%, red >90%); prioritizes important limits (DailyApiRequests, DataStorageMB, etc.)
+
+### 2.9 Metadata Type Presets & package.xml
+- **Save Preset** — saves current type selection as a named preset in `projectData.metaPresets`; chips displayed above type grid in both Metadata and Compare & Deploy views
+- **Load Preset** — clicking a preset chip restores that type selection instantly
+- **Delete Preset** — × button on each chip removes it from saved presets
+- **Export package.xml** — generates standard Salesforce `package.xml` from selected types (with `<members>*</members>` and API version); downloads as file
+- **Import package.xml** — file picker accepts `.xml` file; parses `<types><name>` elements and maps them back to known `META_QUERIES` types; updates type selection
+- Functions: `metaSavePreset()`, `metaLoadPreset()`, `metaDeletePreset()`, `cdLoadPreset()`, `_buildPackageXml()`, `_parsePackageXml()`, `metaExportPackageXml()`, `cdExportPackageXml()`, `metaImportPackageXml()`, `cdImportPackageXml()`
 
 ### 2.10 Logs Tab (In-App Diagnostics)
 - **Application log buffer** — `appLogs[]` array (max 500 entries, FIFO)
@@ -201,7 +213,7 @@
 ### 2.11 UX System
 - **Toast notifications** — all user feedback via animated toasts (ok/err/warn/info), no browser alerts
 - **Help modal** (press `?`) — keyboard shortcuts table + quick tips
-- **Keyboard shortcuts**: R=refresh, T=theme, S=settings, M=metadata, P=pipeline, /=search, ?=help, Esc=close
+- **Keyboard shortcuts**: R=refresh, T=theme, S=settings, M=metadata, P=pipeline, D=compare&deploy, L=logs, /=search, ?=help, Esc=close
 - **Project name badge** in header when unlocked
 - **⬅ Switch project button** — returns to project selector from any view
 - **Nav icons** — 📦 Pipeline, ☁️ Metadata, 🔀 Compare, ⚙️ Settings
@@ -209,6 +221,7 @@
 - **Required field indicators** — red `*` on mandatory fields
 - **Outside-click-to-close** on Create/Unlock/Help modals
 - **Dark/light theme** toggle with persistence
+- **Auto-refresh timer** — configurable interval (1/2/5/10 min or disabled) in Settings → Merge Options; footer shows live countdown with pulsing dot; skips refresh during long operations; `startAutoRefresh()` / `stopAutoRefresh()` lifecycle
 
 ---
 
@@ -257,6 +270,8 @@ Salesforce ──┐
 | `batchSelected` | Set | PR numbers selected for batch promote |
 | `releaseSelected` | Set | PR numbers selected for release to next env |
 | `isCreatingRelease` | boolean | Lock flag during release PR creation |
+| `_autoRefreshTimer` | number | setInterval handle for auto-refresh |
+| `_arNextRefresh` | number | Timestamp of next scheduled auto-refresh |
 | `releaseProgressSteps` | array | State-backed progress trail: `[{ text, cls }]` — survives DOM re-renders |
 
 ---

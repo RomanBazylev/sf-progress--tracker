@@ -619,6 +619,42 @@ input,select{font-family:inherit}
 .env-modal .field input{width:100%;padding:8px 12px;background:var(--surface2);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px}
 .env-modal .field input:focus{outline:none;border-color:var(--accent)}
 .env-modal-footer{display:flex;gap:8px;margin-top:16px}
+/* ── PRESET CHIPS ── */
+.preset-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:10px}
+.preset-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all .15s}
+.preset-chip:hover{border-color:var(--accent);background:var(--accent-dim)}
+.preset-chip.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+.preset-chip .del{margin-left:2px;opacity:.5;font-size:13px;line-height:1}
+.preset-chip .del:hover{opacity:1;color:var(--red)}
+/* ── TEST RESULTS TABLE ── */
+.test-results-tbl{width:100%;border-collapse:collapse;font-size:12px;margin-top:8px}
+.test-results-tbl th{text-align:left;padding:4px 8px;color:var(--muted);border-bottom:1px solid var(--border);font-weight:600}
+.test-results-tbl td{padding:4px 8px;border-bottom:1px solid var(--border)}
+.test-results-tbl .pass{color:var(--green)}
+.test-results-tbl .fail{color:var(--red)}
+.test-results-tbl .test-method{font-family:monospace;font-size:11px}
+/* ── QUICK DEPLOY BADGE ── */
+.qd-badge{display:inline-flex;align-items:center;gap:4px;padding:4px 12px;border-radius:8px;font-size:12px;font-weight:600;background:var(--green-dim);color:var(--green);border:1px solid var(--green);cursor:pointer}
+.qd-badge:hover{filter:brightness(1.15)}
+/* ── ENV HEALTH ── */
+.health-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:10px;margin-top:12px}
+.health-card{background:var(--surface);border:1px solid var(--border);border-radius:10px;padding:14px 16px}
+.health-card h4{font-size:12px;color:var(--muted);margin-bottom:8px;text-transform:uppercase;letter-spacing:.5px}
+.health-bar{height:6px;border-radius:3px;background:var(--surface2);overflow:hidden;margin-top:4px}
+.health-bar .fill{height:100%;border-radius:3px;transition:width .3s}
+.health-bar .fill.green{background:var(--green)}
+.health-bar .fill.yellow{background:var(--yellow)}
+.health-bar .fill.red{background:var(--red)}
+/* ── DEPLOY HISTORY ── */
+.dh-table{width:100%;border-collapse:collapse;font-size:12px}
+.dh-table th{text-align:left;padding:6px 10px;color:var(--muted);border-bottom:1px solid var(--border);font-weight:600;font-size:11px;text-transform:uppercase}
+.dh-table td{padding:6px 10px;border-bottom:1px solid var(--border)}
+.dh-table .dh-ok{color:var(--green)}
+.dh-table .dh-fail{color:var(--red)}
+/* ── AUTO-REFRESH INDICATOR ── */
+.ar-indicator{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
+.ar-indicator .dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:ar-pulse 2s infinite}
+@keyframes ar-pulse{0%,100%{opacity:.4}50%{opacity:1}}
 /* ── COLORS FOR ENV STRIPES (legacy compat) ── */
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HoI/xNIDFo5450Wb5HjZziA7MATgSFGBFDeXN4IfpDBVqXqSUvUFMa7yZqjMBLag==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -754,6 +790,17 @@ input,select{font-family:inherit}
         <option value="rebase">Rebase and merge</option>
       </select>
       <div style="font-size:11px;color:var(--muted);margin-top:4px">Used when promoting PRs via Pipeline view</div>
+    </div>
+    <div class="field">
+      <label>Auto-Refresh Interval</label>
+      <select id="cfgAutoRefresh" style="padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">
+        <option value="0">Disabled</option>
+        <option value="60000">1 minute</option>
+        <option value="120000">2 minutes</option>
+        <option value="300000">5 minutes</option>
+        <option value="600000">10 minutes</option>
+      </select>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Automatically refresh pipeline data in the background</div>
     </div>
   </div>
 
@@ -997,6 +1044,7 @@ input,select{font-family:inherit}
       <tr><td><kbd>M</kbd></td><td>Go to Metadata</td></tr>
       <tr><td><kbd>L</kbd></td><td>Go to Logs</td></tr>
       <tr><td><kbd>P</kbd></td><td>Go to Pipeline</td></tr>
+      <tr><td><kbd>D</kbd></td><td>Go to Compare & Deploy</td></tr>
       <tr><td><kbd>/</kbd></td><td>Focus search bar</td></tr>
       <tr><td><kbd>?</kbd></td><td>Show this help</td></tr>
       <tr><td><kbd>Esc</kbd></td><td>Close any modal or panel</td></tr>
@@ -1018,6 +1066,7 @@ input,select{font-family:inherit}
 <!-- ── FOOTER ── -->
 <div class="footer">
   <span>SF Pipeline Tracker</span>
+  <span id="autoRefreshStatus" class="ar-indicator" style="display:none"><span class="dot"></span><span id="arCountdown"></span></span>
   <a href="https://buymeacoffee.com/salesforce_raman" target="_blank" rel="noopener" style="color:var(--accent);text-decoration:none;font-size:12px" title="Support this project">☕ Buy me a coffee</a>
   <span id="rateLimit"></span>
 </div>
@@ -1079,6 +1128,9 @@ let sfState = { token: null, instance: null, user: null, envIndex: -1 };
 let metaCache = { components: [], gitTree: {}, gitBranch: '', hasFetched: false, failedTypes: [], queriedCount: 0 };
 let metaFetchConfig = { types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC'], datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '' }; // updated by META_DEFAULT_TYPES after load
 let repoBranches = [];
+let _autoRefreshTimer = null;
+let _arNextRefresh = 0; // timestamp of next auto-refresh
+let _arCountdownTimer = null;
 
 const ENV_COLORS = ['#58a6ff','#d29922','#3fb950','#bc8cff','#f85149','#db6d28'];
 const GS_REGEX = /^gs-pipeline\/(.+)_-_(.+)$/;
@@ -1295,6 +1347,7 @@ function enterProject() {
   document.getElementById('cfgRepo').value = projectData.repo || '';
   document.getElementById('cfgCaseUrl').value = projectData.caseBaseUrl || '';
   document.getElementById('cfgMergeMethod').value = projectData.mergeMethod || 'merge';
+  document.getElementById('cfgAutoRefresh').value = String((projectData.prefs && projectData.prefs.autoRefreshInterval) || 0);
   document.getElementById('cfgProtectedBranches').value = (projectData.protectedBranches || []).join(', ');
   // Restore persisted metadata fetch config
   if (projectData.metaFetchTypes && projectData.metaFetchTypes.length) {
@@ -1313,6 +1366,7 @@ function enterProject() {
       showView('pipeline');
     }
     refreshData();
+    startAutoRefresh();
   } else {
     showView('settings');
   }
@@ -1321,6 +1375,7 @@ function enterProject() {
 function lockProject() {
   if (cdState.isComparing || cdState.isDeploying) { toast('Cannot lock while comparison or deployment is in progress', 'warn'); return; }
   if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+  stopAutoRefresh();
   currentProjectIndex = -1;
   currentPassword = '';
   projectData = null;
@@ -1417,6 +1472,9 @@ async function saveSettings() {
   projectData.repo = document.getElementById('cfgRepo').value.trim();
   projectData.caseBaseUrl = document.getElementById('cfgCaseUrl').value.trim().replace(/\/+$/, '');
   projectData.mergeMethod = document.getElementById('cfgMergeMethod').value;
+  const arVal = parseInt(document.getElementById('cfgAutoRefresh').value || '0');
+  if (!projectData.prefs) projectData.prefs = {};
+  projectData.prefs.autoRefreshInterval = arVal;
   projectData.protectedBranches = document.getElementById('cfgProtectedBranches').value.split(',').map(s => s.trim().toLowerCase()).filter(Boolean);
   projectData.metaFetchTypes = metaFetchConfig.types.slice();
   // envs already updated via renderEnvList interactions
@@ -1426,6 +1484,7 @@ async function saveSettings() {
   saveProjects(projects);
   updateConnBadge();
   toast('Settings saved','ok');
+    startAutoRefresh();
   if (projectData.pat && projectData.repo && projectData.envs.length) {
     showView('pipeline');
     refreshData();
@@ -3107,6 +3166,7 @@ document.addEventListener('keydown', e => {
   if (e.key === 'm' || e.key === 'M') { e.preventDefault(); if (projectData) showView('metadata'); }
   if (e.key === 'p' || e.key === 'P') { e.preventDefault(); if (projectData) showView('pipeline'); }
   if (e.key === 'l' || e.key === 'L') { e.preventDefault(); if (projectData) showView('logs'); }
+  if (e.key === 'd' || e.key === 'D') { e.preventDefault(); if (projectData) showView('compare'); }
   if (e.key === '/') { e.preventDefault(); const s = document.getElementById('filterSearch'); if (s) s.focus(); }
   if (e.key === '?') { e.preventDefault(); showHelpModal(); }
   if (e.key === 'Escape') { closeSidePanel(); closeCreateModal(); closeUnlockModal(); closeDiffModal(); closeHelpModal(); }
@@ -3811,8 +3871,25 @@ function buildFetchConfigHtml() {
   h += '<button class="btn btn-sm" onclick="metaFetchConfig.types=META_QUERIES.map(q=>q.type);renderMetadataView()">Select All</button>';
   h += '<button class="btn btn-sm" onclick="metaFetchConfig.types=[];renderMetadataView()">Deselect All</button>';
   h += '<button class="btn btn-sm" onclick="metaFetchConfig.types=META_DEFAULT_TYPES.slice();renderMetadataView()">Reset to Defaults</button>';
+  h += '<button class="btn btn-sm" onclick="metaExportPackageXml()" title="Export selected types as package.xml">📥 package.xml</button>';
+  h += '<label class="btn btn-sm" style="cursor:pointer" title="Import types from package.xml">📤 Import<input type="file" accept=".xml" style="display:none" onchange="metaImportPackageXml(this.files[0])"></label>';
+  h += '<button class="btn btn-sm" onclick="metaSavePreset()" title="Save current selection as a preset">💾 Save Preset</button>';
   h += '<input id="metaTypeSearch" placeholder="\ud83d\udd0d Search types..." oninput="filterMetaTypes(this.value)" style="margin-left:auto;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;width:180px">';
   h += '</div>';
+  // Preset chips
+  const presets = (projectData && projectData.metaPresets) || {};
+  const presetNames = Object.keys(presets);
+  if (presetNames.length) {
+    h += '<div class="preset-bar">';
+    h += '<span style="font-size:11px;color:var(--muted);font-weight:600">Presets:</span>';
+    presetNames.forEach(name => {
+      const isActive = JSON.stringify(metaFetchConfig.types.slice().sort()) === JSON.stringify(presets[name].slice().sort());
+      const safeName = JSON.stringify(name);
+      h += '<span class="preset-chip' + (isActive ? ' active' : '') + '" onclick="metaLoadPreset(' + esc(safeName) + ')">' + esc(name) +
+        ' <span class="del" onclick="event.stopPropagation();metaDeletePreset(' + esc(safeName) + ')" title="Delete">&times;</span></span>';
+    });
+    h += '</div>';
+  }
   // Group types by category
   const typeGroups = [
     { label: 'Code', types: ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC','ApexTestSuite','StaticResource'] },
@@ -4993,7 +5070,9 @@ let cdState = {
   isComparing: false,
   isDeploying: false,
   _deployCancelled: false,
-  _fetchErrors: []
+  _fetchErrors: [],
+  _lastValidation: null, // { asyncId, timestamp, componentCount, testResults }
+  _lastTestResults: null  // { total, passed, failed, tests:[] }
 };
 
 // ── RENDER: Compare & Deploy View ──
@@ -5044,7 +5123,22 @@ function renderCompareDeployView() {
   html += '<button class="btn btn-sm" onclick="cdSelectAllTypes(false)">Deselect All</button>';
   html += '<button class="btn btn-sm" onclick="cdSelectPreset(\'code\')">Code Only</button>';
   html += '<button class="btn btn-sm" onclick="cdSelectPreset(\'config\')">Config Only</button>';
+  html += '<button class="btn btn-sm" onclick="cdExportPackageXml()" title="Export selected types as package.xml">📥 package.xml</button>';
+  html += '<label class="btn btn-sm" style="cursor:pointer" title="Import types from package.xml">📤 Import<input type="file" accept=".xml" style="display:none" onchange="cdImportPackageXml(this.files[0])"></label>';
   html += '</div>';
+  // Preset chips for CD
+  const cdPresets = (projectData && projectData.metaPresets) || {};
+  const cdPresetNames = Object.keys(cdPresets);
+  if (cdPresetNames.length) {
+    html += '<div class="preset-bar">';
+    html += '<span style="font-size:11px;color:var(--muted);font-weight:600">Presets:</span>';
+    cdPresetNames.forEach(name => {
+      const isActive = JSON.stringify(cdState.types.slice().sort()) === JSON.stringify(cdPresets[name].slice().sort());
+      const safeName = JSON.stringify(name);
+      html += '<span class="preset-chip' + (isActive ? ' active' : '') + '" onclick="cdLoadPreset(' + esc(safeName) + ')">' + esc(name) + '</span>';
+    });
+    html += '</div>';
+  }
   html += '<div class="cd-type-grid">';
   const groups = cdGroupMetaTypes();
   for (const [group, items] of Object.entries(groups)) {
@@ -5082,6 +5176,14 @@ function renderCompareDeployView() {
     const reasons = cdWhyCannotCompare();
     html += '<div style="margin-top:8px;font-size:12px;color:var(--yellow)">⚠️ ' + reasons.join(' · ') + '</div>';
   }
+  // Deployment History
+  const dhHist = (projectData && projectData.deployHistory) || [];
+  if (dhHist.length) {
+    html += '<details style="margin-top:20px"><summary style="cursor:pointer;font-size:14px;font-weight:600">📜 Deployment History (' + dhHist.length + ')</summary>';
+    html += buildDeployHistoryHtml();
+    html += '</details>';
+  }
+
   html += '</div>';
 
   html += '</div>'; // cd-container
@@ -5113,6 +5215,7 @@ function buildCdPanelHtml(side, title, type, envIdx, branch) {
     // Connection status
     const conn = cdGetConn(envIdx);
     if (envIdx >= 0) {
+          ' <button class="btn btn-sm" style="margin-left:8px;font-size:10px;padding:1px 6px" onclick="fetchEnvHealth(' + envIdx + ')" title="Show API limits & org health">🏥 Health</button>
       if (conn) {
         html += '<div class="cd-conn-status connected">✓ Connected' + (conn.user ? ' as ' + esc(conn.user) : '') + '</div>';
       } else {
@@ -5555,6 +5658,10 @@ function renderCdResults(el) {
   html += '<button class="btn btn-sm" onclick="cdDeselectAll()">Deselect All</button>';
   if (cdState.targetType === 'org') {
     html += '<button class="btn btn-primary" ' + (selectedCount ? '' : 'disabled') + ' onclick="cdValidateDeploy()" title="Check-only deployment: run tests without applying changes">✓ Validate</button>';
+    // Quick Deploy button — available after successful validation
+    if (cdState._lastValidation && (Date.now() - cdState._lastValidation.timestamp < 10 * 24 * 3600000)) {
+      html += '<button class="qd-badge" onclick="cdQuickDeploy()" title="Deploy the last validated package without re-running tests (valid 10 days)">⚡ Quick Deploy (' + cdState._lastValidation.componentCount + ')</button>';
+    }
     html += '<button class="btn btn-primary" style="background:var(--green);border-color:var(--green)" ' + (selectedCount ? '' : 'disabled') + ' onclick="cdDeployToOrg()">🚀 Deploy to Org</button>';
   }
   if (cdState.targetType === 'git') {
@@ -5577,6 +5684,20 @@ function renderCdResults(el) {
     if (cdState.isDeploying) {
       html += '<div class="cd-progress-bar" style="margin-top:12px"><div class="cd-progress-fill" id="cdDeployBar" style="width:' +
         (cdState.progress.total ? Math.round(cdState.progress.current / cdState.progress.total * 100) : 0) + '%"></div></div>';
+    }
+    // Test results table
+    if (cdState._lastTestResults && cdState._lastTestResults.total > 0 && !cdState.isDeploying) {
+      const tr = cdState._lastTestResults;
+      html += '<details style="margin-top:10px"><summary style="cursor:pointer;font-size:13px;font-weight:600">🧪 Test Results: ' +
+        tr.passed + ' passed, ' + tr.failed + ' failed / ' + tr.total + ' total</summary>';
+      html += '<table class="test-results-tbl"><tr><th>Class</th><th>Method</th><th>Result</th><th>Time</th><th>Message</th></tr>';
+      tr.tests.forEach(t => {
+        const cls = t.outcome === 'Pass' ? 'pass' : 'fail';
+        html += '<tr><td class="test-method">' + esc(t.name) + '</td><td class="test-method">' + esc(t.method) + '</td>' +
+          '<td class="' + cls + '">' + esc(t.outcome) + '</td><td>' + (t.time != null ? t.time + 'ms' : '') + '</td>' +
+          '<td style="max-width:300px;overflow:hidden;text-overflow:ellipsis">' + esc(t.message || '') + '</td></tr>';
+      });
+      html += '</table></details>';
     }
     html += '</div>';
   }
@@ -5879,10 +6000,25 @@ async function cdDeployToOrg(checkOnly) {
         const successNode = statusRes.querySelector('success') || statusRes.getElementsByTagName('success')[0];
         const success = successNode && successNode.textContent === 'true';
 
+        // Parse test results (available for both success and failure)
+        const testResults = _parseTestResults(statusRes);
+        cdState._lastTestResults = testResults;
+
         if (success) {
           addStep('✅ Deployment ' + (checkOnly ? 'validation' : '') + ' succeeded! (' + deployed + ' components)', 'ok');
+          if (testResults && testResults.total > 0) {
+            addStep('🧪 Tests: ' + testResults.passed + '/' + testResults.total + ' passed' +
+              (testResults.failed > 0 ? ', ' + testResults.failed + ' failed' : ''), testResults.failed > 0 ? 'fail' : 'ok');
+          }
+          // Cache validation ID for Quick Deploy (valid 10 days)
+          if (checkOnly) {
+            cdState._lastValidation = { asyncId, timestamp: Date.now(), componentCount: deployed, testResults };
+            addStep('⚡ Quick Deploy available — deploy this validated package without re-running tests', 'ok');
+          }
           toast('Deployment ' + (checkOnly ? 'validated' : 'succeeded'), 'ok');
           notifyUser('SF Deploy', (checkOnly ? 'Validation' : 'Deployment') + ' succeeded: ' + deployed + ' components');
+          // Log to deployment history
+          _addDeployHistory({ ts: new Date().toISOString(), type: checkOnly ? 'validate' : 'deploy', target: _cdDeployTargetLabel(), components: deployed, status: 'success', tests: testResults });
         } else {
           // Parse failures
           const failures = statusRes.querySelectorAll ? statusRes.querySelectorAll('componentFailures') : statusRes.getElementsByTagName('componentFailures');
@@ -5896,8 +6032,13 @@ async function cdDeployToOrg(checkOnly) {
           }
           addStep('❌ Deployment failed' + (errors ? ' (' + errors + ' errors)' : ''), 'fail');
           failMsgs.forEach(m => addStep(m, 'fail'));
+          if (testResults && testResults.failed > 0) {
+            addStep('🧪 Tests: ' + testResults.passed + '/' + testResults.total + ' passed, ' + testResults.failed + ' failed', 'fail');
+            testResults.tests.filter(t => t.outcome === 'Fail').forEach(t => addStep('  ✕ ' + t.name + '.' + t.method + ': ' + t.message, 'fail'));
+          }
           toast('Deployment failed: ' + errors + ' errors', 'error');
           notifyUser('SF Deploy Failed', errors + ' errors');
+          _addDeployHistory({ ts: new Date().toISOString(), type: checkOnly ? 'validate' : 'deploy', target: _cdDeployTargetLabel(), components: deployed, status: 'failed', errors, tests: testResults });
         }
       }
     }
@@ -6657,6 +6798,328 @@ async function cdDeployToGit() {
     cdState.isDeploying = false;
     renderCdResults(document.getElementById('cdContent'));
   }
+}
+
+/* ═══════════════════════════════════════════════════════
+   METADATA TYPE PRESETS
+   ═══════════════════════════════════════════════════════ */
+function metaSavePreset() {
+  const name = prompt('Preset name:');
+  if (!name || !name.trim()) return;
+  if (!projectData) return;
+  if (!projectData.metaPresets) projectData.metaPresets = {};
+  projectData.metaPresets[name.trim()] = [...metaFetchConfig.types];
+  persistProject();
+  toast('Preset "' + name.trim() + '" saved', 'ok');
+  renderMetadataView();
+}
+function metaLoadPreset(name) {
+  const presets = (projectData && projectData.metaPresets) || {};
+  if (!presets[name]) return;
+  metaFetchConfig.types = [...presets[name]];
+  renderMetadataView();
+}
+function metaDeletePreset(name) {
+  if (!projectData || !projectData.metaPresets) return;
+  delete projectData.metaPresets[name];
+  persistProject();
+  toast('Preset deleted', 'info');
+  renderMetadataView();
+}
+function cdLoadPreset(name) {
+  const presets = (projectData && projectData.metaPresets) || {};
+  if (!presets[name]) return;
+  cdState.types = [...presets[name]];
+  renderCompareDeployView();
+}
+
+/* ═══════════════════════════════════════════════════════
+   PACKAGE.XML IMPORT / EXPORT
+   ═══════════════════════════════════════════════════════ */
+function _buildPackageXml(types) {
+  const grouped = {};
+  types.forEach(t => {
+    const q = META_QUERIES.find(qq => qq.type === t);
+    const apiName = q ? q.type : t;
+    if (!grouped[apiName]) grouped[apiName] = true;
+  });
+  let xml = '<?xml version="1.0" encoding="UTF-8"?>\n<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n';
+  Object.keys(grouped).sort().forEach(t => {
+    xml += '  <types>\n    <members>*</members>\n    <name>' + escXmlStr(t) + '</name>\n  </types>\n';
+  });
+  xml += '  <version>' + SF_API_VERSION + '</version>\n</Package>';
+  return xml;
+}
+function _downloadFile(content, filename, mime) {
+  const blob = new Blob([content], { type: mime || 'text/plain' });
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(a.href);
+}
+function metaExportPackageXml() {
+  if (!metaFetchConfig.types.length) { toast('No types selected', 'warn'); return; }
+  _downloadFile(_buildPackageXml(metaFetchConfig.types), 'package.xml', 'application/xml');
+  toast('package.xml exported', 'ok');
+}
+function cdExportPackageXml() {
+  if (!cdState.types.length) { toast('No types selected', 'warn'); return; }
+  _downloadFile(_buildPackageXml(cdState.types), 'package.xml', 'application/xml');
+  toast('package.xml exported', 'ok');
+}
+function _parsePackageXml(xmlText) {
+  const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+  const typeNodes = doc.querySelectorAll('types') || doc.getElementsByTagName('types');
+  const types = [];
+  for (let i = 0; i < typeNodes.length; i++) {
+    const nameNode = typeNodes[i].querySelector('name') || typeNodes[i].getElementsByTagName('name')[0];
+    if (nameNode) {
+      const name = nameNode.textContent.trim();
+      if (META_QUERIES.some(q => q.type === name)) types.push(name);
+    }
+  }
+  return types;
+}
+function metaImportPackageXml(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onerror = () => toast('Failed to read file', 'error');
+  reader.onload = () => {
+    try {
+      const types = _parsePackageXml(reader.result);
+      if (!types.length) { toast('No recognized types found in package.xml', 'warn'); return; }
+      metaFetchConfig.types = types;
+      toast('Imported ' + types.length + ' types from package.xml', 'ok');
+      renderMetadataView();
+    } catch (e) { toast('Invalid package.xml: ' + e.message, 'error'); }
+  };
+  reader.readAsText(file);
+}
+function cdImportPackageXml(file) {
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onerror = () => toast('Failed to read file', 'error');
+  reader.onload = () => {
+    try {
+      const types = _parsePackageXml(reader.result);
+      if (!types.length) { toast('No recognized types found in package.xml', 'warn'); return; }
+      cdState.types = types;
+      toast('Imported ' + types.length + ' types from package.xml', 'ok');
+      renderCompareDeployView();
+    } catch (e) { toast('Invalid package.xml: ' + e.message, 'error'); }
+  };
+  reader.readAsText(file);
+}
+
+/* ═══════════════════════════════════════════════════════
+   TEST RESULTS PARSER
+   ═══════════════════════════════════════════════════════ */
+function _parseTestResults(soapDoc) {
+  const runResult = soapDoc.querySelector('runTestResult') || soapDoc.getElementsByTagName('runTestResult')[0];
+  if (!runResult) return null;
+  const getVal = (parent, tag) => { const n = parent.querySelector(tag) || parent.getElementsByTagName(tag)[0]; return n ? n.textContent : null; };
+  const total = parseInt(getVal(runResult, 'numTestsRun') || '0');
+  const failed = parseInt(getVal(runResult, 'numFailures') || '0');
+  const passed = total - failed;
+  const tests = [];
+  // Parse successes
+  const successes = runResult.querySelectorAll ? runResult.querySelectorAll('successes') : runResult.getElementsByTagName('successes');
+  for (let i = 0; i < successes.length; i++) {
+    tests.push({ name: getVal(successes[i], 'name') || '', method: getVal(successes[i], 'methodName') || '', outcome: 'Pass', time: parseInt(getVal(successes[i], 'time') || '0'), message: '' });
+  }
+  // Parse failures
+  const failures = runResult.querySelectorAll ? runResult.querySelectorAll('failures') : runResult.getElementsByTagName('failures');
+  for (let i = 0; i < failures.length; i++) {
+    tests.push({ name: getVal(failures[i], 'name') || '', method: getVal(failures[i], 'methodName') || '', outcome: 'Fail', time: parseInt(getVal(failures[i], 'time') || '0'), message: getVal(failures[i], 'message') || '' });
+  }
+  return { total, passed, failed, tests };
+}
+
+/* ═══════════════════════════════════════════════════════
+   QUICK DEPLOY (deployRecentValidation)
+   ═══════════════════════════════════════════════════════ */
+async function cdQuickDeploy() {
+  if (!cdState._lastValidation) { toast('No cached validation — run Validate first', 'warn'); return; }
+  if (Date.now() - cdState._lastValidation.timestamp > 10 * 24 * 3600000) { toast('Validation expired (>10 days)', 'warn'); cdState._lastValidation = null; return; }
+  const conn = cdGetConn(cdState.targetEnvIdx);
+  if (!conn) { toast('Target org not connected', 'warn'); return; }
+
+  const validationAsyncId = cdState._lastValidation.asyncId; // capture before async ops
+  cdState.phase = 'deploying';
+  cdState.isDeploying = true;
+  cdState.deploySteps = [];
+  const addStep = (msg, status) => { cdState.deploySteps.push({ message: msg, status }); renderCdResults(document.getElementById('cdContent')); };
+
+  try {
+    addStep('⚡ Quick Deploy — using validated package ID ' + validationAsyncId, 'running');
+    const soap = '<meta:deployRecentValidation><meta:validationId>' + validationAsyncId + '</meta:validationId></meta:deployRecentValidation>';
+    const res = await cdSoapFetch(conn, soap);
+    const idNode = res.querySelector('id') || res.getElementsByTagName('id')[0];
+    const resultId = idNode ? idNode.textContent : validationAsyncId;
+
+    // Poll status
+    let done = false, pollCount = 0;
+    while (!done && pollCount < 30) {
+      pollCount++;
+      await _sleep(Math.min(2000 * Math.pow(1.3, pollCount - 1), 15000));
+      const statusSoap = '<meta:checkDeployStatus><meta:asyncProcessId>' + resultId + '</meta:asyncProcessId><meta:includeDetails>true</meta:includeDetails></meta:checkDeployStatus>';
+      const statusRes = await cdSoapFetch(conn, statusSoap);
+      const doneNode = statusRes.querySelector('done') || statusRes.getElementsByTagName('done')[0];
+      if (doneNode && doneNode.textContent === 'true') {
+        done = true;
+        const successNode = statusRes.querySelector('success') || statusRes.getElementsByTagName('success')[0];
+        const success = successNode && successNode.textContent === 'true';
+        const numDeployed = statusRes.querySelector('numberComponentsDeployed') || statusRes.getElementsByTagName('numberComponentsDeployed')[0];
+        const deployed = numDeployed ? parseInt(numDeployed.textContent) : 0;
+        if (success) {
+          addStep('✅ Quick Deploy succeeded! (' + deployed + ' components)', 'ok');
+          toast('Quick Deploy succeeded', 'ok');
+          notifyUser('SF Quick Deploy', 'Deployment succeeded: ' + deployed + ' components');
+          _addDeployHistory({ ts: new Date().toISOString(), type: 'quickDeploy', target: _cdDeployTargetLabel(), components: deployed, status: 'success' });
+        } else {
+          addStep('❌ Quick Deploy failed', 'fail');
+          toast('Quick Deploy failed', 'error');
+          _addDeployHistory({ ts: new Date().toISOString(), type: 'quickDeploy', target: _cdDeployTargetLabel(), components: deployed, status: 'failed' });
+        }
+      }
+    }
+    cdState._lastValidation = null;
+    cdState.phase = 'deployed';
+  } catch (e) {
+    addStep('Error: ' + e.message, 'fail');
+    toast('Quick Deploy failed: ' + e.message, 'error');
+    cdState.phase = 'results';
+  } finally {
+    cdState.isDeploying = false;
+    renderCdResults(document.getElementById('cdContent'));
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   DEPLOYMENT HISTORY
+   ═══════════════════════════════════════════════════════ */
+function _cdDeployTargetLabel() {
+  if (cdState.targetType === 'org') return (projectData.envs[cdState.targetEnvIdx]?.displayName || 'Org ' + cdState.targetEnvIdx);
+  return cdState.targetBranch || 'git';
+}
+function _addDeployHistory(entry) {
+  if (!projectData) return;
+  if (!projectData.deployHistory) projectData.deployHistory = [];
+  projectData.deployHistory.unshift(entry);
+  if (projectData.deployHistory.length > 50) projectData.deployHistory.length = 50;
+  persistProject();
+}
+function buildDeployHistoryHtml() {
+  const history = (projectData && projectData.deployHistory) || [];
+  if (!history.length) return '<div style="color:var(--muted);font-size:12px;padding:20px;text-align:center">No deployments yet.</div>';
+  let h = '<table class="dh-table"><tr><th>Date</th><th>Type</th><th>Target</th><th>Components</th><th>Status</th><th>Tests</th></tr>';
+  history.forEach(e => {
+    const dt = new Date(e.ts);
+    const typeLabels = { validate: '✓ Validate', deploy: '🚀 Deploy', quickDeploy: '⚡ Quick Deploy' };
+    const statusCls = e.status === 'success' ? 'dh-ok' : 'dh-fail';
+    const testInfo = e.tests ? (e.tests.passed + '/' + e.tests.total) : '—';
+    h += '<tr><td>' + esc(dt.toLocaleString()) + '</td><td>' + (typeLabels[e.type] || e.type) + '</td><td>' + esc(e.target || '') + '</td>' +
+      '<td>' + (e.components || 0) + '</td><td class="' + statusCls + '">' + esc(e.status) + '</td><td>' + testInfo + '</td></tr>';
+  });
+  h += '</table>';
+  return h;
+}
+
+/* ═══════════════════════════════════════════════════════
+   AUTO-REFRESH TIMER
+   ═══════════════════════════════════════════════════════ */
+let _autoRefreshInFlight = false;
+function startAutoRefresh() {
+  stopAutoRefresh();
+  const interval = (projectData && projectData.prefs && projectData.prefs.autoRefreshInterval) || 0;
+  if (!interval || interval < 30000) return; // minimum 30s
+  _arNextRefresh = Date.now() + interval;
+  _autoRefreshTimer = setInterval(async () => {
+    if (_autoRefreshInFlight || isCreatingRelease || isPromoting || isFetchingMeta || cdState.isDeploying || cdState.isComparing) return;
+    _autoRefreshInFlight = true;
+    try { await refreshData(); } finally { _autoRefreshInFlight = false; }
+    _arNextRefresh = Date.now() + interval;
+  }, interval);
+  // Countdown display
+  _arCountdownTimer = setInterval(_updateArCountdown, 1000);
+  _updateArCountdown();
+  const el = document.getElementById('autoRefreshStatus');
+  if (el) el.style.display = '';
+}
+function stopAutoRefresh() {
+  clearInterval(_autoRefreshTimer);
+  clearInterval(_arCountdownTimer);
+  _autoRefreshTimer = null;
+  _arCountdownTimer = null;
+  const el = document.getElementById('autoRefreshStatus');
+  if (el) el.style.display = 'none';
+}
+function _updateArCountdown() {
+  const el = document.getElementById('arCountdown');
+  if (!el || !_arNextRefresh) return;
+  const secs = Math.max(0, Math.round((_arNextRefresh - Date.now()) / 1000));
+  const m = Math.floor(secs / 60), s = secs % 60;
+  el.textContent = 'Refresh in ' + m + ':' + String(s).padStart(2, '0');
+}
+
+/* ═══════════════════════════════════════════════════════
+   ENVIRONMENT HEALTH (SF Limits API)
+   ═══════════════════════════════════════════════════════ */
+async function fetchEnvHealth(envIdx) {
+  if (envIdx < 0 || !projectData || !projectData.envs[envIdx]) { toast('Invalid environment', 'warn'); return; }
+  const conn = cdGetConn(envIdx);
+  if (!conn) { toast('Connect to org first', 'warn'); return; }
+  try {
+    const limits = await cdApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/limits/');
+    _renderEnvHealthModal(envIdx, limits);
+  } catch (e) { toast('Failed to fetch limits: ' + e.message, 'error'); }
+}
+function _renderEnvHealthModal(envIdx, limits) {
+  const envName = (projectData.envs[envIdx]?.displayName || 'Org ' + envIdx);
+  let overlay = document.getElementById('envHealthOverlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'envHealthOverlay';
+  overlay.className = 'env-modal-overlay';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  const important = ['DailyApiRequests','DailyBulkApiRequests','DataStorageMB','FileStorageMB','SingleEmail','DailyWorkflowEmails','DailyAsyncApexExecutions','HourlyAsyncReportRuns','StreamingApiConcurrentClients','DailyGenericStreamingApiEvents','Package2VersionCreates','PermissionSets','ActiveScratchOrgs'];
+  const keys = important.filter(k => limits[k]).concat(Object.keys(limits).filter(k => !important.includes(k) && limits[k]));
+
+  let h = '<div class="env-modal" style="max-width:700px"><h3>🏥 ' + esc(envName) + ' — Org Health</h3>';
+  h += '<div class="health-grid">';
+  keys.slice(0, 20).forEach(k => {
+    const lim = limits[k];
+    if (!lim || lim.Max == null) return;
+    const used = lim.Remaining != null ? (lim.Max - lim.Remaining) : 0;
+    const pct = lim.Max > 0 ? Math.round(used / lim.Max * 100) : 0;
+    const color = pct >= 90 ? 'red' : pct >= 70 ? 'yellow' : 'green';
+    const label = k.replace(/([A-Z])/g, ' $1').trim();
+    h += '<div class="health-card"><h4>' + esc(label) + '</h4>';
+    h += '<div style="font-size:14px;font-weight:600">' + used.toLocaleString() + ' / ' + lim.Max.toLocaleString() + '</div>';
+    h += '<div style="font-size:11px;color:var(--muted)">' + (lim.Remaining != null ? lim.Remaining.toLocaleString() + ' remaining' : '') + '</div>';
+    h += '<div class="health-bar"><div class="fill ' + color + '" style="width:' + pct + '%"></div></div></div>';
+  });
+  h += '</div>';
+  if (keys.length > 20) {
+    h += '<details style="margin-top:12px"><summary style="cursor:pointer;font-size:12px;color:var(--muted)">Show all ' + keys.length + ' limits</summary>';
+    h += '<div class="health-grid" style="margin-top:8px">';
+    keys.slice(20).forEach(k => {
+      const lim = limits[k];
+      if (!lim || lim.Max == null) return;
+      const used = lim.Remaining != null ? (lim.Max - lim.Remaining) : 0;
+      const pct = lim.Max > 0 ? Math.round(used / lim.Max * 100) : 0;
+      const color = pct >= 90 ? 'red' : pct >= 70 ? 'yellow' : 'green';
+      h += '<div class="health-card"><h4>' + esc(k.replace(/([A-Z])/g, ' $1').trim()) + '</h4>';
+      h += '<div style="font-size:14px;font-weight:600">' + used.toLocaleString() + ' / ' + lim.Max.toLocaleString() + '</div>';
+      h += '<div class="health-bar"><div class="fill ' + color + '" style="width:' + pct + '%"></div></div></div>';
+    });
+    h += '</div></details>';
+  }
+  h += '<div class="env-modal-footer"><button class="btn btn-sm" onclick="document.getElementById(\'envHealthOverlay\').remove()">Close</button></div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
 }
 
 /* ═══════════════════════════════════════════════════════
