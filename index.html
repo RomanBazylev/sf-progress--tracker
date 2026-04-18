@@ -655,6 +655,21 @@ input,select{font-family:inherit}
 .ar-indicator{display:inline-flex;align-items:center;gap:4px;font-size:11px;color:var(--muted)}
 .ar-indicator .dot{width:6px;height:6px;border-radius:50%;background:var(--green);animation:ar-pulse 2s infinite}
 @keyframes ar-pulse{0%,100%{opacity:.4}50%{opacity:1}}
+/* ── DEPENDENCY VIEWER ── */
+.dep-modal{background:var(--surface);border-radius:14px;padding:28px 32px;max-width:800px;width:95%;max-height:80vh;overflow-y:auto}
+.dep-table{width:100%;border-collapse:collapse;font-size:12px;margin-top:10px}
+.dep-table th{text-align:left;padding:6px 10px;color:var(--muted);border-bottom:1px solid var(--border);font-weight:600;font-size:11px;text-transform:uppercase}
+.dep-table td{padding:6px 10px;border-bottom:1px solid var(--border)}
+.dep-table .dep-type{font-family:monospace;font-size:11px;color:var(--accent)}
+.dep-direction{display:inline-block;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:600}
+.dep-direction.uses{background:var(--accent-dim);color:var(--accent)}
+.dep-direction.used-by{background:var(--green-dim);color:var(--green)}
+/* ── SNAPSHOT ── */
+.snap-bar{display:flex;gap:6px;flex-wrap:wrap;align-items:center;margin-bottom:6px}
+.snap-chip{display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:14px;font-size:11px;font-weight:600;cursor:pointer;border:1px solid var(--border);background:var(--surface);color:var(--text);transition:all .15s}
+.snap-chip:hover{border-color:var(--accent);background:var(--accent-dim)}
+.snap-chip .del{margin-left:2px;opacity:.5;font-size:13px;line-height:1}
+.snap-chip .del:hover{opacity:1;color:var(--red)}
 /* ── COLORS FOR ENV STRIPES (legacy compat) ── */
 </style>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js" integrity="sha512-XMVd28F1oH/O71fzwBnV7HoI/xNIDFo5450Wb5HjZziA7MATgSFGBFDeXN4IfpDBVqXqSUvUFMa7yZqjMBLag==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
@@ -3611,10 +3626,27 @@ function renderMetadataView() {
   html += '<button class="btn btn-sm" onclick="metaDeselectAll()" title="Deselect all components">Deselect All</button>';
   html += '<button class="btn btn-sm" onclick="metaCache.components=[];renderMetadataView()" title="Go back to type & date filter settings">← Change Filters</button>';
   html += '<button class="btn btn-sf" onclick="fetchMetadata()" title="Re-fetch ALL metadata from Salesforce using current filter settings (types & date range)">↻ Re-fetch</button>';
+  html += '<button class="btn btn-sm" onclick="metaSaveSnapshot()" title="Save a snapshot of the current metadata state for future comparison">📸 Snapshot</button>';
   if (selCount > 0) {
+    html += '<button class="btn btn-sm" onclick="metaDownloadZip()" title="Download selected components as a ZIP file in SFDX folder structure">📦 Download ZIP</button>';
     html += '<button class="btn btn-primary" onclick="showCommitForm()" title="Commit selected components to the git branch">Commit ' + selCount + ' to Git</button>';
   }
   html += '</div>';
+  // Snapshot bar
+  const snaps = (projectData && projectData.metaSnapshots) || {};
+  const snapNames = Object.keys(snaps);
+  if (snapNames.length) {
+    html += '<div class="snap-bar">';
+    html += '<span style="font-size:11px;color:var(--muted);font-weight:600">📸 Snapshots:</span>';
+    snapNames.forEach(name => {
+      const s = snaps[name];
+      const safeName = JSON.stringify(name);
+      html += '<span class="snap-chip" onclick="metaCompareSnapshot(' + esc(safeName) + ')" title="Compare current metadata with this snapshot (' + (s.count || 0) + ' components, ' + new Date(s.ts).toLocaleString() + ')">' + esc(name) +
+        ' <span style="font-size:10px;opacity:.6">(' + (s.count || 0) + ')</span>' +
+        ' <span class="del" onclick="event.stopPropagation();metaDeleteSnapshot(' + esc(safeName) + ')" title="Delete">&times;</span></span>';
+    });
+    html += '</div>';
+  }
 
   // Commit form area
   html += '<div id="commitFormArea"></div>';
@@ -3746,6 +3778,7 @@ function renderMetaRow(c, idx) {
     <span class="meta-row-actions">
       <button class="btn btn-sm" onclick="event.stopPropagation();viewComponent(${idx})" title="View full component source code">View</button>
       ${c.change !== 'new' ? '<button class="btn btn-sm" onclick="event.stopPropagation();showDiff(' + idx + ')" title="Show line-by-line diff between Salesforce and git">Diff</button>' : ''}
+      <button class="btn btn-sm" onclick="event.stopPropagation();showDeps(${idx})" title="Show what this component references and what references it">Deps</button>
     </span>
   </div>`;
 }
@@ -3877,13 +3910,13 @@ function buildFetchConfigHtml() {
   h += '<input id="metaTypeSearch" placeholder="\ud83d\udd0d Search types..." oninput="filterMetaTypes(this.value)" style="margin-left:auto;padding:4px 10px;border:1px solid var(--border);border-radius:6px;background:var(--surface);color:var(--text);font-size:12px;width:180px">';
   h += '</div>';
   // Preset chips
-  const presets = (projectData && projectData.metaPresets) || {};
-  const presetNames = Object.keys(presets);
+  const metaPresets = (projectData && projectData.metaPresets) || {};
+  const presetNames = Object.keys(metaPresets);
   if (presetNames.length) {
     h += '<div class="preset-bar">';
     h += '<span style="font-size:11px;color:var(--muted);font-weight:600">Presets:</span>';
     presetNames.forEach(name => {
-      const isActive = JSON.stringify(metaFetchConfig.types.slice().sort()) === JSON.stringify(presets[name].slice().sort());
+      const isActive = JSON.stringify(metaFetchConfig.types.slice().sort()) === JSON.stringify(metaPresets[name].slice().sort());
       const safeName = JSON.stringify(name);
       h += '<span class="preset-chip' + (isActive ? ' active' : '') + '" onclick="metaLoadPreset(' + esc(safeName) + ')">' + esc(name) +
         ' <span class="del" onclick="event.stopPropagation();metaDeletePreset(' + esc(safeName) + ')" title="Delete">&times;</span></span>';
@@ -3921,8 +3954,8 @@ function buildFetchConfigHtml() {
   h += '<h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/3</span>Date Range Filter</h3>';
   h += '<p style="font-size:12px;color:var(--muted);margin-bottom:10px">Only fetch components modified within this period</p>';
   h += '<div class="meta-date-row">';
-  const presets = [['all','All time'],['today','Today'],['2d','Last 2 days'],['5d','Last 5 days'],['week','Last week'],['month','Last month'],['custom','Custom']];
-  presets.forEach(([k,lbl]) => {
+  const datePresets = [['all','All time'],['today','Today'],['2d','Last 2 days'],['5d','Last 5 days'],['week','Last week'],['month','Last month'],['custom','Custom']];
+  datePresets.forEach(([k,lbl]) => {
     h += `<button class="date-preset${metaFetchConfig.datePreset===k?' active':''}" onclick="setDatePreset('${k}')">${lbl}</button>`;
   });
   h += '</div>';
@@ -5215,9 +5248,10 @@ function buildCdPanelHtml(side, title, type, envIdx, branch) {
     // Connection status
     const conn = cdGetConn(envIdx);
     if (envIdx >= 0) {
-          ' <button class="btn btn-sm" style="margin-left:8px;font-size:10px;padding:1px 6px" onclick="fetchEnvHealth(' + envIdx + ')" title="Show API limits & org health">🏥 Health</button>
       if (conn) {
-        html += '<div class="cd-conn-status connected">✓ Connected' + (conn.user ? ' as ' + esc(conn.user) : '') + '</div>';
+        html += '<div class="cd-conn-status connected">✓ Connected' + (conn.user ? ' as ' + esc(conn.user) : '') +
+          ' <button class="btn btn-sm" style="margin-left:8px;font-size:10px;padding:1px 6px" onclick="fetchEnvHealth(' + envIdx + ')" title="Show API limits & org health">🏥 Health</button>' +
+          '</div>';
       } else {
         html += '<div class="cd-conn-status disconnected">✕ Not connected</div>';
         html += '<button class="btn btn-sf btn-sm" style="margin-top:8px" onclick="cdOAuthLogin(' + envIdx + ')">🔑 Connect</button>';
@@ -7120,6 +7154,247 @@ function _renderEnvHealthModal(envIdx, limits) {
   h += '<div class="env-modal-footer"><button class="btn btn-sm" onclick="document.getElementById(\'envHealthOverlay\').remove()">Close</button></div></div>';
   overlay.innerHTML = h;
   document.body.appendChild(overlay);
+}
+
+/* ═══════════════════════════════════════════════════════
+   COMPONENT DEPENDENCY VIEWER
+   ═══════════════════════════════════════════════════════ */
+async function showDeps(idx) {
+  const c = metaCache.components[idx];
+  if (!c) return;
+  if (!sfState.token) { toast('Connect to Salesforce first', 'warn'); return; }
+
+  // Show loading overlay immediately
+  let overlay = document.getElementById('depOverlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'depOverlay';
+  overlay.className = 'env-modal-overlay';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+  overlay.innerHTML = '<div class="dep-modal"><h3>🔗 Loading dependencies for ' + esc(c.name) + '...</h3></div>';
+  document.body.appendChild(overlay);
+
+  try {
+    // Query both directions: what this component uses, and what uses this component
+    const compName = c.name;
+    const [usesRes, usedByRes] = await Promise.all([
+      sfApiFetch('/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(
+        "SELECT MetadataComponentName, MetadataComponentType, RefMetadataComponentName, RefMetadataComponentType FROM MetadataComponentDependency WHERE MetadataComponentName = '" + compName.replace(/'/g, "\\'") + "'"
+      )).catch(() => ({ records: [] })),
+      sfApiFetch('/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(
+        "SELECT MetadataComponentName, MetadataComponentType, RefMetadataComponentName, RefMetadataComponentType FROM MetadataComponentDependency WHERE RefMetadataComponentName = '" + compName.replace(/'/g, "\\'") + "'"
+      )).catch(() => ({ records: [] }))
+    ]);
+
+    const uses = (usesRes.records || []).map(r => ({ name: r.RefMetadataComponentName, type: r.RefMetadataComponentType, direction: 'uses' }));
+    const usedBy = (usedByRes.records || []).map(r => ({ name: r.MetadataComponentName, type: r.MetadataComponentType, direction: 'used-by' }));
+
+    // Deduplicate
+    const all = [];
+    const seen = new Set();
+    [...uses, ...usedBy].forEach(d => {
+      const key = d.direction + ':' + d.type + ':' + d.name;
+      if (!seen.has(key)) { seen.add(key); all.push(d); }
+    });
+
+    // Sort: used-by first, then uses; alphabetically within each group
+    all.sort((a, b) => a.direction === b.direction ? a.name.localeCompare(b.name) : a.direction === 'used-by' ? -1 : 1);
+
+    let h = '<div class="dep-modal"><h3>🔗 Dependencies: ' + esc(c.name) + ' <span style="font-weight:400;color:var(--muted);font-size:13px">(' + esc(c.type) + ')</span></h3>';
+    if (!all.length) {
+      h += '<p style="color:var(--muted);margin-top:12px">No dependencies found. This component neither references nor is referenced by other metadata.</p>';
+    } else {
+      h += '<div style="font-size:12px;color:var(--muted);margin:8px 0">' + uses.length + ' outgoing (uses) · ' + usedBy.length + ' incoming (used by)</div>';
+      h += '<table class="dep-table"><tr><th>Direction</th><th>Component</th><th>Type</th></tr>';
+      all.forEach(d => {
+        h += '<tr><td><span class="dep-direction ' + d.direction + '">' + (d.direction === 'uses' ? '→ Uses' : '← Used by') + '</span></td>' +
+          '<td>' + esc(d.name) + '</td><td class="dep-type">' + esc(d.type) + '</td></tr>';
+      });
+      h += '</table>';
+    }
+    h += '<div class="env-modal-footer"><button class="btn btn-sm" onclick="document.getElementById(\'depOverlay\').remove()">Close</button></div></div>';
+    overlay.innerHTML = h;
+  } catch (e) {
+    overlay.innerHTML = '<div class="dep-modal"><h3>🔗 Dependencies</h3><p style="color:var(--red)">Error: ' + esc(e.message) + '</p>' +
+      '<div class="env-modal-footer"><button class="btn btn-sm" onclick="document.getElementById(\'depOverlay\').remove()">Close</button></div></div>';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════
+   METADATA SNAPSHOT (Save / Compare / Delete)
+   ═══════════════════════════════════════════════════════ */
+function metaSaveSnapshot() {
+  if (!metaCache.components.length) { toast('No metadata loaded to snapshot', 'warn'); return; }
+  const name = prompt('Snapshot name (e.g. "Pre-Release 2.4"):');
+  if (!name || !name.trim()) return;
+  if (!projectData) return;
+  if (!projectData.metaSnapshots) projectData.metaSnapshots = {};
+  // Store lightweight version: name, type, body hash, lastModified (no full body to save space)
+  const items = metaCache.components.map(c => ({
+    name: c.name, type: c.type, fullName: c.fullName,
+    lastModified: c.lastModified,
+    bodyHash: _simpleHash(c.body || ''),
+    bodyLen: (c.body || '').length
+  }));
+  projectData.metaSnapshots[name.trim()] = { ts: new Date().toISOString(), count: items.length, items };
+  persistProject();
+  toast('Snapshot "' + name.trim() + '" saved (' + items.length + ' components)', 'ok');
+  renderMetadataView();
+}
+
+function _simpleHash(str) {
+  let h = 0;
+  for (let i = 0; i < str.length; i++) { h = ((h << 5) - h + str.charCodeAt(i)) | 0; }
+  return h;
+}
+
+function metaDeleteSnapshot(name) {
+  if (!projectData || !projectData.metaSnapshots) return;
+  delete projectData.metaSnapshots[name];
+  persistProject();
+  toast('Snapshot deleted', 'info');
+  renderMetadataView();
+}
+
+function metaCompareSnapshot(name) {
+  if (!projectData || !projectData.metaSnapshots || !projectData.metaSnapshots[name]) return;
+  if (!metaCache.components.length) { toast('Fetch metadata first, then compare to snapshot', 'warn'); return; }
+
+  const snap = projectData.metaSnapshots[name];
+  const snapMap = {};
+  snap.items.forEach(s => { snapMap[s.type + ':' + s.name] = s; });
+
+  const results = [];
+  // Check current vs snapshot
+  metaCache.components.forEach(c => {
+    const key = c.type + ':' + c.name;
+    const s = snapMap[key];
+    const currentHash = _simpleHash(c.body || '');
+    if (!s) {
+      results.push({ name: c.name, type: c.type, diff: 'new', detail: 'Not in snapshot' });
+    } else if (currentHash !== s.bodyHash) {
+      results.push({ name: c.name, type: c.type, diff: 'modified', detail: 'Body changed since snapshot' });
+    }
+    delete snapMap[key];
+  });
+  // Items in snapshot but not in current fetch (may be deleted or just not fetched)
+  Object.values(snapMap).forEach(s => {
+    results.push({ name: s.name, type: s.type, diff: 'missing', detail: 'In snapshot, not in current fetch' });
+  });
+
+  // Show modal
+  let overlay = document.getElementById('snapCompareOverlay');
+  if (overlay) overlay.remove();
+  overlay = document.createElement('div');
+  overlay.id = 'snapCompareOverlay';
+  overlay.className = 'env-modal-overlay';
+  overlay.onclick = e => { if (e.target === overlay) overlay.remove(); };
+
+  let h = '<div class="dep-modal"><h3>📸 Snapshot Compare: Current vs "' + esc(name) + '"</h3>';
+  h += '<div style="font-size:12px;color:var(--muted);margin:6px 0">Snapshot from ' + new Date(snap.ts).toLocaleString() + ' (' + snap.count + ' components)</div>';
+
+  const newItems = results.filter(r => r.diff === 'new');
+  const modItems = results.filter(r => r.diff === 'modified');
+  const missItems = results.filter(r => r.diff === 'missing');
+
+  h += '<div style="display:flex;gap:16px;margin:12px 0;font-size:13px">';
+  h += '<span style="color:var(--green)">✚ ' + newItems.length + ' new</span>';
+  h += '<span style="color:var(--yellow)">✎ ' + modItems.length + ' modified</span>';
+  h += '<span style="color:var(--red)">✕ ' + missItems.length + ' missing</span>';
+  h += '</div>';
+
+  if (!results.length) {
+    h += '<p style="color:var(--muted);margin:12px 0">No differences found — current metadata matches the snapshot.</p>';
+  } else {
+    h += '<table class="dep-table"><tr><th>Status</th><th>Component</th><th>Type</th><th>Detail</th></tr>';
+    results.sort((a, b) => {
+      const order = { modified: 0, new: 1, missing: 2 };
+      return (order[a.diff] ?? 3) - (order[b.diff] ?? 3) || a.name.localeCompare(b.name);
+    });
+    results.forEach(r => {
+      const colors = { new: 'var(--green)', modified: 'var(--yellow)', missing: 'var(--red)' };
+      const icons = { new: '✚', modified: '✎', missing: '✕' };
+      h += '<tr><td style="color:' + colors[r.diff] + ';font-weight:600">' + icons[r.diff] + ' ' + r.diff + '</td>' +
+        '<td>' + esc(r.name) + '</td><td class="dep-type">' + esc(r.type) + '</td><td style="color:var(--muted);font-size:11px">' + esc(r.detail) + '</td></tr>';
+    });
+    h += '</table>';
+  }
+  h += '<div class="env-modal-footer"><button class="btn btn-sm" onclick="document.getElementById(\'snapCompareOverlay\').remove()">Close</button></div></div>';
+  overlay.innerHTML = h;
+  document.body.appendChild(overlay);
+}
+
+/* ═══════════════════════════════════════════════════════
+   BULK RETRIEVE — DOWNLOAD SELECTED AS ZIP
+   ═══════════════════════════════════════════════════════ */
+async function metaDownloadZip() {
+  const selected = metaCache.components.filter(c => c.selected);
+  if (!selected.length) { toast('No components selected', 'warn'); return; }
+
+  toast('Building ZIP with ' + selected.length + ' components...', 'info', 3000);
+
+  try {
+    const zip = new JSZip();
+    const basePath = 'force-app/main/default/';
+    const packageTypes = {};
+
+    for (const item of selected) {
+      const q = META_QUERIES.find(mq => mq.type === item.type);
+      if (!q) continue;
+
+      let body = item.body || '';
+      // If body not loaded yet, try to fetch it
+      if (!body && item.sfId && sfState.token) {
+        try {
+          const bodyField = q.type === 'ApexPage' || q.type === 'ApexComponent' ? 'Markup' : 'Body';
+          const detail = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/tooling/sobjects/' + q.type.replace('LWC', 'LightningComponentBundle').replace('AuraBundle', 'AuraDefinitionBundle') + '/' + item.sfId + '?fields=' + bodyField);
+          body = detail[bodyField] || '';
+        } catch {}
+      }
+      if (!body) continue;
+
+      // Compute SFDX path
+      let filePath;
+      if (OBJECT_CHILD_FOLDERS && OBJECT_CHILD_FOLDERS[item.type]) {
+        const parts = item.name.split('.');
+        if (parts.length >= 2) {
+          filePath = basePath + 'objects/' + parts[0] + '/' + OBJECT_CHILD_FOLDERS[item.type] + '/' + parts.slice(1).join('.') + q.ext;
+        } else {
+          filePath = basePath + q.path + '/' + item.name + q.ext;
+        }
+      } else if (item.type === 'LWC' || item.type === 'AuraBundle') {
+        filePath = basePath + q.path + '/' + item.name + '/' + item.name + (item.type === 'LWC' ? '.js' : '.cmp');
+      } else {
+        filePath = basePath + q.path + '/' + item.name + q.ext;
+      }
+      zip.file(filePath, body);
+
+      // Track for package.xml
+      if (!packageTypes[q.type]) packageTypes[q.type] = [];
+      packageTypes[q.type].push(item.name);
+    }
+
+    // Add package.xml
+    let pkgXml = '<?xml version="1.0" encoding="UTF-8"?>\n<Package xmlns="http://soap.sforce.com/2006/04/metadata">\n';
+    Object.keys(packageTypes).sort().forEach(t => {
+      pkgXml += '  <types>\n';
+      packageTypes[t].sort().forEach(m => { pkgXml += '    <members>' + escXmlStr(m) + '</members>\n'; });
+      pkgXml += '    <name>' + escXmlStr(t) + '</name>\n  </types>\n';
+    });
+    pkgXml += '  <version>' + SF_API_VERSION + '</version>\n</Package>';
+    zip.file(basePath + 'package.xml', pkgXml);
+
+    const blob = await zip.generateAsync({ type: 'blob' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'metadata-' + new Date().toISOString().slice(0, 10) + '.zip';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    toast('ZIP downloaded: ' + selected.length + ' components', 'ok');
+  } catch (e) {
+    toast('ZIP generation failed: ' + e.message, 'error');
+    logMsg('error', 'downloadZip', 'Failed to generate ZIP', e.message);
+  }
 }
 
 /* ═══════════════════════════════════════════════════════

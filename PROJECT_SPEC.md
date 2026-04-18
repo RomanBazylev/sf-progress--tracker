@@ -200,7 +200,31 @@
 - **Import package.xml** — file picker accepts `.xml` file; parses `<types><name>` elements and maps them back to known `META_QUERIES` types; updates type selection
 - Functions: `metaSavePreset()`, `metaLoadPreset()`, `metaDeletePreset()`, `cdLoadPreset()`, `_buildPackageXml()`, `_parsePackageXml()`, `metaExportPackageXml()`, `cdExportPackageXml()`, `metaImportPackageXml()`, `cdImportPackageXml()`
 
-### 2.10 Logs Tab (In-App Diagnostics)
+### 2.10 Component Dependency Viewer
+- **Deps button** on each metadata row — queries Tooling API `MetadataComponentDependency` (both directions)
+- **Uses** (→) — what this component references (classes, fields, pages, etc.)
+- **Used by** (←) — what other components reference this one (impact analysis)
+- Parallel queries for both directions; deduplication of results
+- Modal overlay with color-coded direction badges, component name, and type
+- Functions: `showDeps(idx)`
+
+### 2.11 Metadata Snapshots
+- **Save Snapshot** — captures lightweight snapshot of current metadata state (name, type, body hash, timestamps) into `projectData.metaSnapshots`
+- **Compare Snapshot** — compares current metadata fetch against a saved snapshot; shows diff summary (new/modified/missing) in a modal table
+- **Delete Snapshot** — removes saved snapshot from project data
+- Uses `_simpleHash()` body hash comparison (not full body storage, saves encrypted storage space)
+- Snapshot chips displayed below the action bar when snapshots exist
+- Functions: `metaSaveSnapshot()`, `metaCompareSnapshot()`, `metaDeleteSnapshot()`, `_simpleHash()`
+
+### 2.12 Bulk Retrieve (Download ZIP)
+- **Download ZIP** button — available when components are selected in Metadata view
+- Builds SFDX-structured ZIP (`force-app/main/default/`) with correct paths per metadata type
+- Includes auto-generated `package.xml` with specific member names (not wildcards)
+- Handles object child types (fields, validationRules) and bundle types (LWC, Aura)
+- Uses JSZip for in-browser ZIP generation
+- Function: `metaDownloadZip()`
+
+### 2.13 Logs Tab (In-App Diagnostics)
 - **Application log buffer** — `appLogs[]` array (max 500 entries, FIFO)
 - **`logMsg(level, source, message, detail)`** — pushes to buffer + mirrors to browser console
 - **Log levels**: info (ℹ️), success (✅), warn (⚠️), error (❌) with color-coded rows
@@ -210,7 +234,7 @@
 - **Sources**: describeMetadata, buildSfdxPath, ensureFullMetadata, fetchMetadata, gitTree, and more
 - All 17+ former `console.log`/`console.warn` calls rewired to `logMsg()` for in-app visibility
 
-### 2.11 UX System
+### 2.14 UX System
 - **Toast notifications** — all user feedback via animated toasts (ok/err/warn/info), no browser alerts
 - **Help modal** (press `?`) — keyboard shortcuts table + quick tips
 - **Keyboard shortcuts**: R=refresh, T=theme, S=settings, M=metadata, P=pipeline, D=compare&deploy, L=logs, /=search, ?=help, Esc=close
