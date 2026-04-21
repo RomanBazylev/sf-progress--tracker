@@ -1035,6 +1035,26 @@ input,select{font-family:inherit}
   </div>
 </div>
 
+<!-- ── DELETE PROJECT MODAL ── -->
+<div class="modal-overlay" id="deleteModal" onclick="if(event.target===this)closeDeleteModal()">
+  <div class="modal">
+    <h2 id="deleteTitle" style="color:var(--error, #ef4444)">🗑 Delete Project</h2>
+    <p class="modal-sub" id="deleteSub">Enter the project password to confirm deletion. This cannot be undone.</p>
+    <div class="field">
+      <label>Password</label>
+      <div class="secret-wrap" style="position:relative">
+        <input id="deletePass" type="password" placeholder="Enter password to confirm" style="padding-right:44px" onkeydown="if(event.key==='Enter')confirmDeleteProject()">
+        <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>
+      </div>
+    </div>
+    <div class="modal-error" id="deleteError"></div>
+    <div class="modal-actions">
+      <button class="btn" onclick="closeDeleteModal()">Cancel</button>
+      <button class="btn btn-danger" onclick="confirmDeleteProject()">🗑 Delete</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── TOOLTIP ── -->
 <div class="tooltip" id="tooltip"></div>
 
@@ -1317,20 +1337,53 @@ async function unlockProject() {
 /* ═══════════════════════════════════════════════════════
    DELETE PROJECT
    ═══════════════════════════════════════════════════════ */
+let pendingDeleteIdx = -1;
 function deleteProject(idx) {
+  pendingDeleteIdx = idx;
   const projects = getProjects();
-  if (!confirm('Delete project "' + projects[idx].name + '"? This cannot be undone.')) return;
-  projects.splice(idx, 1);
-  saveProjects(projects);
-  renderProjectList();
+  document.getElementById('deleteTitle').textContent = '🗑 Delete: ' + esc(projects[idx].name);
+  document.getElementById('deleteSub').textContent = 'Enter the project password to confirm deletion. This cannot be undone.';
+  document.getElementById('deletePass').value = '';
+  document.getElementById('deleteError').textContent = '';
+  document.getElementById('deleteModal').classList.add('open');
+  setTimeout(() => document.getElementById('deletePass').focus(), 100);
 }
 function deleteCurrentProject() {
   if (currentProjectIndex < 0) return;
+  pendingDeleteIdx = currentProjectIndex;
   const projects = getProjects();
-  if (!confirm('Delete this project? This cannot be undone.')) return;
-  projects.splice(currentProjectIndex, 1);
+  document.getElementById('deleteTitle').textContent = '🗑 Delete: ' + esc(projects[currentProjectIndex].name);
+  document.getElementById('deleteSub').textContent = 'Enter the project password to confirm deletion. This cannot be undone.';
+  document.getElementById('deletePass').value = '';
+  document.getElementById('deleteError').textContent = '';
+  document.getElementById('deleteModal').classList.add('open');
+  setTimeout(() => document.getElementById('deletePass').focus(), 100);
+}
+function closeDeleteModal() { document.getElementById('deleteModal').classList.remove('open'); pendingDeleteIdx = -1; }
+async function confirmDeleteProject() {
+  const pass = document.getElementById('deletePass').value;
+  const err = document.getElementById('deleteError');
+  if (!pass) { err.textContent = 'Enter password'; return; }
+  const projects = getProjects();
+  const proj = projects[pendingDeleteIdx];
+  if (!proj) { err.textContent = 'Project not found'; return; }
+  try {
+    await Crypto.decrypt(pass, { salt: proj.salt, iv: proj.iv, ciphertext: proj.ciphertext });
+  } catch {
+    err.textContent = 'Wrong password';
+    return;
+  }
+  // Password verified — delete
+  const wasCurrentProject = pendingDeleteIdx === currentProjectIndex;
+  projects.splice(pendingDeleteIdx, 1);
   saveProjects(projects);
-  lockProject();
+  closeDeleteModal();
+  if (wasCurrentProject) {
+    lockProject();
+  } else {
+    renderProjectList();
+  }
+  toast('Project deleted', 'ok');
 }
 
 /* ═══════════════════════════════════════════════════════
