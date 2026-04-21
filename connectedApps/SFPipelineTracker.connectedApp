@@ -4,7 +4,7 @@
     <contactEmail>admin@example.com</contactEmail>
     <description>OAuth Connected App for SF Pipeline Tracker. After install: Setup → App Manager → SF Pipeline Tracker → copy Consumer Key.</description>
     <oauthConfig>
-        <callbackUrl>https://romanbazylev.github.io/sf-progress--tracker/index.html</callbackUrl>
+        <callbackUrl>https://romanbazylev.github.io/sf-progress--tracker/</callbackUrl>
         <isAdminApproved>false</isAdminApproved>
         <isConsumerSecretOptional>true</isConsumerSecretOptional>
         <isIntrospectAllTokens>false</isIntrospectAllTokens>
