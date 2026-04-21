@@ -147,17 +147,25 @@ input,select{font-family:inherit}
 .conn-status.err{background:var(--red-dim);color:var(--red)}
 
 /* ── ENV PIPELINE CONFIG ── */
-.env-list{display:flex;flex-direction:column;gap:6px;margin:12px 0}
-.env-item{display:flex;align-items:center;gap:8px;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px}
+.env-list{display:flex;flex-direction:column;gap:10px;margin:12px 0}
+.env-item{padding:14px 16px;background:var(--bg);border:1px solid var(--border);border-radius:10px;position:relative}
+.env-item-header{display:flex;align-items:center;gap:10px;margin-bottom:10px}
 .env-item .env-color{width:14px;height:14px;border-radius:50%;flex-shrink:0}
-.env-item .env-fields{display:flex;gap:8px;flex:1;flex-wrap:wrap}
-.env-item input{padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;width:130px}
-.env-item input.env-url{width:220px;font-size:12px;color:var(--accent)}
-.env-item input:focus{outline:none;border-color:var(--accent)}
-.env-item .env-branch{color:var(--muted);font-size:12px;font-family:monospace;background:var(--surface2);padding:4px 8px;border-radius:4px}
+.env-item .env-name-display{font-weight:600;font-size:14px;flex:1}
+.env-item .env-branch{color:var(--muted);font-size:12px;font-family:monospace;background:var(--surface2);padding:3px 8px;border-radius:4px}
 .env-item .env-actions{display:flex;gap:2px}
-.env-item .env-actions button{background:none;border:none;color:var(--muted);padding:4px 6px;border-radius:4px;font-size:14px}
+.env-item .env-actions button{background:none;border:none;color:var(--muted);padding:4px 6px;border-radius:4px;font-size:14px;cursor:pointer}
 .env-item .env-actions button:hover{color:var(--text);background:var(--surface2)}
+.env-fields-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px 12px}
+.env-field{display:flex;flex-direction:column;gap:3px}
+.env-field label{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.3px}
+.env-field input{padding:6px 10px;background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:13px;width:100%}
+.env-field input:focus{outline:none;border-color:var(--accent)}
+.env-field input.env-url{font-size:12px;color:var(--accent)}
+.env-advanced{margin-top:8px}
+.env-advanced summary{font-size:11px;color:var(--muted);cursor:pointer;font-weight:600}
+.env-advanced summary:hover{color:var(--text)}
+.env-advanced .env-fields-grid{margin-top:8px}
 .env-add-row{display:flex;gap:8px;align-items:center;margin-top:8px}
 .env-add-row select{padding:7px 10px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;flex:1}
 .presets{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
@@ -1724,20 +1732,40 @@ function renderEnvList() {
     }
     return `
     <div class="env-item">
-      <div class="env-color" style="background:${ENV_COLORS[i % ENV_COLORS.length]}"></div>
-      <div class="env-fields">
-        <input value="${esc(env.displayName)}" onchange="updateEnv(${i},'displayName',this.value)" placeholder="Display name">
-        <span class="env-branch">${esc(env.branch)}</span>
-        <input value="${esc(env.orgLabel || '')}" onchange="updateEnv(${i},'orgLabel',this.value)" placeholder="SF Org label" style="width:110px">
-        <input class="env-url" value="${esc(env.orgUrl || '')}" onchange="updateEnv(${i},'orgUrl',this.value)" placeholder="https://mycompany--sandbox.sandbox.my.salesforce.com">
-        <input value="${esc(env.sfClientId || '')}" onchange="updateEnv(${i},'sfClientId',this.value)" placeholder="Client ID (auto-filled on install)" style="width:170px;font-size:11px">
+      <div class="env-item-header">
+        <div class="env-color" style="background:${ENV_COLORS[i % ENV_COLORS.length]}"></div>
+        <span class="env-name-display">${esc(env.displayName || env.branch)}</span>
+        <span class="env-branch">🌿 ${esc(env.branch)}</span>
         ${badge}
+        <div class="env-actions">
+          <button onclick="moveEnv(${i},-1)" title="Move up" ${i === 0 ? 'disabled' : ''}>▲</button>
+          <button onclick="moveEnv(${i},1)" title="Move down" ${i === projectData.envs.length - 1 ? 'disabled' : ''}>▼</button>
+          <button onclick="removeEnv(${i})" title="Remove">✕</button>
+        </div>
       </div>
-      <div class="env-actions">
-        <button onclick="moveEnv(${i},-1)" ${i === 0 ? 'disabled' : ''}>▲</button>
-        <button onclick="moveEnv(${i},1)" ${i === projectData.envs.length - 1 ? 'disabled' : ''}>▼</button>
-        <button onclick="removeEnv(${i})">✕</button>
+      <div class="env-fields-grid">
+        <div class="env-field">
+          <label>Display Name</label>
+          <input value="${esc(env.displayName)}" onchange="updateEnv(${i},'displayName',this.value)" placeholder="e.g. Development">
+        </div>
+        <div class="env-field">
+          <label>Org Label</label>
+          <input value="${esc(env.orgLabel || '')}" onchange="updateEnv(${i},'orgLabel',this.value)" placeholder="e.g. DEV, UAT, PROD">
+        </div>
       </div>
+      <details class="env-advanced">
+        <summary>⚙️ Advanced (Salesforce Org URL & OAuth)</summary>
+        <div class="env-fields-grid">
+          <div class="env-field">
+            <label>Salesforce Org URL</label>
+            <input class="env-url" value="${esc(env.orgUrl || '')}" onchange="updateEnv(${i},'orgUrl',this.value)" placeholder="https://mycompany--sandbox.my.salesforce.com">
+          </div>
+          <div class="env-field">
+            <label>OAuth Client ID</label>
+            <input value="${esc(env.sfClientId || '')}" onchange="updateEnv(${i},'sfClientId',this.value)" placeholder="Auto-filled on app install" style="font-size:11px">
+          </div>
+        </div>
+      </details>
     </div>`;
   }).join('');
 }
