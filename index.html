@@ -3164,8 +3164,11 @@ document.addEventListener('keydown', e => {
 /* ═══════════════════════════════════════════════════════
    SALESFORCE OAUTH
    ═══════════════════════════════════════════════════════ */
+function _oauthRedirectUri() {
+  return location.origin + location.pathname.replace(/index\.html$/i, '');
+}
 function initOAuthCallbackUrls() {
-  const cb = location.origin + location.pathname;
+  const cb = _oauthRedirectUri();
   const el1 = document.getElementById('oauthCallback');
   const el2 = document.getElementById('oauthCallback2');
   if (el1) el1.textContent = cb;
@@ -3209,7 +3212,7 @@ function sfOAuthLogin(envIdx) {
     if (envIdx !== undefined) sessionStorage.setItem('sf_oauth_env_idx', String(envIdx));
   } catch {}
 
-  const redirect = location.origin + location.pathname;
+  const redirect = _oauthRedirectUri();
   const url = instance + '/services/oauth2/authorize'
     + '?response_type=token'
     + '&client_id=' + encodeURIComponent(clientId)
@@ -5049,7 +5052,7 @@ function cdOAuthLogin(envIdx) {
   safeSsSet('sf_oauth_pending', '1');
   safeSsSet('sf_oauth_project_idx', String(currentProjectIndex));
   safeSsSet('sf_instance_pending', instance);
-  const redirect = location.origin + location.pathname;
+  const redirect = _oauthRedirectUri();
   location.href = instance + '/services/oauth2/authorize?response_type=token&client_id=' +
     encodeURIComponent(clientId) + '&redirect_uri=' + encodeURIComponent(redirect) + '&scope=api';
 }
