@@ -542,6 +542,26 @@ input,select{font-family:inherit}
 .cd-progress{background:var(--surface);border:1px solid var(--border);border-radius:12px;padding:20px;margin-bottom:20px}
 .cd-progress-bar{width:100%;height:6px;background:var(--surface2);border-radius:3px;overflow:hidden;margin:10px 0}
 .cd-progress-fill{height:100%;background:var(--accent);border-radius:3px;transition:width .3s}
+.cd-progress-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:4px}
+.cd-progress-header h3{margin:0}
+.cd-progress-header .cd-progress-fraction{font-size:12px;color:var(--muted);font-weight:400}
+.cd-tp-container{max-height:52vh;overflow-y:auto;margin-top:14px;padding-right:4px}
+.cd-tp-category{margin-bottom:10px}
+.cd-tp-category-hdr{font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;padding:4px 0;margin-bottom:4px;border-bottom:1px solid var(--border)}
+.cd-tp-chips{display:flex;flex-wrap:wrap;gap:6px}
+.cd-tp-chip{display:flex;align-items:center;gap:5px;padding:5px 10px;border-radius:6px;font-size:12px;border:1px solid var(--border);background:var(--surface);transition:all .2s;min-width:0}
+.cd-tp-chip .cd-tp-icon{flex-shrink:0;width:16px;text-align:center;font-size:13px}
+.cd-tp-chip .cd-tp-label{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.cd-tp-chip .cd-tp-counts{font-size:10px;color:var(--muted);white-space:nowrap;margin-left:auto}
+.cd-tp-chip.pending{opacity:.45}
+.cd-tp-chip.source{border-color:var(--accent);background:var(--accent-dim);animation:cdPulse 1.2s ease-in-out infinite}
+.cd-tp-chip.target{border-color:var(--accent);background:var(--accent-dim);animation:cdPulse 1.2s ease-in-out infinite}
+.cd-tp-chip.waiting{border-color:var(--accent);opacity:.7}
+.cd-tp-chip.done{border-color:var(--ok, #22c55e);background:rgba(34,197,94,.08)}
+.cd-tp-chip.done .cd-tp-icon{color:var(--ok, #22c55e)}
+.cd-tp-chip.error{border-color:var(--error, #ef4444);background:rgba(239,68,68,.08)}
+.cd-tp-chip.error .cd-tp-icon{color:var(--error, #ef4444)}
+@keyframes cdPulse{0%,100%{opacity:1}50%{opacity:.6}}
 .cd-results{margin-bottom:20px}
 .cd-results-tabs{display:flex;gap:0;border-bottom:2px solid var(--border);margin-bottom:0}
 .cd-results-tabs button{padding:10px 18px;font-size:13px;font-weight:500;border:none;background:none;color:var(--muted);cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;transition:all .15s}
@@ -5106,10 +5126,13 @@ function renderCompareDeployView() {
     return;
   }
   if (cdState.phase === 'comparing') {
-    el.innerHTML = '<div class="cd-container"><div class="cd-progress"><h3>🔄 Comparing metadata...</h3>' +
+    el.innerHTML = '<div class="cd-container"><div class="cd-progress">' +
+      '<div class="cd-progress-header"><h3>🔄 Comparing metadata...</h3><span class="cd-progress-fraction" id="cdProgressFraction">0 / 0 types</span></div>' +
       cdComparisonBanner() +
       '<div class="cd-progress-bar"><div class="cd-progress-fill" id="cdProgressBar" style="width:0%"></div></div>' +
-      '<div id="cdProgressMsg" style="font-size:12px;color:var(--muted)">Starting...</div></div></div>';
+      '<div id="cdProgressMsg" style="font-size:12px;color:var(--muted)">Starting...</div>' +
+      _cdBuildTypeGrid(META_QUERIES.filter(q => cdState.types.includes(q.type))) +
+      '</div></div>';
     return;
   }
 
@@ -5362,14 +5385,13 @@ async function cdRunComparison() {
 
   try {
     const activeQueries = META_QUERIES.filter(q => cdState.types.includes(q.type));
-    const total = activeQueries.length * 2;
-    let done = 0;
-    const updateProgress = (msg) => {
-      done++;
-      cdState.progress = { current: done, total, message: msg };
-      const bar = document.getElementById('cdProgressBar');
+    // Initialize per-type progress tracking
+    cdState.typeProgress = {};
+    activeQueries.forEach(q => { cdState.typeProgress[q.type] = { status: 'pending', sourceCount: 0, targetCount: 0, error: '' }; });
+
+    const setMsg = (msg) => {
+      cdState.progress.message = msg;
       const msgEl = document.getElementById('cdProgressMsg');
-      if (bar) bar.style.width = Math.round(done / total * 100) + '%';
       if (msgEl) msgEl.textContent = msg;
     };
 
@@ -5379,14 +5401,24 @@ async function cdRunComparison() {
       const conn = cdGetConn(cdState.sourceEnvIdx);
       if (!conn) throw new Error('Source org not connected — please reconnect and try again');
       for (const q of activeQueries) {
-        updateProgress('Source: Fetching ' + q.label + '...');
+        cdState.typeProgress[q.type].status = 'source';
+        _cdUpdateTypeEl(q.type);
+        setMsg('Source: Fetching ' + q.label + '...');
         const items = await cdFetchTypeFromOrg(conn, q);
+        cdState.typeProgress[q.type].sourceCount = items.length;
+        cdState.typeProgress[q.type].status = 'waiting';
+        _cdUpdateTypeEl(q.type);
         items.forEach(c => { sourceComps[c.type + '::' + c.name] = c; });
       }
     } else {
       for (const q of activeQueries) {
-        updateProgress('Source: Reading ' + q.label + ' from git...');
+        cdState.typeProgress[q.type].status = 'source';
+        _cdUpdateTypeEl(q.type);
+        setMsg('Source: Reading ' + q.label + ' from git...');
         const items = await cdFetchTypeFromGit(cdState.sourceBranch, q);
+        cdState.typeProgress[q.type].sourceCount = items.length;
+        cdState.typeProgress[q.type].status = 'waiting';
+        _cdUpdateTypeEl(q.type);
         items.forEach(c => { sourceComps[c.type + '::' + c.name] = c; });
       }
     }
@@ -5397,14 +5429,26 @@ async function cdRunComparison() {
       const conn = cdGetConn(cdState.targetEnvIdx);
       if (!conn) throw new Error('Target org not connected — please reconnect and try again');
       for (const q of activeQueries) {
-        updateProgress('Target: Fetching ' + q.label + '...');
+        cdState.typeProgress[q.type].status = 'target';
+        _cdUpdateTypeEl(q.type);
+        setMsg('Target: Fetching ' + q.label + '...');
         const items = await cdFetchTypeFromOrg(conn, q);
+        cdState.typeProgress[q.type].targetCount = items.length;
+        cdState.typeProgress[q.type].status = 'done';
+        _cdUpdateTypeEl(q.type);
+        _cdUpdateOverallProgress();
         items.forEach(c => { targetComps[c.type + '::' + c.name] = c; });
       }
     } else {
       for (const q of activeQueries) {
-        updateProgress('Target: Reading ' + q.label + ' from git...');
+        cdState.typeProgress[q.type].status = 'target';
+        _cdUpdateTypeEl(q.type);
+        setMsg('Target: Reading ' + q.label + ' from git...');
         const items = await cdFetchTypeFromGit(cdState.targetBranch, q);
+        cdState.typeProgress[q.type].targetCount = items.length;
+        cdState.typeProgress[q.type].status = 'done';
+        _cdUpdateTypeEl(q.type);
+        _cdUpdateOverallProgress();
         items.forEach(c => { targetComps[c.type + '::' + c.name] = c; });
       }
     }
@@ -5722,6 +5766,87 @@ function renderCdResults(el) {
   html += '</div></div>';
 
   el.innerHTML = html;
+}
+
+// ── Type category map for progress grouping ──
+const _CD_TYPE_CATEGORIES = {};
+(function() {
+  const cats = [
+    ['Code', ['ApexClass','ApexTrigger','ApexPage','ApexComponent','AuraBundle','LWC','ApexTestSuite','StaticResource']],
+    ['Objects & Fields', ['CustomObject','CustomField','RecordType','CompactLayout','FieldSet','CustomMetadata','PlatformEvent','ExternalObject']],
+    ['Automation', ['Flow','ValidationRule','WorkflowRule','WorkflowFieldUpdate','WorkflowAlert','WorkflowOutboundMessage','WorkflowTask','ApprovalProcess','QuickAction','BusinessProcess']],
+    ['UI & Layout', ['Layout','FlexiPage','ListView','CustomTab','CustomApplication','HomePageLayout','PathAssistant','WebLink']],
+    ['Picklist & Values', ['StandardValueSet','GlobalValueSet','CustomLabel']],
+    ['Security & Access', ['PermissionSet','PermissionSetGroup','CustomPermission','Profile']],
+    ['Rules', ['AssignmentRule','AutoResponseRule','EscalationRule','MatchingRule','DuplicateRule']],
+    ['Email & Templates', ['EmailTemplate','Letterhead']],
+    ['Reports & Dashboards', ['Report','Dashboard','ReportType']],
+    ['Integration', ['NamedCredential','ExternalDataSource','RemoteSiteSetting','ConnectedApp']],
+    ['Admin', ['Queue','CustomNotificationType','FlowCategory']]
+  ];
+  cats.forEach(([cat, types]) => types.forEach(t => { _CD_TYPE_CATEGORIES[t] = cat; }));
+})();
+
+function _cdBuildTypeGrid(activeQueries) {
+  // Group by category
+  const groups = {};
+  activeQueries.forEach(q => {
+    const cat = _CD_TYPE_CATEGORIES[q.type] || 'Other';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(q);
+  });
+  let h = '<div class="cd-tp-container">';
+  for (const [cat, queries] of Object.entries(groups)) {
+    h += '<div class="cd-tp-category"><div class="cd-tp-category-hdr">' + esc(cat) + '</div><div class="cd-tp-chips">';
+    queries.forEach(q => {
+      const tp = cdState.typeProgress?.[q.type];
+      const status = tp ? tp.status : 'pending';
+      const icon = status === 'done' ? '✅' : status === 'error' ? '❌' : status === 'source' || status === 'target' ? '🔄' : status === 'waiting' ? '⏸️' : '⏳';
+      let counts = '';
+      if (status === 'done') counts = '<span class="cd-tp-counts">' + (tp.sourceCount||0) + ' / ' + (tp.targetCount||0) + '</span>';
+      else if (status === 'source') counts = '<span class="cd-tp-counts">' + (tp.sourceCount ? tp.sourceCount + ' /' : 'src...') + '</span>';
+      else if (status === 'waiting') counts = '<span class="cd-tp-counts">' + (tp.sourceCount||0) + ' / …</span>';
+      else if (status === 'target') counts = '<span class="cd-tp-counts">' + (tp.sourceCount||0) + ' / tgt...</span>';
+      else if (status === 'error') counts = '<span class="cd-tp-counts">err</span>';
+      h += '<div class="cd-tp-chip ' + status + '" id="cdTp_' + q.type + '">' +
+        '<span class="cd-tp-icon">' + icon + '</span>' +
+        '<span class="cd-tp-label">' + esc(q.label) + '</span>' +
+        counts + '</div>';
+    });
+    h += '</div></div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function _cdUpdateTypeEl(type) {
+  const tp = cdState.typeProgress?.[type];
+  if (!tp) return;
+  const el = document.getElementById('cdTp_' + type);
+  if (!el) return;
+  const icon = tp.status === 'done' ? '✅' : tp.status === 'error' ? '❌' : tp.status === 'source' || tp.status === 'target' ? '🔄' : tp.status === 'waiting' ? '⏸️' : '⏳';
+  let counts = '';
+  if (tp.status === 'done') counts = '<span class="cd-tp-counts">' + (tp.sourceCount||0) + ' / ' + (tp.targetCount||0) + '</span>';
+  else if (tp.status === 'source') counts = '<span class="cd-tp-counts">' + (tp.sourceCount ? tp.sourceCount + ' /' : 'src...') + '</span>';
+  else if (tp.status === 'waiting') counts = '<span class="cd-tp-counts">' + (tp.sourceCount||0) + ' / …</span>';
+  else if (tp.status === 'target') counts = '<span class="cd-tp-counts">' + (tp.sourceCount||0) + ' / tgt...</span>';
+  else if (tp.status === 'error') counts = '<span class="cd-tp-counts">err</span>';
+  el.className = 'cd-tp-chip ' + tp.status;
+  el.innerHTML = '<span class="cd-tp-icon">' + icon + '</span>' +
+    '<span class="cd-tp-label">' + esc(META_QUERIES.find(q=>q.type===type)?.label || type) + '</span>' +
+    counts;
+}
+
+function _cdUpdateOverallProgress() {
+  if (!cdState.typeProgress) return;
+  const types = Object.values(cdState.typeProgress);
+  const doneCount = types.filter(t => t.status === 'done' || t.status === 'error').length;
+  const total = types.length;
+  const pct = total ? Math.round(doneCount / total * 100) : 0;
+  const bar = document.getElementById('cdProgressBar');
+  const frac = document.getElementById('cdProgressFraction');
+  if (bar) bar.style.width = pct + '%';
+  if (frac) frac.textContent = doneCount + ' / ' + total + ' types';
 }
 
 function cdComparisonBanner() {
