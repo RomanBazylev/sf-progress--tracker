@@ -1218,6 +1218,7 @@ function showView(name) {
   if (nb) nb.classList.add('active');
   if (name === 'logs') renderLogsView();
   if (name === 'compare') renderCompareDeployView();
+  if (name === 'pipeline') renderPipeline();
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1914,10 +1915,16 @@ let activeEnvIndex = -1; // -1 = overview, 0+ = selected env
 let activeEnvTab = 'open'; // 'open' or 'merged'
 
 function renderPipeline() {
+  if (!projectData) return;
   const envs = projectData.envs;
+  if (!projectData.pat || !projectData.repo) {
+    document.getElementById('pipelineContent').innerHTML =
+      '<div class="empty-state"><div class="empty-icon">⚙️</div><p>Pipeline is not configured yet.<br>Go to <a href="#" onclick="showView(\'settings\');return false" style="color:var(--accent)">Settings</a> to add a GitHub token and repository.</p></div>';
+    return;
+  }
   if (!envs.length) {
     document.getElementById('pipelineContent').innerHTML =
-      '<div class="empty-state"><div class="empty-icon">🔧</div><p>Configure environments in Settings first.</p></div>';
+      '<div class="empty-state"><div class="empty-icon">🔧</div><p>No environments configured.<br>Go to <a href="#" onclick="showView(\'settings\');return false" style="color:var(--accent)">Settings</a> to add environments.</p></div>';
     return;
   }
 
