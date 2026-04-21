@@ -757,20 +757,20 @@ input,select{font-family:inherit}
   </div>
 
   <div class="settings-section">
-    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/5</span>🎫 Salesforce Cases</h3>
-    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Case numbers in PR titles/descriptions will link to the Case record in your org.</p>
+    <h3><span style="background:var(--accent-dim);color:var(--accent);border-radius:6px;padding:2px 8px;font-size:11px;margin-right:6px">2/5</span>🎫 Ticket System</h3>
+    <p style="font-size:12px;color:var(--muted);margin-bottom:8px">Ticket/case numbers in PR titles will link to the corresponding record.</p>
     <div class="field">
-      <label>Production Org URL</label>
-      <input id="cfgCaseUrl" placeholder="https://mycompany.lightning.force.com">
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Case numbers like <code>00012345</code> will open as <code>.../lightning/r/Case/00012345/view</code></div>
-      <details style="margin-top:8px;font-size:12px;color:var(--muted)">
-        <summary style="cursor:pointer;font-weight:600">📖 How to find your Org URL</summary>
-        <ol style="margin-top:8px;padding-left:20px;line-height:2">
-          <li>Log into your <strong>Salesforce production</strong> org</li>
-          <li>Copy the URL from the browser address bar (e.g. <code>https://mycompany.lightning.force.com</code>)</li>
-          <li>Remove any page path after the domain — keep only the base URL</li>
-        </ol>
-      </details>
+      <label>System</label>
+      <select id="cfgTicketSystem" onchange="updateTicketSystemUI()">
+        <option value="salesforce">Salesforce (Cases)</option>
+        <option value="jira">Jira</option>
+        <option value="ado">Azure DevOps</option>
+        <option value="custom">Other / Custom</option>
+        <option value="none">None</option>
+      </select>
+    </div>
+    <div id="ticketSystemConfig">
+      <!-- populated by updateTicketSystemUI() -->
     </div>
   </div>
 
@@ -1408,7 +1408,8 @@ function enterProject() {
   // populate settings from decrypted data
   document.getElementById('cfgPat').value = projectData.pat || '';
   document.getElementById('cfgRepo').value = projectData.repo || '';
-  document.getElementById('cfgCaseUrl').value = projectData.caseBaseUrl || '';
+  document.getElementById('cfgTicketSystem').value = projectData.ticketSystem || 'salesforce';
+  updateTicketSystemUI();
   document.getElementById('cfgMergeMethod').value = projectData.mergeMethod || 'merge';
   document.getElementById('cfgAutoRefresh').value = String((projectData.prefs && projectData.prefs.autoRefreshInterval) || 0);
   document.getElementById('cfgProtectedBranches').value = (projectData.protectedBranches || []).join(', ');
@@ -1533,7 +1534,11 @@ async function changePassword() {
 async function saveSettings() {
   projectData.pat = document.getElementById('cfgPat').value.trim();
   projectData.repo = document.getElementById('cfgRepo').value.trim();
-  projectData.caseBaseUrl = document.getElementById('cfgCaseUrl').value.trim().replace(/\/+$/, '');
+  projectData.ticketSystem = document.getElementById('cfgTicketSystem').value;
+  const caseUrlEl = document.getElementById('cfgCaseUrl');
+  projectData.caseBaseUrl = caseUrlEl ? caseUrlEl.value.trim().replace(/\/+$/, '') : (projectData.caseBaseUrl || '');
+  const ticketPrefixEl = document.getElementById('cfgTicketPrefix');
+  projectData.ticketPrefix = ticketPrefixEl ? ticketPrefixEl.value.trim().toUpperCase() : (projectData.ticketPrefix || '');
   projectData.mergeMethod = document.getElementById('cfgMergeMethod').value;
   const arVal = parseInt(document.getElementById('cfgAutoRefresh').value || '0');
   if (!projectData.prefs) projectData.prefs = {};
@@ -1552,6 +1557,41 @@ async function saveSettings() {
     showView('pipeline');
     refreshData();
   }
+}
+
+function updateTicketSystemUI() {
+  const sys = document.getElementById('cfgTicketSystem').value;
+  const el = document.getElementById('ticketSystemConfig');
+  if (sys === 'none') { el.innerHTML = ''; return; }
+  let h = '';
+  if (sys === 'salesforce') {
+    h += '<div class="field"><label>Production Org URL</label>';
+    h += '<input id="cfgCaseUrl" placeholder="https://mycompany.lightning.force.com" value="' + esc(projectData.caseBaseUrl || '') + '">';
+    h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">Case numbers like <code>00012345</code> will open as <code>.../lightning/r/Case/00012345/view</code></div>';
+    h += '</div>';
+  } else if (sys === 'jira') {
+    h += '<div class="field"><label>Jira Base URL</label>';
+    h += '<input id="cfgCaseUrl" placeholder="https://yourteam.atlassian.net" value="' + esc(projectData.caseBaseUrl || '') + '">';
+    h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">Tickets will open as <code>.../browse/PROJ-123</code></div></div>';
+    h += '<div class="field" style="margin-top:8px"><label>Project Prefix</label>';
+    h += '<input id="cfgTicketPrefix" placeholder="PROJ" value="' + esc(projectData.ticketPrefix || '') + '" style="max-width:120px">';
+    h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">e.g. <code>PROJ</code> to match <code>PROJ-123</code> in PR titles</div></div>';
+  } else if (sys === 'ado') {
+    h += '<div class="field"><label>Azure DevOps Project URL</label>';
+    h += '<input id="cfgCaseUrl" placeholder="https://dev.azure.com/org/project" value="' + esc(projectData.caseBaseUrl || '') + '">';
+    h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">Work items will open as <code>.../_workitems/edit/123</code></div></div>';
+    h += '<div class="field" style="margin-top:8px"><label>Work Item Prefix</label>';
+    h += '<input id="cfgTicketPrefix" placeholder="AB" value="' + esc(projectData.ticketPrefix || '') + '" style="max-width:120px">';
+    h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">e.g. <code>AB</code> to match <code>AB-1234</code> in PR titles</div></div>';
+  } else if (sys === 'custom') {
+    h += '<div class="field"><label>Ticket URL Template</label>';
+    h += '<input id="cfgCaseUrl" placeholder="https://tickets.example.com/view/{ticket}" value="' + esc(projectData.caseBaseUrl || '') + '">';
+    h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">Use <code>{ticket}</code> as placeholder, e.g. <code>https://mysite.com/ticket/{ticket}</code></div></div>';
+    h += '<div class="field" style="margin-top:8px"><label>Ticket Prefix</label>';
+    h += '<input id="cfgTicketPrefix" placeholder="TK" value="' + esc(projectData.ticketPrefix || '') + '" style="max-width:120px">';
+    h += '<div style="font-size:11px;color:var(--muted);margin-top:4px">e.g. <code>TK</code> to match <code>TK-456</code> in PR titles</div></div>';
+  }
+  el.innerHTML = h;
 }
 
 async function persistProject() {
@@ -3025,15 +3065,46 @@ function extractIssues(pr) {
     issues.push({ type: 'ext', key: label, url });
   }
 
-  // 3. Fallback — Case number patterns (only if no SF URLs found for that case)
-  const caseRe = /\bcase[- #:]*?(\d{5,8})\b/gi;
-  while ((m = caseRe.exec(text)) !== null) {
-    const caseNum = m[1];
-    if (!seen.has('case:' + caseNum) && caseNum !== String(pr.number)) {
-      seen.add('case:' + caseNum);
-      const baseUrl = (projectData.caseBaseUrl || '').replace(/\/+$/, '');
-      const url = baseUrl ? baseUrl + '/lightning/r/Case/' + caseNum + '/view' : '';
-      if (url) issues.push({ type: 'sf', key: 'Case ' + caseNum, url });
+  // 3. Fallback — ticket patterns based on configured ticket system
+  const ticketSys = projectData.ticketSystem || 'salesforce';
+  const baseUrl = (projectData.caseBaseUrl || '').replace(/\/+$/, '');
+
+  if (ticketSys === 'salesforce' && baseUrl) {
+    const caseRe = /\bcase[- #:]*?(\d{5,8})\b/gi;
+    while ((m = caseRe.exec(text)) !== null) {
+      const caseNum = m[1];
+      if (!seen.has('case:' + caseNum) && caseNum !== String(pr.number)) {
+        seen.add('case:' + caseNum);
+        const url = baseUrl + '/lightning/r/Case/' + caseNum + '/view';
+        issues.push({ type: 'sf', key: 'Case ' + caseNum, url });
+      }
+    }
+  } else if ((ticketSys === 'jira' || ticketSys === 'ado') && baseUrl) {
+    const prefix = (projectData.ticketPrefix || '').toUpperCase();
+    if (prefix) {
+      const jiraRe = new RegExp('\\b(' + prefix.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '-\\d+)\\b', 'gi');
+      while ((m = jiraRe.exec(text)) !== null) {
+        const ticket = m[1].toUpperCase();
+        if (!seen.has('ticket:' + ticket)) {
+          seen.add('ticket:' + ticket);
+          const url = ticketSys === 'jira'
+            ? baseUrl + '/browse/' + ticket
+            : baseUrl + '/_workitems/edit/' + ticket.split('-')[1];
+          issues.push({ type: 'ext', key: ticket, url });
+        }
+      }
+    }
+  } else if (ticketSys === 'custom' && baseUrl) {
+    const prefix = (projectData.ticketPrefix || '').toUpperCase();
+    if (prefix) {
+      const customRe = new RegExp('\\b(' + prefix.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&') + '-\\d+)\\b', 'gi');
+      while ((m = customRe.exec(text)) !== null) {
+        const ticket = m[1].toUpperCase();
+        if (!seen.has('ticket:' + ticket)) {
+          seen.add('ticket:' + ticket);
+          issues.push({ type: 'ext', key: ticket, url: baseUrl.replace('{ticket}', ticket) });
+        }
+      }
     }
   }
 
