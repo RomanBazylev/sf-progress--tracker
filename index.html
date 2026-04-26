@@ -254,6 +254,17 @@ input,select{font-family:inherit}
 .pr-card .pr-labels{display:flex;gap:3px;flex-wrap:wrap;margin-top:4px}
 .pr-card .pr-label-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
 
+/* ── PRS VIEW ── */
+.prs-toolbar{margin-bottom:16px}
+.prs-filters{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.prs-filters input{padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;min-width:200px}
+.prs-filters select{padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px}
+.prs-stats{display:flex;gap:16px;margin-bottom:16px;font-size:12px;color:var(--muted);flex-wrap:wrap}
+.prs-stats .ps-item{display:flex;align-items:center;gap:4px}
+.prs-stats .ps-dot{width:8px;height:8px;border-radius:50%;flex-shrink:0}
+.prs-list{display:flex;flex-direction:column;gap:6px}
+.prs-env-tag{font-size:10px;padding:1px 6px;border-radius:4px;background:var(--surface2);color:var(--muted);white-space:nowrap}
+
 /* Mini journey dots on PR card */
 .mini-journey{display:flex;align-items:center;gap:0;flex-shrink:0;margin-left:auto}
 .mini-journey .mj-dot{width:10px;height:10px;border-radius:50%;border:1.5px solid var(--border);margin:0 1px}
@@ -511,6 +522,8 @@ input,select{font-family:inherit}
   .pr-card{flex-direction:column;align-items:flex-start}
   .mini-journey{margin-left:0;margin-top:6px}
   .filter-bar input{width:100%}
+  .prs-filters{flex-direction:column}
+  .prs-filters input,.prs-filters select{width:100%;min-width:0}
   .summary-bar{gap:8px}
   .summary-stat{min-width:auto;flex:1}
   .overview-grid{grid-template-columns:1fr}
@@ -704,6 +717,7 @@ input,select{font-family:inherit}
   </div>
   <nav id="mainNav" style="display:none">
     <button onclick="showView('pipeline')" id="navPipeline">📦 Pipeline</button>
+    <button onclick="showView('prs')" id="navPrs">🔀 Pull Requests</button>
     <button onclick="showView('metadata')" id="navMetadata">☁️ Metadata</button>
     <button onclick="showView('compare')" id="navCompare">🔀 Compare</button>
     <button onclick="showView('logs')" id="navLogs">📋 Logs</button>
@@ -836,7 +850,7 @@ input,select{font-family:inherit}
         <option value="300000">5 minutes</option>
         <option value="600000">10 minutes</option>
       </select>
-      <div style="font-size:11px;color:var(--muted);margin-top:4px">Automatically refresh pipeline data in the background</div>
+      <div style="font-size:11px;color:var(--muted);margin-top:4px">Automatically fetch new PR data from GitHub at the selected interval. When active, a green dot and countdown appear in the header. Pauses during promote/release operations.</div>
     </div>
   </div>
 
@@ -866,6 +880,34 @@ input,select{font-family:inherit}
   <div id="pipelineContent">
     <div class="loading"><div class="spinner"></div><p>Loading pipeline...</p></div>
   </div>
+</div>
+
+<!-- ── PULL REQUESTS VIEW ── -->
+<div class="view" id="prsView">
+  <div class="prs-toolbar">
+    <div class="prs-filters">
+      <input id="prsSearch" placeholder="🔍 Search PRs..." oninput="renderPrsView()">
+      <select id="prsStatus" onchange="renderPrsView()">
+        <option value="all">All statuses</option>
+        <option value="open">Open</option>
+        <option value="draft">Draft</option>
+        <option value="merged">Merged</option>
+        <option value="approved">✓ Approved</option>
+        <option value="changes_requested">✗ Changes requested</option>
+      </select>
+      <select id="prsEnv" onchange="renderPrsView()"><option value="">All environments</option></select>
+      <select id="prsAuthor" onchange="renderPrsView()"><option value="">All authors</option></select>
+      <select id="prsLabel" onchange="renderPrsView()"><option value="">All labels</option></select>
+      <select id="prsSort" onchange="renderPrsView()">
+        <option value="updated">Recently updated</option>
+        <option value="created">Newest first</option>
+        <option value="oldest">Oldest first</option>
+        <option value="title">Title A→Z</option>
+      </select>
+    </div>
+  </div>
+  <div id="prsStats" class="prs-stats"></div>
+  <div id="prsContent"></div>
 </div>
 
 <!-- ── COMPARE & DEPLOY VIEW ── -->
@@ -945,31 +987,63 @@ input,select{font-family:inherit}
       </div>
 
       <details style="margin-top:20px;font-size:12px;color:var(--muted)">
-        <summary style="cursor:pointer;font-weight:600">Setup Instructions (Manual)</summary>
-        <ol style="margin-top:8px;padding-left:20px;line-height:2">
-          <li>Use the <strong>"Deploy to Salesforce"</strong> button below — or manually create a Connected App in Setup → App Manager</li>
-          <li>If creating manually: Enable OAuth, set Callback URL: <code id="oauthCallback2"></code>, add scopes <strong>Api</strong> and <strong>RefreshToken</strong></li>
-          <li>Wait ~2 min for activation</li>
-          <li>Setup → App Manager → <strong>SF Pipeline Tracker</strong> → View → copy the <strong>Consumer Key</strong></li>
-          <li>Paste the Consumer Key into the field above</li>
-          <li>For CORS Proxy: deploy a Cloudflare Worker that forwards requests and adds CORS headers (expand the "How to deploy a CORS Proxy" section above for code)</li>
-        </ol>
+        <summary style="cursor:pointer;font-weight:600">Setup Instructions</summary>
+        <div style="margin-top:10px">
+          <p style="font-weight:600;margin-bottom:6px">Option A — External Client App (recommended):</p>
+          <ol style="padding-left:20px;line-height:2">
+            <li>In Salesforce: Setup → <strong>External Client App Manager</strong> → <strong>New External Client App</strong></li>
+            <li>Name: <em>SF Pipeline Tracker</em>, Distribution State: <em>Local</em> → Save</li>
+            <li>On the app page → <strong>OAuth Settings → Configure</strong></li>
+            <li>Callback URL: <code id="oauthCallback2"></code></li>
+            <li>Scopes: <strong>Manage user data via APIs (api)</strong></li>
+            <li>Client Authentication: <strong>None (Public Client)</strong>, PKCE: <strong>off</strong></li>
+            <li>Save → wait 2-5 min → copy the <strong>Consumer Key</strong></li>
+            <li>Paste the Consumer Key into the field above</li>
+          </ol>
+          <p style="font-weight:600;margin-top:12px;margin-bottom:6px">Option B — Connected App (classic):</p>
+          <ol style="padding-left:20px;line-height:2">
+            <li>Setup → <strong>App Manager</strong> → <strong>New Connected App</strong></li>
+            <li>Enable OAuth, set Callback URL (same as above), add scopes <strong>Api</strong> and <strong>RefreshToken</strong></li>
+            <li>Require Secret: <strong>off</strong>, PKCE: <strong>off</strong> → Save</li>
+            <li>Wait ~2 min → App Manager → SF Pipeline Tracker → View → copy <strong>Consumer Key</strong></li>
+            <li>Paste the Consumer Key into the field above</li>
+          </ol>
+          <p style="margin-top:8px">For CORS Proxy: deploy a Cloudflare Worker (expand the section above for code)</p>
+        </div>
       </details>
 
       <details class="bs-section" id="bsSection">
-        <summary>⚡ Quick Setup: Deploy Connected App via GitHub</summary>
-        <p style="font-size:12px;color:var(--muted);margin-top:8px;line-height:1.5">Deploy a pre-configured Connected App to your Salesforce org with one click. No credentials needed here — you'll log in on the Salesforce side.</p>
-        <ol style="font-size:12px;color:var(--muted);margin-top:8px;padding-left:20px;line-height:2">
-          <li>Click the button below to deploy the Connected App to your org:</li>
-        </ol>
-        <div style="margin-top:10px;margin-bottom:14px">
+        <summary>⚡ Quick Setup: Create OAuth App</summary>
+
+        <p style="font-size:13px;font-weight:600;margin-top:12px;margin-bottom:6px">Option 1 — One-click deploy (regular Dev Orgs only)</p>
+        <p style="font-size:12px;color:var(--muted);line-height:1.5">Deploy a pre-configured Connected App. Works for standard dev orgs (<code>login.salesforce.com</code>). <strong>Does NOT work for Sandboxes or custom-domain orgs.</strong></p>
+        <div style="margin-top:8px;margin-bottom:6px">
           <a href="https://githubsfdeploy.herokuapp.com?owner=RomanBazylev&amp;repo=sf-progress--tracker&amp;ref=metadata" target="_blank" rel="noopener">
             <img src="https://raw.githubusercontent.com/afawcett/githubsfdeploy/master/deploy.png" alt="Deploy to Salesforce" style="height:40px">
           </a>
         </div>
-        <ol start="2" style="font-size:12px;color:var(--muted);padding-left:20px;line-height:2">
+        <ol style="font-size:12px;color:var(--muted);padding-left:20px;line-height:2">
+          <li>Click the button above and log in to your org</li>
           <li>Wait ~2 minutes for activation</li>
-          <li>In Salesforce: Setup → App Manager → find <strong>SF Pipeline Tracker</strong> → View → copy the <strong>Consumer Key</strong></li>
+          <li>Setup → App Manager → <strong>SF Pipeline Tracker</strong> → View → copy <strong>Consumer Key</strong></li>
+          <li>Paste the Consumer Key into the field above</li>
+        </ol>
+
+        <p style="font-size:13px;font-weight:600;margin-top:16px;margin-bottom:6px">Option 2 — External Client App (any org, including Sandboxes)</p>
+        <p style="font-size:12px;color:var(--muted);line-height:1.5">Create the app manually in Salesforce Setup. Works for <strong>all orgs</strong> including sandboxes and custom-domain orgs.</p>
+        <ol style="font-size:12px;color:var(--muted);margin-top:8px;padding-left:20px;line-height:2">
+          <li>In Salesforce: Setup → <strong>External Client App Manager</strong> → <strong>New External Client App</strong></li>
+          <li>Name: <em>SF Pipeline Tracker</em>, Distribution: <em>Local</em> → Save</li>
+          <li>On the app page → <strong>OAuth Settings → Configure</strong>:
+            <ul style="list-style:disc;padding-left:16px;line-height:1.8">
+              <li>Callback URL: <code id="oauthCallbackQS"></code></li>
+              <li>Scopes: <strong>Manage user data via APIs (api)</strong></li>
+              <li>Client Authentication: <strong>None (Public Client)</strong></li>
+              <li>Require PKCE: <strong>off</strong></li>
+            </ul>
+          </li>
+          <li>Save → wait 2-5 minutes for activation</li>
+          <li>Copy the <strong>Consumer Key</strong> from the app page</li>
           <li>Paste the Consumer Key into the field above (or per-environment in Settings → Environments)</li>
         </ol>
       </details>
@@ -1090,6 +1164,7 @@ input,select{font-family:inherit}
       <h3 style="font-size:13px;margin-bottom:8px">Quick Tips</h3>
       <ul style="padding-left:16px;line-height:2">
         <li><strong>Pipeline:</strong> Click an environment node to view its PRs. Click again to return to overview.</li>
+        <li><strong>Pull Requests:</strong> Flat list of all PRs with filters by status, environment, author, label, and sort.</li>
         <li><strong>Batch select:</strong> Check multiple open PRs, then click ▶ Promote to merge them all.</li>
         <li><strong>Side panel:</strong> Click any PR card to view details, reviewers, and promote actions.</li>
         <li><strong>Metadata:</strong> Connect to Salesforce, select types & date range, fetch & compare with any git branch.</li>
@@ -1227,6 +1302,7 @@ function showView(name) {
   if (name === 'logs') renderLogsView();
   if (name === 'compare') renderCompareDeployView();
   if (name === 'pipeline') renderPipeline();
+  if (name === 'prs') { populatePrsFilters(); renderPrsView(); }
 }
 
 /* ═══════════════════════════════════════════════════════
@@ -1762,7 +1838,10 @@ function renderEnvList() {
           </div>
           <div class="env-field">
             <label>OAuth Client ID</label>
-            <input value="${esc(env.sfClientId || '')}" onchange="updateEnv(${i},'sfClientId',this.value)" placeholder="Auto-filled on app install" style="font-size:11px">
+            <div class="secret-wrap" style="position:relative">
+              <input type="password" value="${esc(env.sfClientId || '')}" onchange="updateEnv(${i},'sfClientId',this.value)" placeholder="Auto-filled on app install" style="font-size:11px;padding-right:36px" autocomplete="off">
+              <button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer;font-size:13px">👁</button>
+            </div>
           </div>
         </div>
       </details>
@@ -1887,6 +1966,9 @@ async function refreshData() {
     renderPipeline();
     renderSummary();
     populateFilterAuthors();
+    populatePrsFilters();
+    // Refresh PRs view if currently active
+    if (document.getElementById('prsView')?.classList.contains('active')) renderPrsView();
 
     // Start auto-refresh
     if (refreshTimer) clearInterval(refreshTimer);
@@ -2818,6 +2900,153 @@ function applyFilters() { clearTimeout(_filterTimer); _filterTimer = setTimeout(
 function applyFiltersNow() { clearTimeout(_filterTimer); renderPipeline(); }
 
 /* ═══════════════════════════════════════════════════════
+   PULL REQUESTS VIEW (dedicated tab)
+   ═══════════════════════════════════════════════════════ */
+function populatePrsFilters() {
+  const allPrs = [...pipelineCache.prs, ...pipelineCache.mergedPrs];
+  const envBranches = projectData ? projectData.envs.map(e => e.branch) : [];
+
+  // Authors
+  const authors = new Set();
+  allPrs.forEach(pr => authors.add(pr.user.login));
+  const aSel = document.getElementById('prsAuthor');
+  if (aSel) {
+    const cur = aSel.value;
+    aSel.innerHTML = '<option value="">All authors</option>' +
+      Array.from(authors).sort().map(a => '<option value="' + esc(a) + '">' + esc(a) + '</option>').join('');
+    aSel.value = cur;
+  }
+
+  // Environments
+  const eSel = document.getElementById('prsEnv');
+  if (eSel && projectData) {
+    const cur = eSel.value;
+    eSel.innerHTML = '<option value="">All environments</option>' +
+      projectData.envs.map(e => '<option value="' + esc(e.branch) + '">' + esc(e.displayName || e.branch) + '</option>').join('');
+    eSel.value = cur;
+  }
+
+  // Labels
+  const labels = new Map();
+  allPrs.forEach(pr => {
+    if (pr.labels) pr.labels.forEach(l => { if (!labels.has(l.name)) labels.set(l.name, l); });
+  });
+  const lSel = document.getElementById('prsLabel');
+  if (lSel) {
+    const cur = lSel.value;
+    lSel.innerHTML = '<option value="">All labels</option>' +
+      Array.from(labels.keys()).sort().map(n => '<option value="' + esc(n) + '">' + esc(n) + '</option>').join('');
+    lSel.value = cur;
+  }
+}
+
+function renderPrsView() {
+  const content = document.getElementById('prsContent');
+  const stats = document.getElementById('prsStats');
+  if (!content) return;
+
+  if (!projectData || !projectData.pat || !projectData.repo) {
+    content.innerHTML = '<div class="empty-state"><div class="empty-icon">⚙️</div><p>Configure GitHub connection in <a href="#" onclick="showView(\'settings\');return false" style="color:var(--accent)">Settings</a> first.</p></div>';
+    if (stats) stats.innerHTML = '';
+    return;
+  }
+
+  const allPrs = [...pipelineCache.prs, ...pipelineCache.mergedPrs];
+  if (!allPrs.length) {
+    content.innerHTML = '<div class="empty-state"><div class="empty-icon">📋</div><p>No PRs loaded yet. Data loads from the Pipeline tab or click refresh there.</p></div>';
+    if (stats) stats.innerHTML = '';
+    return;
+  }
+
+  // Read filters
+  const search = (document.getElementById('prsSearch')?.value || '').toLowerCase();
+  const status = document.getElementById('prsStatus')?.value || 'all';
+  const env = document.getElementById('prsEnv')?.value || '';
+  const author = document.getElementById('prsAuthor')?.value || '';
+  const label = document.getElementById('prsLabel')?.value || '';
+  const sort = document.getElementById('prsSort')?.value || 'updated';
+
+  // Filter
+  let filtered = allPrs.filter(pr => {
+    if (search) {
+      const hay = (pr.title + ' ' + pr.head.ref + ' #' + pr.number + ' ' + pr.user.login).toLowerCase();
+      if (!hay.includes(search)) return false;
+    }
+    if (status !== 'all') {
+      if (status === 'open' && (pr.merged_at || pr.draft)) return false;
+      if (status === 'draft' && !pr.draft) return false;
+      if (status === 'merged' && !pr.merged_at) return false;
+      if (status === 'approved' && pr._reviewState !== 'approved') return false;
+      if (status === 'changes_requested' && pr._reviewState !== 'changes_requested') return false;
+    }
+    if (env && pr.base.ref !== env) return false;
+    if (author && pr.user.login !== author) return false;
+    if (label && !(pr.labels || []).some(l => l.name === label)) return false;
+    return true;
+  });
+
+  // Sort
+  if (sort === 'updated') filtered.sort((a, b) => new Date(b.updated_at) - new Date(a.updated_at));
+  else if (sort === 'created') filtered.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  else if (sort === 'oldest') filtered.sort((a, b) => new Date(a.created_at) - new Date(b.created_at));
+  else if (sort === 'title') filtered.sort((a, b) => a.title.localeCompare(b.title));
+
+  // Stats
+  const openCount = filtered.filter(pr => !pr.merged_at && !pr.draft).length;
+  const draftCount = filtered.filter(pr => pr.draft).length;
+  const mergedCount = filtered.filter(pr => pr.merged_at).length;
+  if (stats) {
+    stats.innerHTML =
+      '<span class="ps-item"><span class="ps-dot" style="background:var(--green)"></span>' + filtered.length + ' total</span>' +
+      '<span class="ps-item"><span class="ps-dot" style="background:var(--blue)"></span>' + openCount + ' open</span>' +
+      '<span class="ps-item"><span class="ps-dot" style="background:var(--muted)"></span>' + draftCount + ' draft</span>' +
+      '<span class="ps-item"><span class="ps-dot" style="background:var(--purple)"></span>' + mergedCount + ' merged</span>';
+  }
+
+  // Render list
+  if (!filtered.length) {
+    content.innerHTML = '<div class="empty-state" style="margin-top:24px"><div class="empty-icon">🔍</div><p>No PRs match the current filters.</p></div>';
+    return;
+  }
+
+  let html = '<div class="prs-list">';
+  filtered.forEach(pr => {
+    const statusCls = getPrStatusClass(pr);
+    const statusIcon = getPrStatusIcon(pr);
+    const featureName = extractFeatureName(pr.head.ref);
+    const age = timeAgo(pr.merged_at || pr.updated_at);
+    const envName = projectData.envs.find(e => e.branch === pr.base.ref);
+    const envLabel = envName ? (envName.displayName || envName.branch) : pr.base.ref;
+
+    html += '<div class="pr-card" onclick="openSidePanel(' + pr.number + ')">';
+    html += '<div class="pr-status-icon ' + statusCls + '">' + statusIcon + '</div>';
+    html += '<div class="pr-info">';
+    html += '<div class="pr-title-row"><span class="pr-title">' + esc(pr.title) + '</span><span class="pr-number">#' + pr.number + '</span></div>';
+    html += '<div class="pr-meta">';
+    html += '<span class="prs-env-tag">' + esc(envLabel) + '</span>';
+    html += '<span class="pr-feature">' + esc(featureName) + '</span>';
+    html += '<span class="pr-author"><img src="' + esc(pr.user.avatar_url) + '&s=32" alt="">' + esc(pr.user.login) + '</span>';
+    html += '<span class="pr-age">' + age + '</span>';
+    if (pr.requested_reviewers && pr.requested_reviewers.length) {
+      html += '<span>\ud83d\udc41 ' + pr.requested_reviewers.length + '</span>';
+    }
+    html += '</div>';
+    if (pr.labels && pr.labels.length) {
+      html += '<div class="pr-labels">';
+      pr.labels.forEach(l => {
+        html += '<span class="pr-label-dot" style="background:#' + l.color + '" title="' + esc(l.name) + '"></span>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+    html += renderMiniJourney(pr);
+    html += '</div>';
+  });
+  html += '</div>';
+  content.innerHTML = html;
+}
+
+/* ═══════════════════════════════════════════════════════
    SIDE PANEL
    ═══════════════════════════════════════════════════════ */
 async function openSidePanel(prNumber) {
@@ -3350,8 +3579,10 @@ function initOAuthCallbackUrls() {
   const cb = _oauthRedirectUri();
   const el1 = document.getElementById('oauthCallback');
   const el2 = document.getElementById('oauthCallback2');
+  const el3 = document.getElementById('oauthCallbackQS');
   if (el1) el1.textContent = cb;
   if (el2) el2.textContent = cb;
+  if (el3) el3.textContent = cb;
 }
 
 function sfOAuthLogin(envIdx) {
@@ -3877,13 +4108,22 @@ function buildMetaConnectHtml() {
   // Setup instructions
   h += '<details style="margin-top:20px;font-size:12px;color:var(--muted)">';
   h += '<summary style="cursor:pointer;font-weight:600">Setup Instructions</summary>';
-  h += '<ol style="margin-top:8px;padding-left:20px;line-height:2">';
-  h += '<li>Deploy the Connected App to your org using the <strong>"Deploy to Salesforce"</strong> button in the Quick Setup section above (or via Settings → Environments → Install App)</li>';
-  h += '<li>Wait ~2 min for activation</li>';
-  h += '<li>In Salesforce: Setup → App Manager → <strong>SF Pipeline Tracker</strong> → View → copy the <strong>Consumer Key</strong></li>';
-  h += '<li>Paste the Consumer Key into the field above</li>';
-  h += '<li>Deploy a Cloudflare Worker as CORS proxy (see below)</li>';
+  h += '<div style="margin-top:8px">';
+  h += '<p style="font-weight:600;margin-bottom:4px">Option A — External Client App (recommended):</p>';
+  h += '<ol style="padding-left:20px;line-height:2">';
+  h += '<li>Setup → <strong>External Client App Manager</strong> → New External Client App</li>';
+  h += '<li>Name: <em>SF Pipeline Tracker</em>, Distribution: <em>Local</em> → Save</li>';
+  h += '<li>OAuth Settings → Configure: Callback URL = your app URL, Scopes: <strong>api</strong>, Client: <strong>Public</strong>, PKCE: <strong>off</strong></li>';
+  h += '<li>Save → wait 2-5 min → copy <strong>Consumer Key</strong> → paste above</li>';
   h += '</ol>';
+  h += '<p style="font-weight:600;margin-top:8px;margin-bottom:4px">Option B — Connected App (classic):</p>';
+  h += '<ol style="padding-left:20px;line-height:2">';
+  h += '<li>Setup → App Manager → New Connected App → Enable OAuth</li>';
+  h += '<li>Callback URL = your app URL, Scopes: <strong>Api</strong> + <strong>RefreshToken</strong>, Secret: off, PKCE: off</li>';
+  h += '<li>Save → wait ~2 min → App Manager → View → copy <strong>Consumer Key</strong> → paste above</li>';
+  h += '</ol>';
+  h += '<p style="margin-top:8px">Deploy a Cloudflare Worker as CORS proxy (see below)</p>';
+  h += '</div>';
   h += '<details style="margin-top:10px">';
   h += '<summary style="cursor:pointer">Cloudflare Worker code (copy &amp; paste)</summary>';
   h += `<pre style="background:var(--surface);padding:12px;border-radius:8px;margin-top:8px;font-size:11px;overflow-x:auto">export default {
@@ -6374,21 +6614,40 @@ function openEnvInstallModal(envIdx) {
   h += '<h3 style="margin:0">⚡ Install OAuth App — ' + esc(envName) + '</h3>';
   h += '<button onclick="closeEnvInstallModal()" style="background:none;border:none;color:var(--muted);font-size:18px;cursor:pointer">✕</button>';
   h += '</div>';
-  h += '<p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5">Deploy the Connected App to this Salesforce org, then paste the Consumer Key below.</p>';
+  h += '<p style="font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.5">Create an OAuth app in this Salesforce org, then paste the Consumer Key below.</p>';
 
   h += '<div style="margin-bottom:16px">';
-  h += '<p style="font-size:13px;font-weight:600;margin-bottom:8px">Step 1: Deploy Connected App</p>';
+  h += '<p style="font-size:13px;font-weight:600;margin-bottom:8px">Step 1: Create OAuth App</p>';
+  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:6px"><strong>Option A — External Client App (recommended):</strong></p>';
+  h += '<ol style="font-size:11px;color:var(--muted);padding-left:18px;line-height:1.8;margin-bottom:8px">';
+  h += '<li>Setup → <strong>External Client App Manager</strong> → New External Client App</li>';
+  h += '<li>Name: <em>SF Pipeline Tracker</em>, Distribution: <em>Local</em> → Save</li>';
+  h += '<li>OAuth Settings → Configure: Callback URL = <code>' + esc(_oauthRedirectUri()) + '</code></li>';
+  h += '<li>Scopes: <strong>Manage user data via APIs (api)</strong></li>';
+  h += '<li>Client Authentication: <strong>None (Public Client)</strong>, PKCE: <strong>off</strong></li>';
+  h += '<li>Save → wait 2-5 min for activation</li>';
+  h += '</ol>';
+  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:6px"><strong>Option B — Connected App (classic):</strong></p>';
+  h += '<ol style="font-size:11px;color:var(--muted);padding-left:18px;line-height:1.8;margin-bottom:8px">';
+  h += '<li>Setup → App Manager → New Connected App → Enable OAuth</li>';
+  h += '<li>Callback URL = <code>' + esc(_oauthRedirectUri()) + '</code>, Scopes: Api + RefreshToken</li>';
+  h += '<li>Require Secret: off, PKCE: off → Save → wait ~2 min</li>';
+  h += '</ol>';
+  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:6px"><strong>Option C — One-click deploy (regular Dev Orgs only):</strong></p>';
+  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:4px">⚠️ Does NOT work for Sandboxes or custom-domain orgs.</p>';
   h += '<a href="https://githubsfdeploy.herokuapp.com?owner=RomanBazylev&amp;repo=sf-progress--tracker&amp;ref=metadata" target="_blank" rel="noopener">';
-  h += '<img src="https://raw.githubusercontent.com/afawcett/githubsfdeploy/master/deploy.png" alt="Deploy to Salesforce" style="height:40px">';
+  h += '<img src="https://raw.githubusercontent.com/afawcett/githubsfdeploy/master/deploy.png" alt="Deploy to Salesforce" style="height:32px">';
   h += '</a>';
-  h += '<p style="font-size:11px;color:var(--muted);margin-top:6px">Log in to the target org when prompted. Wait ~2 min after deploy for activation.</p>';
   h += '</div>';
 
   h += '<div style="margin-bottom:16px">';
   h += '<p style="font-size:13px;font-weight:600;margin-bottom:8px">Step 2: Copy Consumer Key</p>';
-  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px">In Salesforce: Setup → App Manager → <strong>SF Pipeline Tracker</strong> → View → copy the <strong>Consumer Key</strong>.</p>';
+  h += '<p style="font-size:11px;color:var(--muted);margin-bottom:8px">For External Client App: on the app page → copy <strong>Consumer Key</strong>.<br>For Connected App: Setup → App Manager → SF Pipeline Tracker → View → copy <strong>Consumer Key</strong>.</p>';
   h += '<div class="field"><label>Consumer Key</label>';
-  h += '<input id="eiConsumerKey" value="' + esc(existingKey) + '" placeholder="3MVG9...">';
+  h += '<div class="secret-wrap" style="position:relative">';
+  h += '<input id="eiConsumerKey" type="password" value="' + esc(existingKey) + '" placeholder="3MVG9..." autocomplete="off" style="padding-right:40px">';
+  h += '<button type="button" class="secret-toggle" onclick="toggleSecret(this)" style="position:absolute;right:8px;top:50%;transform:translateY(-50%);background:none;border:none;color:var(--muted);cursor:pointer">👁</button>';
+  h += '</div>';
   h += '</div>';
   h += '</div>';
 
