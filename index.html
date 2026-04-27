@@ -5849,10 +5849,14 @@ function buildCdPanelHtml(side, title, type, envIdx, branch) {
     html += '<option value="">— select branch —</option>';
     if (pipelineCache.branches && pipelineCache.branches.length) {
       pipelineCache.branches.forEach(b => {
-        html += '<option value="' + esc(b) + '"' + (branch === b ? ' selected' : '') + '>' + esc(b) + '</option>';
+        const lock = isProtectedBranch(b) ? '🔒 ' : '';
+        html += '<option value="' + esc(b) + '"' + (branch === b ? ' selected' : '') + '>' + lock + esc(b) + '</option>';
       });
     }
     html += '</select></div>';
+    if (side === 'target' && branch && isProtectedBranch(branch)) {
+      html += '<div style="margin-top:6px;padding:8px 12px;background:var(--yellow-dim);color:var(--yellow);border-radius:8px;font-size:12px;font-weight:500">🔒 Protected branch — direct commits will be blocked. You\'ll be prompted to create a new branch.</div>';
+    }
     if (!pipelineCache.branches || !pipelineCache.branches.length) {
       html += '<button class="btn btn-sm" style="margin-top:4px" onclick="loadBranches().then(()=>renderCompareDeployView())">Load branches</button>';
     }
@@ -6317,7 +6321,11 @@ function renderCdResults(el) {
     html += '<button class="btn btn-primary" style="background:var(--green);border-color:var(--green)" ' + (selectedCount ? '' : 'disabled') + ' onclick="cdDeployToOrg()">🚀 Deploy to Org</button>';
   }
   if (cdState.targetType === 'git') {
-    html += '<button class="btn btn-primary" ' + (selectedCount ? '' : 'disabled') + ' onclick="cdDeployToGit()">📝 Commit to Git</button>';
+    const targetProtected = cdState.targetBranch && isProtectedBranch(cdState.targetBranch);
+    if (targetProtected) {
+      html += '<span style="font-size:12px;color:var(--yellow);font-weight:500">🔒 Protected branch</span>';
+    }
+    html += '<button class="btn btn-primary" ' + (selectedCount ? '' : 'disabled') + ' onclick="cdDeployToGit()">' + (targetProtected ? '🌿 New Branch & Commit' : '📝 Commit to Git') + '</button>';
   }
   html += '</div>';
 
@@ -6879,13 +6887,64 @@ function closeEnvInstallModal() {
 }
 
 // ── DEPLOY TO GIT ──
+// Prompt user for new branch name when target is protected
+function _cdPromptNewBranch(protectedBranch) {
+  return new Promise(resolve => {
+    let overlay = document.getElementById('cdNewBranchOverlay');
+    if (overlay) overlay.remove();
+    overlay = document.createElement('div');
+    overlay.id = 'cdNewBranchOverlay';
+    overlay.className = 'env-modal-overlay';
+    overlay.onclick = e => { if (e.target === overlay) { overlay.remove(); resolve(null); } };
+    const srcLabel = cdState.sourceType === 'org'
+      ? (projectData.envs[cdState.sourceEnvIdx]?.displayName || 'org')
+      : cdState.sourceBranch;
+    overlay.innerHTML = '<div class="dep-modal" style="max-width:440px">' +
+      '<h3>🔒 Protected Branch</h3>' +
+      '<p style="color:var(--muted);font-size:13px;margin:8px 0 16px">Direct commits to <strong>' + esc(protectedBranch) + '</strong> are not allowed. Create a new branch and optionally open a Pull Request.</p>' +
+      '<div class="field" style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">New Branch Name</label>' +
+      '<input id="cdNewBranchInput" placeholder="feature/cd-deploy-from-' + esc(srcLabel).replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase() + '" style="width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px"></div>' +
+      '<div style="font-size:11px;color:var(--muted);margin-bottom:16px">Will branch from: <strong>' + esc(protectedBranch) + '</strong></div>' +
+      '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:16px">' +
+      '<input type="checkbox" id="cdNewBranchPr" checked style="accent-color:var(--accent);width:16px;height:16px"> Create Pull Request into <strong>' + esc(protectedBranch) + '</strong></label>' +
+      '<div style="display:flex;gap:8px;justify-content:flex-end">' +
+      '<button class="btn btn-sm" id="cdNewBranchCancel">Cancel</button>' +
+      '<button class="btn btn-primary" id="cdNewBranchOk">🌿 Create & Commit</button>' +
+      '</div></div>';
+    document.body.appendChild(overlay);
+    document.getElementById('cdNewBranchInput').focus();
+    document.getElementById('cdNewBranchCancel').onclick = () => { overlay.remove(); resolve(null); };
+    document.getElementById('cdNewBranchOk').onclick = () => {
+      const name = document.getElementById('cdNewBranchInput').value.trim();
+      if (!name) { toast('Enter a branch name', 'warn'); return; }
+      const createPr = document.getElementById('cdNewBranchPr').checked;
+      overlay.remove();
+      // Store PR preference on cdState for use after commit
+      cdState._cdNewBranchPr = createPr;
+      cdState._cdNewBranchBase = protectedBranch;
+      resolve(name);
+    };
+    document.getElementById('cdNewBranchInput').onkeydown = e => {
+      if (e.key === 'Enter') document.getElementById('cdNewBranchOk').click();
+      if (e.key === 'Escape') { overlay.remove(); resolve(null); }
+    };
+  });
+}
+
 async function cdDeployToGit() {
   if (cdState.isDeploying) return;
   const selected = cdState.results.filter(r => r.selected);
   if (!selected.length) { toast('Select at least one item', 'warn'); return; }
   if (!projectData || !projectData.pat || !projectData.repo) { toast('GitHub not configured', 'warn'); return; }
-  const branch = cdState.targetBranch;
+  let branch = cdState.targetBranch;
   if (!branch) { toast('No target branch selected', 'warn'); return; }
+
+  // Protected branch check — prompt for new branch name
+  if (isProtectedBranch(branch)) {
+    const newBranch = await _cdPromptNewBranch(branch);
+    if (!newBranch) return; // user cancelled
+    branch = newBranch;
+  }
 
   cdState.isDeploying = true;
   cdState.phase = 'deploying';
@@ -6899,9 +6958,19 @@ async function cdDeployToGit() {
 
   try {
     addStep('Getting branch reference...', 'running');
-    const refData = await ghFetch('/repos/' + projectData.repo + '/git/ref/heads/' + encodeURIComponent(branch));
+    const baseBranch = cdState.targetBranch; // original (possibly protected) branch
+    const refData = await ghFetch('/repos/' + projectData.repo + '/git/ref/heads/' + encodeURIComponent(baseBranch));
     const latestSha = refData.object.sha;
-    addStep('Branch ' + branch + ' at ' + latestSha.slice(0, 7), 'ok');
+    addStep('Branch ' + baseBranch + ' at ' + latestSha.slice(0, 7), 'ok');
+
+    // If committing to a new branch (different from target), create it first
+    if (branch !== baseBranch) {
+      addStep('Creating branch ' + branch + ' from ' + baseBranch + '...', 'running');
+      await ghFetch('/repos/' + projectData.repo + '/git/refs', {
+        method: 'POST', body: JSON.stringify({ ref: 'refs/heads/' + branch, sha: latestSha })
+      });
+      addStep('Branch ' + branch + ' created', 'ok');
+    }
 
     // Get base tree
     const commitData = await ghFetch('/repos/' + projectData.repo + '/git/commits/' + latestSha);
@@ -6981,6 +7050,28 @@ async function cdDeployToGit() {
     addStep('✅ Committed to ' + branch + ' (' + newCommit.sha.slice(0, 7) + ')', 'ok');
     toast('Committed ' + selected.length + ' components to ' + branch, 'ok');
     notifyUser('Git Commit', selected.length + ' components committed to ' + branch);
+
+    // Create PR if user opted in (protected branch flow)
+    if (cdState._cdNewBranchPr && cdState._cdNewBranchBase) {
+      try {
+        addStep('Creating Pull Request...', 'running');
+        const prData = await ghFetch('/repos/' + projectData.repo + '/pulls', {
+          method: 'POST', body: JSON.stringify({
+            title: msg,
+            head: branch,
+            base: cdState._cdNewBranchBase,
+            body: 'Created from Compare & Deploy.\n\n' + selected.length + ' component(s) committed.'
+          })
+        });
+        addStep('✅ PR #' + prData.number + ' created → ' + cdState._cdNewBranchBase, 'ok');
+        toast('PR #' + prData.number + ' created — <a href="' + esc(prData.html_url) + '" target="_blank" style="color:inherit;text-decoration:underline">open ↗</a>', 'ok', 10000);
+      } catch (prErr) {
+        addStep('⚠ PR creation failed: ' + prErr.message, 'fail');
+      }
+      cdState._cdNewBranchPr = false;
+      cdState._cdNewBranchBase = '';
+    }
+
     cdState.phase = 'deployed';
   } catch (e) {
     addStep('Error: ' + e.message, 'fail');
