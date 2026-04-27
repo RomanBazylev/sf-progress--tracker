@@ -3712,12 +3712,10 @@ async function sfApiFetch(path, opts = {}) {
       res = await fetch(url, { ...opts, method, headers });
     } catch (networkErr) {
       if (attempt < maxRetries) { await _sleep(500 * (attempt + 1)); continue; }
-      const noCors = !proxy;
-      throw new Error(
-        noCors
-          ? 'CORS blocked: no CORS proxy configured. Go to Metadata → Connect → set a CORS Proxy URL (Cloudflare Worker). Browser blocks direct cross-origin calls to Salesforce.'
-          : 'Network error: ' + networkErr.message + ' (URL: ' + url.slice(0, 120) + ')'
-      );
+      const hint = !proxy
+        ? ' — Fix: either (A) add your app URL to Salesforce Setup → Security → CORS Allowed Origins, or (B) set a CORS Proxy URL in connection settings.'
+        : '';
+      throw new Error('Network error: ' + networkErr.message + hint + ' (URL: ' + url.slice(0, 120) + ')');
     }
     // Retry on 429 rate-limit or 503 service unavailable
     if ((res.status === 429 || res.status === 503) && attempt < maxRetries) {
@@ -3930,9 +3928,12 @@ function renderMetadataView() {
     if (fc) {
       html += '<div style="text-align:left;margin:16px auto;max-width:600px;background:var(--hover);border-radius:8px;padding:12px 16px">';
       html += '<p style="font-size:13px;color:var(--danger);margin:0 0 8px">⚠ ' + fc + ' type(s) failed to query:</p>';
-      var corsBlocked = metaCache.failedTypes.some(function(ft) { return ft.error && (ft.error.indexOf('CORS') >= 0 || ft.error.indexOf('Failed to fetch') >= 0); });
+      var corsBlocked = metaCache.failedTypes.some(function(ft) { return ft.error && (ft.error.indexOf('CORS') >= 0 || ft.error.indexOf('Failed to fetch') >= 0 || ft.error.indexOf('Network error') >= 0); });
       if (corsBlocked) {
-        html += '<div style="font-size:12px;color:var(--yellow);margin-bottom:8px;padding:8px 12px;background:var(--yellow-dim);border-radius:6px">💡 <b>Likely cause:</b> No CORS proxy configured. Go to Metadata → Disconnect → set a <b>CORS Proxy URL</b> (Cloudflare Worker), then reconnect.</div>';
+        html += '<div style="font-size:12px;color:var(--yellow);margin-bottom:8px;padding:8px 12px;background:var(--yellow-dim);border-radius:6px">';
+        html += '💡 <b>Likely cause — CORS block.</b> Two ways to fix:<br>';
+        html += '<b>A)</b> In Salesforce: Setup → Security → <b>CORS</b> → add <code>' + esc(location.origin) + '</code> to Allowed Origins (if sandbox was refreshed, this setting was reset).<br>';
+        html += '<b>B)</b> Set a <b>CORS Proxy URL</b> (Cloudflare Worker) in connection settings.</div>';
       }
       html += '<div style="font-size:12px;color:var(--muted);max-height:200px;overflow-y:auto">';
       metaCache.failedTypes.forEach(function(ft) {
@@ -3972,9 +3973,12 @@ function renderMetadataView() {
   if (metaCache.failedTypes && metaCache.failedTypes.length) {
     html += '<details style="margin-bottom:12px;background:var(--hover);border-radius:8px;padding:8px 12px;border-left:3px solid var(--danger)">';
     html += '<summary style="cursor:pointer;font-size:13px;color:var(--danger)">⚠ ' + metaCache.failedTypes.length + ' type(s) failed to query — click to expand</summary>';
-    var corsBlocked2 = metaCache.failedTypes.some(function(ft) { return ft.error && (ft.error.indexOf('CORS') >= 0 || ft.error.indexOf('Failed to fetch') >= 0); });
+    var corsBlocked2 = metaCache.failedTypes.some(function(ft) { return ft.error && (ft.error.indexOf('CORS') >= 0 || ft.error.indexOf('Failed to fetch') >= 0 || ft.error.indexOf('Network error') >= 0); });
     if (corsBlocked2) {
-      html += '<div style="font-size:12px;color:var(--yellow);margin:8px 0;padding:8px 12px;background:var(--yellow-dim);border-radius:6px">💡 <b>Likely cause:</b> No CORS proxy configured. Disconnect → set a <b>CORS Proxy URL</b> (Cloudflare Worker) → reconnect.</div>';
+      html += '<div style="font-size:12px;color:var(--yellow);margin:8px 0;padding:8px 12px;background:var(--yellow-dim);border-radius:6px">';
+      html += '💡 <b>Likely cause — CORS block.</b> Two ways to fix:<br>';
+      html += '<b>A)</b> In Salesforce: Setup → Security → <b>CORS</b> → add <code>' + esc(location.origin) + '</code> to Allowed Origins.<br>';
+      html += '<b>B)</b> Set a <b>CORS Proxy URL</b> (Cloudflare Worker) in connection settings.</div>';
     }
     html += '<div style="font-size:12px;color:var(--muted);margin-top:8px;max-height:200px;overflow-y:auto">';
     metaCache.failedTypes.forEach(function(ft) {
@@ -4757,12 +4761,6 @@ async function ensureFullMetadata(comp) {
 async function fetchMetadata() {
   if (!sfState.token) { toast('Connect to Salesforce first','warn'); return; }
   if (isFetchingMeta) { toast('Metadata fetch already in progress','warn'); return; }
-  // Pre-flight: warn if no CORS proxy configured
-  const _proxy = (projectData && projectData.sfCorsProxy) ? projectData.sfCorsProxy.trim() : '';
-  if (!_proxy) {
-    toast('No CORS proxy configured — API calls will fail. Set a CORS Proxy URL in the connection settings.', 'err', 8000);
-    logMsg('error', 'fetchMetadata', 'No CORS proxy configured', 'Browser blocks direct cross-origin calls to Salesforce. Configure a Cloudflare Worker proxy in the connection settings.');
-  }
   isFetchingMeta = true;
   // Auto-persist selected types to project
   if (projectData) { projectData.metaFetchTypes = metaFetchConfig.types.slice(); saveSettings(); }
