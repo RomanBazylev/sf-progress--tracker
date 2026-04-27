@@ -4014,6 +4014,11 @@ function renderMetadataView() {
   html += '<select id="metaChangeFilter" onchange="filterMetaRows()">';
   html += '<option value="">All statuses</option><option value="new">New in SF</option><option value="modified">Modified</option><option value="same">In Sync</option>';
   html += '</select>';
+  html += '<select id="metaUserFilter" onchange="filterMetaRows()">';
+  html += '<option value="">All users</option>';
+  const users = [...new Set(metaCache.components.map(c => c.lastModifiedBy).filter(Boolean))].sort();
+  users.forEach(u => { html += '<option>' + esc(u) + '</option>'; });
+  html += '</select>';
   html += '<input id="metaSearch" placeholder="🔍 Search components..." oninput="filterMetaRows()">';
   const total = metaCache.components.length;
   const newC = metaCache.components.filter(c => c.change === 'new').length;
@@ -4199,11 +4204,11 @@ function renderMetaRow(c, idx) {
   const label = META_CHANGE_LABELS[c.change] || c.change;
   const tip = META_CHANGE_TIPS[c.change] || '';
   const sfLink = c.sfId && sfState.instance ? sfState.instance + '/' + c.sfId : '';
-  return `<div class="meta-row${c.selected ? ' selected' : ''}" data-type="${esc(c.type)}" data-change="${c.change}" onclick="toggleMetaComponent(${idx})">
+  return `<div class="meta-row${c.selected ? ' selected' : ''}" data-type="${esc(c.type)}" data-change="${c.change}" data-user="${esc(c.lastModifiedBy || '')}" onclick="toggleMetaComponent(${idx})">
     <input type="checkbox" class="meta-cb" ${checked} onclick="event.stopPropagation();toggleMetaComponent(${idx})">
     <span class="meta-name" title="${esc(c.fullName)}">${esc(c.name)}<button class="meta-copy-btn" onclick="event.stopPropagation();navigator.clipboard.writeText('${esc(c.fullName).replace(/'/g, '\\\'')}');toast('Copied: ${esc(c.name)}','ok',1500)" title="Copy API name">📋</button></span>
     <span class="meta-type" title="${esc(c.type)}">${esc(c.type)}</span>
-    <span class="meta-date-cell" title="${c.lastModified || ''}">${c.lastModified ? fmtMetaDate(c.lastModified) : ''}</span>
+    <span class="meta-date-cell" title="${c.lastModified || ''}${c.lastModifiedBy ? '\nBy: ' + c.lastModifiedBy : ''}">${c.lastModified ? fmtMetaDate(c.lastModified) : ''}${c.lastModifiedBy ? '<div style="font-size:10px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(c.lastModifiedBy) + '</div>' : ''}</span>
     <span class="meta-change ${c.change}" title="${tip}">${label}</span>
     <span class="meta-row-actions">
       <button class="btn btn-sm" onclick="event.stopPropagation();viewComponent(${idx})" title="View source code">View</button>
@@ -4222,12 +4227,14 @@ function filterMetaRows() {
 function _applyMetaFilter() {
   const typeF = document.getElementById('metaTypeFilter').value;
   const changeF = document.getElementById('metaChangeFilter').value;
+  const userF = document.getElementById('metaUserFilter') ? document.getElementById('metaUserFilter').value : '';
   const search = document.getElementById('metaSearch').value.toLowerCase();
   document.querySelectorAll('#metaGrid .meta-row').forEach(row => {
     const matchType = !typeF || row.dataset.type === typeF;
     const matchChange = !changeF || row.dataset.change === changeF;
+    const matchUser = !userF || row.dataset.user === userF;
     const matchSearch = !search || row.querySelector('.meta-name').textContent.toLowerCase().includes(search);
-    row.style.display = (matchType && matchChange && matchSearch) ? '' : 'none';
+    row.style.display = (matchType && matchChange && matchUser && matchSearch) ? '' : 'none';
   });
 }
 
@@ -4914,7 +4921,7 @@ async function fetchMetadata() {
       try {
         if (q.api === 'soql') {
           // Standard REST API SOQL (setup objects like AssignmentRule, etc.)
-          const soql = q.soql + buildDateClause(q.soql) + ' ORDER BY LastModifiedDate DESC';
+          const soql = q.soql.replace(/ FROM /, ', LastModifiedBy.Name FROM ') + buildDateClause(q.soql) + ' ORDER BY LastModifiedDate DESC';
           let queryUrl = '/services/data/v' + SF_API_VERSION + '/query?q=' + encodeURIComponent(soql);
           try {
             while (queryUrl) {
@@ -4935,6 +4942,7 @@ async function fetchMetadata() {
                     body: buildMetaXmlBody(rec, q.type),
                     _hasRealBody: false,
                     lastModified: rec.LastModifiedDate,
+                    lastModifiedBy: (rec.LastModifiedBy && rec.LastModifiedBy.Name) || '',
                     sfId: rec.Id,
                     change: 'new',
                     selected: false
@@ -4951,7 +4959,7 @@ async function fetchMetadata() {
           }
         } else {
           // Tooling API SOQL
-          const soql = q.soql + buildDateClause(q.soql) + ' ORDER BY LastModifiedDate DESC';
+          const soql = q.soql.replace(/ FROM /, ', LastModifiedBy.Name FROM ') + buildDateClause(q.soql) + ' ORDER BY LastModifiedDate DESC';
           let queryUrl = '/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(soql);
           while (queryUrl) {
             const res = await sfApiFetch(queryUrl);
@@ -4970,6 +4978,7 @@ async function fetchMetadata() {
                   body: body,
                   _hasRealBody: !!realBody,
                   lastModified: rec.LastModifiedDate,
+                  lastModifiedBy: (rec.LastModifiedBy && rec.LastModifiedBy.Name) || '',
                   sfId: rec.Id,
                   change: 'new',
                   selected: false
@@ -7339,6 +7348,25 @@ async function showDeps(idx) {
     const uses = (usesRes.records || []).map(r => ({ name: r.RefMetadataComponentName, type: r.RefMetadataComponentType, direction: 'uses' }));
     const usedBy = (usedByRes.records || []).map(r => ({ name: r.MetadataComponentName, type: r.MetadataComponentType, direction: 'used-by' }));
 
+    // Parse VF/Aura markup for controller references not captured by MetadataComponentDependency
+    if ((c.type === 'ApexPage' || c.type === 'ApexComponent') && c.body) {
+      const markup = c.body;
+      const ctrlMatch = markup.match(/\bcontroller\s*=\s*"([^"]+)"/i);
+      const stdCtrlMatch = markup.match(/\bstandardController\s*=\s*"([^"]+)"/i);
+      const extMatch = markup.match(/\bextensions\s*=\s*"([^"]+)"/i);
+      const markupDeps = [];
+      if (ctrlMatch) markupDeps.push({ name: ctrlMatch[1], type: 'ApexClass', direction: 'uses', _src: 'markup' });
+      if (stdCtrlMatch) markupDeps.push({ name: stdCtrlMatch[1], type: 'CustomObject', direction: 'uses', _src: 'markup' });
+      if (extMatch) extMatch[1].split(',').map(s => s.trim()).filter(Boolean).forEach(ext => {
+        markupDeps.push({ name: ext, type: 'ApexClass', direction: 'uses', _src: 'markup' });
+      });
+      // Add markup deps that weren't already found by MetadataComponentDependency
+      const existingKeys = new Set(uses.map(d => d.type + ':' + d.name));
+      markupDeps.forEach(d => {
+        if (!existingKeys.has(d.type + ':' + d.name)) uses.push(d);
+      });
+    }
+
     // Deduplicate
     const all = [];
     const seen = new Set();
@@ -7357,8 +7385,9 @@ async function showDeps(idx) {
       h += '<div style="font-size:12px;color:var(--muted);margin:8px 0">' + uses.length + ' outgoing (uses) · ' + usedBy.length + ' incoming (used by)</div>';
       h += '<table class="dep-table"><tr><th>Direction</th><th>Component</th><th>Type</th></tr>';
       all.forEach(d => {
+        const srcBadge = d._src === 'markup' ? ' <span style="font-size:10px;color:var(--accent);opacity:.7" title="Parsed from VF markup">(markup)</span>' : '';
         h += '<tr><td><span class="dep-direction ' + d.direction + '">' + (d.direction === 'uses' ? '→ Uses' : '← Used by') + '</span></td>' +
-          '<td>' + esc(d.name) + '</td><td class="dep-type">' + esc(d.type) + '</td></tr>';
+          '<td>' + esc(d.name) + srcBadge + '</td><td class="dep-type">' + esc(d.type) + '</td></tr>';
       });
       h += '</table>';
     }
