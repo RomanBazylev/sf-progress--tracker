@@ -443,30 +443,30 @@ input,select{font-family:inherit}
 .meta-toolbar select,.meta-toolbar input{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:6px 10px}
 .meta-toolbar input{flex:1;min-width:160px}
 .meta-toolbar .meta-info{font-size:11px;color:var(--muted);margin-left:auto}
-.meta-grid{display:flex;flex-direction:column;max-height:calc(100vh - 300px);overflow-y:auto;border:1px solid var(--border);border-radius:8px}
+.meta-grid{display:flex;flex-direction:column;max-height:calc(100vh - 300px);overflow-y:auto;overflow-x:auto;border:1px solid var(--border);border-radius:8px;min-width:0}
 .meta-grid-header{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface2);font-size:11px;font-weight:600;color:var(--muted);text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0;z-index:2;border-bottom:2px solid var(--border)}
 .meta-grid-header .col-cb{width:16px;flex-shrink:0}
-.meta-grid-header .col-name{flex:1}
-.meta-grid-header .col-type{width:90px}
-.meta-grid-header .col-date{width:90px}
-.meta-grid-header .col-status{width:80px}
-.meta-grid-header .col-actions{width:100px;text-align:right}
-.meta-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);font-size:13px;cursor:pointer;transition:all .15s;border-bottom:1px solid var(--border)}
+.meta-grid-header .col-name{flex:1;min-width:120px}
+.meta-grid-header .col-type{width:90px;flex-shrink:0}
+.meta-grid-header .col-date{width:90px;flex-shrink:0}
+.meta-grid-header .col-status{width:80px;flex-shrink:0}
+.meta-grid-header .col-actions{width:140px;text-align:right;flex-shrink:0}
+.meta-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--surface);font-size:13px;cursor:pointer;transition:all .15s;border-bottom:1px solid var(--border);min-width:0}
 .meta-row:hover{border-color:var(--accent);background:var(--surface2)}
 .meta-row.selected{border-color:var(--accent);background:var(--accent-dim)}
 .meta-row .meta-cb{width:16px;height:16px;accent-color:var(--accent);flex-shrink:0}
-.meta-row .meta-name{flex:1;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px}
+.meta-row .meta-name{flex:1;min-width:0;font-weight:500;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:4px}
 .meta-copy-btn{background:none;border:none;cursor:pointer;font-size:11px;padding:0 2px;opacity:0;transition:opacity .15s}
 .meta-row:hover .meta-copy-btn{opacity:.6}
 .meta-copy-btn:hover{opacity:1!important}
-.meta-row .meta-type{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--muted);font-weight:500;width:90px;text-align:center;flex-shrink:0;box-sizing:border-box}
-.meta-row .meta-date-cell{font-size:11px;color:var(--muted);white-space:nowrap;width:120px;flex-shrink:0}
+.meta-row .meta-type{font-size:11px;padding:2px 8px;border-radius:4px;background:var(--surface2);color:var(--muted);font-weight:500;width:90px;text-align:center;flex-shrink:0;box-sizing:border-box;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.meta-row .meta-date-cell{font-size:11px;color:var(--muted);white-space:nowrap;width:90px;flex-shrink:0}
 .meta-row .meta-change{font-size:11px;font-weight:600;padding:2px 8px;border-radius:4px;width:80px;text-align:center;flex-shrink:0;box-sizing:border-box}
 .meta-row .meta-change.new{background:color-mix(in srgb,var(--green) 15%,transparent);color:var(--green)}
 .meta-row .meta-change.modified{background:color-mix(in srgb,var(--yellow) 15%,transparent);color:var(--yellow)}
 .meta-row .meta-change.deleted{background:color-mix(in srgb,var(--red) 15%,transparent);color:var(--red)}
 .meta-row .meta-change.same{background:var(--surface2);color:var(--muted)}
-.meta-row-actions{display:flex;gap:4px;flex-shrink:0;width:100px;justify-content:flex-end}
+.meta-row-actions{display:flex;gap:4px;flex-shrink:0;width:140px;justify-content:flex-end}
 .meta-actions{display:flex;gap:8px;padding:12px 0;border-top:1px solid var(--border);margin-top:12px;flex-wrap:wrap;align-items:center}
 .meta-actions .meta-summary{font-size:12px;color:var(--muted);margin-right:auto}
 
@@ -484,7 +484,6 @@ input,select{font-family:inherit}
 .date-preset:hover{border-color:var(--accent)}
 .date-preset.active{background:var(--accent);color:#fff;border-color:var(--accent)}
 .meta-date{background:var(--surface);border:1px solid var(--border);border-radius:6px;color:var(--text);font-size:12px;padding:5px 8px}
-.meta-row .meta-date-cell{font-size:11px;color:var(--muted);white-space:nowrap;width:90px;flex-shrink:0}
 
 .meta-diff-modal{position:fixed;inset:0;z-index:250;display:flex;align-items:center;justify-content:center;background:var(--overlay)}
 .meta-diff-content{background:var(--surface);border:1px solid var(--border);border-radius:12px;width:90vw;max-width:900px;max-height:80vh;display:flex;flex-direction:column}
@@ -528,6 +527,12 @@ input,select{font-family:inherit}
   .summary-stat{min-width:auto;flex:1}
   .overview-grid{grid-template-columns:1fr}
   .side-panel{width:100vw}
+  .meta-row .meta-type{display:none}
+  .meta-grid-header .col-type{display:none}
+  .meta-row .meta-date-cell{display:none}
+  .meta-grid-header .col-date{display:none}
+  .meta-row-actions{width:auto}
+  .meta-grid-header .col-actions{width:auto}
 }
 
 /* ── TOOLTIP ── */
@@ -4189,16 +4194,18 @@ function renderMetaRow(c, idx) {
   const checked = c.selected ? 'checked' : '';
   const label = META_CHANGE_LABELS[c.change] || c.change;
   const tip = META_CHANGE_TIPS[c.change] || '';
+  const sfLink = c.sfId && sfState.instance ? sfState.instance + '/' + c.sfId : '';
   return `<div class="meta-row${c.selected ? ' selected' : ''}" data-type="${esc(c.type)}" data-change="${c.change}" onclick="toggleMetaComponent(${idx})">
     <input type="checkbox" class="meta-cb" ${checked} onclick="event.stopPropagation();toggleMetaComponent(${idx})">
     <span class="meta-name" title="${esc(c.fullName)}">${esc(c.name)}<button class="meta-copy-btn" onclick="event.stopPropagation();navigator.clipboard.writeText('${esc(c.fullName).replace(/'/g, '\\\'')}');toast('Copied: ${esc(c.name)}','ok',1500)" title="Copy API name">📋</button></span>
-    <span class="meta-type">${esc(c.type)}</span>
+    <span class="meta-type" title="${esc(c.type)}">${esc(c.type)}</span>
     <span class="meta-date-cell" title="${c.lastModified || ''}">${c.lastModified ? fmtMetaDate(c.lastModified) : ''}</span>
     <span class="meta-change ${c.change}" title="${tip}">${label}</span>
     <span class="meta-row-actions">
-      <button class="btn btn-sm" onclick="event.stopPropagation();viewComponent(${idx})" title="View full component source code">View</button>
-      ${c.change !== 'new' ? '<button class="btn btn-sm" onclick="event.stopPropagation();showDiff(' + idx + ')" title="Show line-by-line diff between Salesforce and git">Diff</button>' : ''}
-      <button class="btn btn-sm" onclick="event.stopPropagation();showDeps(${idx})" title="Show what this component references and what references it">Deps</button>
+      <button class="btn btn-sm" onclick="event.stopPropagation();viewComponent(${idx})" title="View source code">View</button>
+      ${c.change !== 'new' ? '<button class="btn btn-sm" onclick="event.stopPropagation();showDiff(' + idx + ')" title="Diff with git">Diff</button>' : ''}
+      ${sfLink ? '<a class="btn btn-sm" href="' + esc(sfLink) + '" target="_blank" rel="noopener" onclick="event.stopPropagation()" title="Open in Salesforce" style="text-decoration:none">SF</a>' : ''}
+      <button class="btn btn-sm" onclick="event.stopPropagation();showDeps(${idx})" title="Dependencies">Deps</button>
     </span>
   </div>`;
 }
