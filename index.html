@@ -1234,6 +1234,8 @@ let releaseSelected = new Set();
 let isCreatingRelease = false;
 let releaseProgressSteps = []; // State-backed progress trail for release/promote operations
 let isFetchingMeta = false;
+let _metaFetchCancelled = false;
+let _metaFetchTypeProgress = {}; // { type: 'pending'|'fetching'|'done'|'error'|'cancelled', count: N }
 
 // Salesforce metadata state
 let sfState = { token: null, instance: null, user: null, envIndex: -1 };
@@ -3862,6 +3864,8 @@ function sfConnectedLabel() {
 
 function renderMetadataView() {
   const el = document.getElementById('metaContent');
+  // Don't overwrite inline progress UI while fetching
+  if (isFetchingMeta) return;
   if (!sfState.token) {
     // Show connect form
     el.innerHTML = buildMetaConnectHtml();
@@ -4762,53 +4766,107 @@ async function ensureFullMetadata(comp) {
   }
 }
 
+function cancelMetaFetch() {
+  _metaFetchCancelled = true;
+  toast('Cancelling metadata fetch...', 'warn');
+}
+
+function _metaBuildTypeGrid(activeQueries) {
+  const groups = {};
+  activeQueries.forEach(q => {
+    const cat = _CD_TYPE_CATEGORIES[q.type] || 'Other';
+    if (!groups[cat]) groups[cat] = [];
+    groups[cat].push(q);
+  });
+  let h = '<div class="cd-tp-container">';
+  for (const [cat, queries] of Object.entries(groups)) {
+    h += '<div class="cd-tp-category"><div class="cd-tp-category-hdr">' + esc(cat) + '</div><div class="cd-tp-chips">';
+    queries.forEach(q => {
+      const tp = _metaFetchTypeProgress[q.type];
+      const status = tp ? tp.status : 'pending';
+      const icon = status === 'done' ? '✅' : status === 'error' ? '❌' : status === 'fetching' ? '🔄' : status === 'cancelled' ? '⛔' : '⏳';
+      let counts = '';
+      if (tp && tp.count > 0) counts = '<span class="cd-tp-counts">' + tp.count + '</span>';
+      h += '<div class="cd-tp-chip ' + status + '" id="metaTp_' + q.type + '">' +
+        '<span class="cd-tp-icon">' + icon + '</span>' +
+        '<span class="cd-tp-label">' + esc(q.label) + '</span>' +
+        counts + '</div>';
+    });
+    h += '</div></div>';
+  }
+  h += '</div>';
+  return h;
+}
+
+function _metaUpdateTypeEl(type) {
+  const tp = _metaFetchTypeProgress[type];
+  if (!tp) return;
+  const el = document.getElementById('metaTp_' + type);
+  if (!el) return;
+  const icon = tp.status === 'done' ? '✅' : tp.status === 'error' ? '❌' : tp.status === 'fetching' ? '🔄' : tp.status === 'cancelled' ? '⛔' : '⏳';
+  let counts = '';
+  if (tp.count > 0) counts = '<span class="cd-tp-counts">' + tp.count + '</span>';
+  el.className = 'cd-tp-chip ' + tp.status;
+  el.innerHTML = '<span class="cd-tp-icon">' + icon + '</span>' +
+    '<span class="cd-tp-label">' + esc(META_QUERIES.find(q => q.type === type)?.label || type) + '</span>' +
+    counts;
+}
+
+function _metaUpdateProgress(done, total, label) {
+  const pct = total > 0 ? Math.round(done / total * 100) : 0;
+  const bar = document.getElementById('metaFetchBar');
+  if (bar) bar.style.width = pct + '%';
+  const frac = document.getElementById('metaFetchFraction');
+  if (frac) frac.textContent = done + ' / ' + total + ' types';
+  const msg = document.getElementById('metaFetchMsg');
+  if (msg) msg.textContent = label;
+}
+
 async function fetchMetadata() {
   if (!sfState.token) { toast('Connect to Salesforce first','warn'); return; }
   if (isFetchingMeta) { toast('Metadata fetch already in progress','warn'); return; }
   isFetchingMeta = true;
+  _metaFetchCancelled = false;
+  _metaFetchTypeProgress = {};
   // Auto-persist selected types to project
   if (projectData) { projectData.metaFetchTypes = metaFetchConfig.types.slice(); saveSettings(); }
   const el = document.getElementById('metaContent');
-  el.innerHTML = '<div class="loading"><div class="spinner"></div><p id="metaFetchProgress">Fetching metadata from Salesforce...</p></div>';
 
-  // Floating progress indicator (visible even when scrolled)
-  let floatingEl = document.getElementById('metaFetchFloating');
-  if (!floatingEl) {
-    floatingEl = document.createElement('div');
-    floatingEl.id = 'metaFetchFloating';
-    floatingEl.className = 'meta-fetch-floating';
-    document.body.appendChild(floatingEl);
+  const activeTypes = META_QUERIES.filter(q => metaFetchConfig.types.includes(q.type));
+
+  // Warn on large fetch
+  if (activeTypes.length > 20) {
+    if (!confirm('You selected ' + activeTypes.length + ' metadata types. This may take several minutes on a large org.\n\nContinue?')) {
+      isFetchingMeta = false;
+      renderMetadataView();
+      return;
+    }
   }
-  floatingEl.innerHTML = '<div class="spinner"></div><span id="metaFetchFloatingText">Fetching metadata...</span>';
-  floatingEl.style.display = 'flex';
+
+  // Init type progress
+  activeTypes.forEach(q => { _metaFetchTypeProgress[q.type] = { status: 'pending', count: 0 }; });
+
+  // Render inline progress UI on the Metadata tab
+  el.innerHTML = '<div class="cd-progress">' +
+    '<div class="cd-progress-header"><h3>☁️ Fetching Metadata...</h3><span class="cd-progress-fraction" id="metaFetchFraction">0 / ' + activeTypes.length + ' types</span></div>' +
+    '<div class="cd-progress-bar"><div class="cd-progress-fill" id="metaFetchBar" style="width:0%"></div></div>' +
+    '<div id="metaFetchMsg" style="font-size:12px;color:var(--muted)">Fetching metadata schema...</div>' +
+    '<button class="btn btn-sm" style="margin-top:12px;color:var(--red);border-color:var(--red)" onclick="cancelMetaFetch()">⛔ Cancel Fetch</button>' +
+    _metaBuildTypeGrid(activeTypes) +
+    '</div>';
 
   try {
     const components = [];
     const failedTypes = [];
-    const activeTypes = META_QUERIES.filter(q => metaFetchConfig.types.includes(q.type));
     let done = 0;
 
-    // Warn on large fetch
-    if (activeTypes.length > 20) {
-      if (!confirm('You selected ' + activeTypes.length + ' metadata types. This may take several minutes on a large org.\n\nContinue?')) {
-        isFetchingMeta = false;
-        el.innerHTML = '';
-        const f = document.getElementById('metaFetchFloating'); if (f) f.style.display = 'none';
-        renderMetadataView();
-        return;
-      }
-    }
-
-    // Fetch SFDX metadata schema (directoryName, suffix, childXmlNames) from org
-    const prog0 = document.getElementById('metaFetchProgress');
-    if (prog0) prog0.textContent = 'Fetching metadata schema...';
-    const floatingText0 = document.getElementById('metaFetchFloatingText');
-    if (floatingText0) floatingText0.textContent = 'Fetching metadata schema...';
+    // Fetch SFDX metadata schema
     try {
       await fetchDescribeMetadata();
     } catch (e) {
       logMsg('warn', 'fetchMetadata', 'describeMetadata failed — using hardcoded defaults', e.message);
     }
+    if (_metaFetchCancelled) throw new Error('Cancelled by user');
 
     // Enrich META_QUERIES path/ext from describeMetadata if available
     // Restore original defaults first (in case previous fetch mutated them)
@@ -4837,12 +4895,11 @@ async function fetchMetadata() {
     let sessionExpired = false;
 
     for (const q of activeTypes) {
-      if (sessionExpired) break;
+      if (sessionExpired || _metaFetchCancelled) break;
       done++;
-      const prog = document.getElementById('metaFetchProgress');
-      if (prog) prog.textContent = 'Fetching ' + q.type + ' (' + done + '/' + activeTypes.length + ')...';
-      const floatingText = document.getElementById('metaFetchFloatingText');
-      if (floatingText) floatingText.textContent = 'Fetching ' + q.type + ' (' + done + '/' + activeTypes.length + ')...';
+      _metaFetchTypeProgress[q.type] = { status: 'fetching', count: 0 };
+      _metaUpdateTypeEl(q.type);
+      _metaUpdateProgress(done - 1, activeTypes.length, 'Fetching ' + q.label + '...');
       try {
         if (q.api === 'soql') {
           // Standard REST API SOQL (setup objects like AssignmentRule, etc.)
@@ -4878,6 +4935,8 @@ async function fetchMetadata() {
           } catch (e) {
             logMsg('warn', 'fetchMetadata', q.type + ': standard SOQL failed', e.message);
             failedTypes.push({ type: q.type, label: q.label, error: e.message });
+            _metaFetchTypeProgress[q.type] = { status: 'error', count: 0 };
+            _metaUpdateTypeEl(q.type);
           }
         } else {
           // Tooling API SOQL
@@ -4909,22 +4968,39 @@ async function fetchMetadata() {
             queryUrl = res.nextRecordsUrl || null;
           }
         }
+        // Mark type as done
+        const typeCount = components.filter(c => c.type === q.type).length;
+        _metaFetchTypeProgress[q.type] = { status: 'done', count: typeCount };
+        _metaUpdateTypeEl(q.type);
+        _metaUpdateProgress(done, activeTypes.length, 'Fetched ' + q.label + ' (' + typeCount + ')');
       } catch (e) {
         logMsg('warn', 'fetchMetadata', 'Skip ' + q.type, e.message);
         failedTypes.push({ type: q.type, label: q.label, error: e.message });
+        _metaFetchTypeProgress[q.type] = { status: 'error', count: 0 };
+        _metaUpdateTypeEl(q.type);
         if (e.message.includes('401')) { sessionExpired = true; logMsg('error', 'fetchMetadata', 'Session expired (401)', 'Stopping further queries'); }
       }
+    }
+
+    // Mark remaining types as cancelled if we stopped early
+    if (_metaFetchCancelled || sessionExpired) {
+      activeTypes.forEach(q => {
+        if (_metaFetchTypeProgress[q.type] && _metaFetchTypeProgress[q.type].status === 'pending') {
+          _metaFetchTypeProgress[q.type] = { status: 'cancelled', count: 0 };
+          _metaUpdateTypeEl(q.type);
+        }
+      });
     }
 
     // Fetch bundle source for LWC and Aura (they don't have Body in the parent query)
     const lwcComps = components.filter(c => c.type === 'LWC');
     const auraComps = components.filter(c => c.type === 'AuraBundle');
-    const updFloating = t => { const f = document.getElementById('metaFetchFloatingText'); if (f) f.textContent = t; };
 
     // LWC: fetch LightningComponentResource for each bundle
     for (let i = 0; i < lwcComps.length; i++) {
+      if (_metaFetchCancelled) break;
       const comp = lwcComps[i];
-      updFloating('Fetching LWC source (' + (i + 1) + '/' + lwcComps.length + ')...');
+      _metaUpdateProgress(done, activeTypes.length, 'Fetching LWC source (' + (i + 1) + '/' + lwcComps.length + ')...');
       try {
         const res = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(
           "SELECT FilePath, Source FROM LightningComponentResource WHERE LightningComponentBundleId = '" + comp.sfId + "' ORDER BY FilePath"
@@ -4942,6 +5018,7 @@ async function fetchMetadata() {
 
     // Aura: fetch AuraDefinition for each bundle
     for (const comp of auraComps) {
+      if (_metaFetchCancelled) break;
       try {
         const res = await sfApiFetch('/services/data/v' + SF_API_VERSION + '/tooling/query?q=' + encodeURIComponent(
           "SELECT DefType, Source FROM AuraDefinition WHERE AuraDefinitionBundleId = '" + comp.sfId + "' ORDER BY DefType"
@@ -4957,22 +5034,35 @@ async function fetchMetadata() {
     }
 
     // Fetch git tree for comparison
-    await fetchGitTreeForDiff(components);
+    if (!_metaFetchCancelled) {
+      _metaUpdateProgress(done, activeTypes.length, 'Comparing with git...');
+      await fetchGitTreeForDiff(components);
+    }
 
     metaCache.components = components;
     metaCache.failedTypes = failedTypes;
     metaCache.queriedCount = activeTypes.length;
     metaCache.hasFetched = true;
-    logMsg('success', 'fetchMetadata', 'Fetch complete', components.length + ' components from ' + activeTypes.length + ' types' + (failedTypes.length ? ', ' + failedTypes.length + ' failed' : ''));
-    notifyUser('Metadata Fetch Complete', components.length + ' components fetched' + (failedTypes.length ? ' (' + failedTypes.length + ' types failed)' : ''));
+    if (_metaFetchCancelled) {
+      logMsg('warn', 'fetchMetadata', 'Cancelled by user', components.length + ' components fetched before cancel');
+      toast('Fetch cancelled — ' + components.length + ' components loaded', 'warn');
+    } else {
+      logMsg('success', 'fetchMetadata', 'Fetch complete', components.length + ' components from ' + activeTypes.length + ' types' + (failedTypes.length ? ', ' + failedTypes.length + ' failed' : ''));
+      notifyUser('Metadata Fetch Complete', components.length + ' components fetched' + (failedTypes.length ? ' (' + failedTypes.length + ' types failed)' : ''));
+    }
     renderMetadataView();
   } catch (e) {
-    el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error fetching metadata: ' + esc(e.message) + '</p></div>';
-    logMsg('error', 'fetchMetadata', 'Fatal error', e.message);
+    if (_metaFetchCancelled) {
+      logMsg('warn', 'fetchMetadata', 'Cancelled by user', e.message);
+      toast('Fetch cancelled', 'warn');
+      renderMetadataView();
+    } else {
+      el.innerHTML = '<div class="empty-state"><div class="empty-icon">⚠️</div><p>Error fetching metadata: ' + esc(e.message) + '</p></div>';
+      logMsg('error', 'fetchMetadata', 'Fatal error', e.message);
+    }
   } finally {
     isFetchingMeta = false;
-    const f = document.getElementById('metaFetchFloating');
-    if (f) f.style.display = 'none';
+    _metaFetchCancelled = false;
   }
 }
 
