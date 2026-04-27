@@ -494,9 +494,13 @@ input,select{font-family:inherit}
 .diff-add{background:color-mix(in srgb,var(--green) 12%,transparent);color:var(--green)}
 .diff-del{background:color-mix(in srgb,var(--red) 12%,transparent);color:var(--red)}
 .diff-hdr{color:var(--accent);font-weight:600}
-.meta-commit-form{display:flex;flex-direction:column;gap:10px;max-width:500px}
+.meta-commit-form{display:flex;flex-direction:column;gap:10px;max-width:540px}
 .meta-commit-form input,.meta-commit-form textarea{background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:8px 12px}
 .meta-commit-form textarea{min-height:60px;resize:vertical}
+.meta-commit-form select{background:var(--surface);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px;padding:8px 12px}
+.commitModeBtn{background:var(--surface2);border:1px solid var(--border);color:var(--muted);cursor:pointer;transition:all .15s}
+.commitModeBtn:hover{border-color:var(--accent);color:var(--text)}
+.commitModeBtn.active{background:var(--accent);color:#fff;border-color:var(--accent);font-weight:600}
 .meta-commit-result{font-size:12px;padding:8px 12px;border-radius:8px;margin-top:8px}
 
 /* ── POST-DEPLOY CHECKLIST ── */
@@ -5235,71 +5239,89 @@ function showCommitForm() {
   // Auto-detect base path from git tree
   const detectedBase = detectBasePath();
   const branch = metaCache.gitBranch || 'main';
+  const branches = repoBranches.length ? repoBranches : [branch];
 
   let html = '<div class="meta-commit-form">';
-  html += '<h3>📤 Commit to Git</h3>';
-  html += '<p style="font-size:12px;color:var(--muted);margin-bottom:16px">' + selected.length + ' component(s) selected. Files will be placed in their standard SFDX paths (e.g. <code>classes/</code>, <code>triggers/</code>).</p>';
+  html += '<h3 style="display:flex;align-items:center;gap:8px">📤 Commit to Git <span style="font-weight:400;font-size:13px;color:var(--muted)">' + selected.length + ' component(s)</span></h3>';
 
   // Selected files preview
-  html += '<details style="margin-bottom:16px"><summary style="font-size:12px;font-weight:600;cursor:pointer;color:var(--muted)">Selected files (' + selected.length + ')</summary>';
-  html += '<div style="margin-top:8px;max-height:160px;overflow-y:auto;font-size:12px;font-family:monospace;background:var(--bg);border:1px solid var(--border);border-radius:8px;padding:8px">';
+  html += '<details style="margin-bottom:16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px;padding:10px 14px"><summary style="font-size:12px;font-weight:600;cursor:pointer;color:var(--muted)">📁 Selected files (' + selected.length + ')</summary>';
+  html += '<div style="margin-top:8px;max-height:160px;overflow-y:auto;font-size:12px;font-family:monospace;padding:4px 0">';
   selected.forEach(c => {
-    html += '<div style="padding:2px 0;color:var(--text)">' + esc(detectedBase + '/' + c.fullName) + '</div>';
+    const changeCol = c.change === 'new' ? 'var(--green)' : c.change === 'modified' ? 'var(--yellow)' : 'var(--muted)';
+    html += '<div style="padding:2px 0;color:var(--text);display:flex;gap:8px"><span style="color:' + changeCol + ';flex-shrink:0">' + (c.change === 'new' ? '+' : c.change === 'modified' ? '~' : '=') + '</span>' + esc(detectedBase + '/' + c.fullName) + '</div>';
   });
   html += '</div></details>';
 
-  // Branch selection
-  html += '<div class="field"><label>Target Branch</label>';
-  html += '<div style="display:flex;gap:12px;margin-bottom:8px">';
-  html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="radio" name="commitMode" value="existing" checked onchange="toggleNewBranchField()"> Existing</label>';
-  html += '<label style="display:flex;align-items:center;gap:6px;font-size:13px;cursor:pointer;text-transform:none;letter-spacing:0"><input type="radio" name="commitMode" value="new" onchange="toggleNewBranchField()"> New branch</label>';
+  // ── Branch Mode Toggle ──
+  html += '<div style="display:flex;gap:8px;margin-bottom:16px">';
+  html += '<button class="btn btn-sm commitModeBtn active" id="modeBtnExisting" onclick="setCommitMode(\'existing\')" style="flex:1;padding:10px;font-size:13px;border-radius:8px">📂 Existing branch</button>';
+  html += '<button class="btn btn-sm commitModeBtn" id="modeBtnNew" onclick="setCommitMode(\'new\')" style="flex:1;padding:10px;font-size:13px;border-radius:8px">🌿 New branch</button>';
   html += '</div>';
-  html += '<div id="commitBranchExisting">';
-  html += '<select id="commitBranch" style="width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" onchange="onCommitBranchChange()">';
-  const branches = repoBranches.length ? repoBranches : [branch];
+
+  // ── Existing branch panel ──
+  html += '<div id="commitBranchExisting" style="margin-bottom:16px">';
+  html += '<div class="field"><label style="font-size:12px;font-weight:600;margin-bottom:6px;display:block">Target Branch</label>';
+  html += '<select id="commitBranch" style="width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px" onchange="onCommitBranchChange()">';
   branches.forEach(b => {
     const sel = b === branch ? ' selected' : '';
     const lock = isProtectedBranch(b) ? '🔒 ' : '';
     html += '<option value="' + esc(b) + '"' + sel + '>' + lock + esc(b) + '</option>';
   });
   html += '</select>';
-  html += '<div id="protectedBranchWarn" style="display:none;margin-top:6px;padding:8px 12px;background:var(--yellow-dim);color:var(--yellow);border-radius:8px;font-size:12px;font-weight:500">🔒 This is a protected branch. Direct commits are not allowed — please create a new branch instead.</div>';
-  html += '</div>';
-  html += '<div id="commitBranchNew" style="display:none">';
-  html += '<input id="commitNewBranchName" placeholder="feature/my-metadata-update" style="width:100%;padding:9px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px;margin-bottom:6px">';
-  html += '<div style="font-size:12px;color:var(--muted)">Will branch from: <strong>' + esc(branch) + '</strong></div>';
+  html += '<div id="protectedBranchWarn" style="display:none;margin-top:8px;padding:10px 14px;background:var(--yellow-dim);color:var(--yellow);border-radius:8px;font-size:12px;font-weight:500;align-items:center;gap:6px">🔒 Protected branch — switch to "New branch" to commit.</div>';
   html += '</div></div>';
 
-  // Create PR option (only for new branch mode)
-  html += '<div id="commitPrSection" style="display:none;margin-bottom:16px;padding:16px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">';
-  html += '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:12px;text-transform:none;letter-spacing:0">';
-  html += '<input type="checkbox" id="commitCreatePr" checked onchange="togglePrFields()">';
+  // ── New branch panel ──
+  html += '<div id="commitBranchNew" style="display:none;margin-bottom:16px">';
+  // Base branch selector
+  html += '<div class="field" style="margin-bottom:12px"><label style="font-size:12px;font-weight:600;margin-bottom:6px;display:block">Create from (base branch)</label>';
+  html += '<select id="commitBaseBranch" style="width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">';
+  branches.forEach(b => {
+    const sel = b === branch ? ' selected' : '';
+    html += '<option value="' + esc(b) + '"' + sel + '>' + esc(b) + '</option>';
+  });
+  html += '</select>';
+  html += '<div style="font-size:11px;color:var(--muted);margin-top:4px">The new branch will be created from this branch\'s latest commit.</div>';
+  html += '</div>';
+  // New branch name
+  html += '<div class="field"><label style="font-size:12px;font-weight:600;margin-bottom:6px;display:block">New Branch Name</label>';
+  html += '<input id="commitNewBranchName" placeholder="feature/my-metadata-update" style="width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:14px">';
+  html += '</div>';
+
+  // ── Create PR option ──
+  html += '<div style="margin-top:12px;padding:14px;background:var(--surface2);border:1px solid var(--border);border-radius:10px">';
+  html += '<label style="display:flex;align-items:center;gap:8px;font-size:13px;cursor:pointer;margin-bottom:10px">';
+  html += '<input type="checkbox" id="commitCreatePr" checked onchange="togglePrFields()" style="accent-color:var(--accent);width:16px;height:16px">';
   html += '<strong>Create Pull Request</strong> <span style="color:var(--muted);font-weight:normal">after commit</span>';
   html += '</label>';
   html += '<div id="commitPrFields">';
-  html += '<div class="field" style="margin-bottom:8px"><label style="font-size:12px">PR Title</label>';
-  html += '<input id="commitPrTitle" placeholder="" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"></div>';
-  html += '<div class="field"><label style="font-size:12px">Target Branch (base)</label>';
+  html += '<div class="field" style="margin-bottom:8px"><label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">PR Title</label>';
+  html += '<input id="commitPrTitle" placeholder="Auto-filled from commit message" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px"></div>';
+  html += '<div class="field"><label style="font-size:12px;font-weight:600;margin-bottom:4px;display:block">Merge Into (PR base)</label>';
   html += '<select id="commitPrBase" style="width:100%;padding:8px 12px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px">';
-  const prBaseBranches = repoBranches.length ? repoBranches : [branch];
-  prBaseBranches.forEach(b => {
+  branches.forEach(b => {
     const sel = b === branch ? ' selected' : '';
     html += '<option value="' + esc(b) + '"' + sel + '>' + esc(b) + '</option>';
   });
   html += '</select></div>';
   html += '</div></div>';
+  html += '</div>'; // close commitBranchNew
 
-  // Commit message
-  html += '<div class="field"><label>Commit Message</label>';
-  html += '<textarea id="commitMsg" rows="2" style="resize:vertical" placeholder="Describe your changes">Update ' + selected.length + ' component(s) from Salesforce</textarea></div>';
+  // ── Commit message ──
+  html += '<div class="field" style="margin-bottom:16px"><label style="font-size:12px;font-weight:600;margin-bottom:6px;display:block">Commit Message</label>';
+  html += '<textarea id="commitMsg" rows="2" style="resize:vertical;width:100%;padding:10px 14px;background:var(--bg);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:13px" placeholder="Describe your changes">Update ' + selected.length + ' component(s) from Salesforce</textarea></div>';
 
   // Hidden base path (auto-detected)
   html += '<input type="hidden" id="commitBasePath" value="' + esc(detectedBase) + '">';
+  html += '<input type="hidden" name="commitMode" value="existing">';
 
   html += '<div id="commitResult"></div>';
-  html += '<div style="display:flex;gap:8px;align-items:center">';
-  html += '<button class="btn btn-primary" onclick="doCommit()" id="commitBtn">📤 Commit &amp; Push</button>';
-  html += '<span style="font-size:11px;color:var(--muted)">Files go to: <code>' + esc(detectedBase) + '/</code></span>';
+
+  // ── Actions ──
+  html += '<div style="display:flex;gap:10px;align-items:center;flex-wrap:wrap">';
+  html += '<button class="btn btn-primary" onclick="doCommit()" id="commitBtn" style="padding:10px 20px;font-size:14px">📤 Commit &amp; Push</button>';
+  html += '<span style="font-size:11px;color:var(--muted)">Path: <code>' + esc(detectedBase) + '/</code></span>';
   html += '</div>';
   html += '</div>';
 
@@ -5329,11 +5351,18 @@ function detectBasePath() {
   return 'force-app/main/default';
 }
 
-function toggleNewBranchField() {
-  const mode = document.querySelector('input[name=commitMode]:checked').value;
+function setCommitMode(mode) {
+  // Update hidden field
+  const hiddenMode = document.querySelector('input[name=commitMode]');
+  if (hiddenMode) hiddenMode.value = mode;
+  // Toggle button styles
+  const btnEx = document.getElementById('modeBtnExisting');
+  const btnNew = document.getElementById('modeBtnNew');
+  if (btnEx) btnEx.classList.toggle('active', mode === 'existing');
+  if (btnNew) btnNew.classList.toggle('active', mode === 'new');
+  // Toggle panels
   document.getElementById('commitBranchExisting').style.display = mode === 'existing' ? '' : 'none';
   document.getElementById('commitBranchNew').style.display = mode === 'new' ? '' : 'none';
-  document.getElementById('commitPrSection').style.display = mode === 'new' ? '' : 'none';
   // Update commit button state
   if (mode === 'new') {
     document.getElementById('commitBtn').disabled = false;
@@ -5342,6 +5371,11 @@ function toggleNewBranchField() {
   } else {
     onCommitBranchChange();
   }
+}
+// Backwards compat alias
+function toggleNewBranchField() {
+  const mode = document.querySelector('input[name=commitMode]');
+  setCommitMode(mode ? mode.value : 'existing');
 }
 
 function togglePrFields() {
@@ -5358,8 +5392,8 @@ function syncPrTitle() {
 }
 
 function onCommitBranchChange() {
-  const mode = document.querySelector('input[name=commitMode]:checked');
-  if (!mode || mode.value !== 'existing') return;
+  const modeEl = document.querySelector('input[name=commitMode]');
+  if (!modeEl || modeEl.value !== 'existing') return;
   const sel = document.getElementById('commitBranch');
   const warn = document.getElementById('protectedBranchWarn');
   const btn = document.getElementById('commitBtn');
@@ -5377,7 +5411,8 @@ async function doCommit() {
   const selected = metaCache.components.filter(c => c.selected);
   if (!selected.length) { toast('Select components first','warn'); return; }
 
-  const mode = document.querySelector('input[name=commitMode]:checked').value;
+  const modeEl = document.querySelector('input[name=commitMode]');
+  const mode = modeEl ? modeEl.value : 'existing';
   let branch;
   if (mode === 'new') {
     branch = document.getElementById('commitNewBranchName').value.trim();
@@ -5405,9 +5440,11 @@ async function doCommit() {
       await ensureFullMetadata(selected[i]);
     }
 
-    // 1. Get base branch SHA (for new branch, use compare branch as base)
+    // 1. Get base branch SHA (for new branch, use selected base branch)
     updProg('(resolving branch...)');
-    const baseBranch = (mode === 'new') ? (metaCache.gitBranch || 'main') : branch;
+    const baseBranch = (mode === 'new')
+      ? (document.getElementById('commitBaseBranch').value || metaCache.gitBranch || 'main')
+      : branch;
     const refData = await ghFetch('/repos/' + repo + '/git/ref/heads/' + baseBranch);
     const latestCommitSha = refData.object.sha;
 
@@ -5464,7 +5501,30 @@ async function doCommit() {
 
     const branchUrl = 'https://github.com/' + esc(repo) + '/tree/' + encodeURIComponent(branch);
     const commitUrl = 'https://github.com/' + esc(repo) + '/commit/' + newCommit.sha;
-    resultEl.innerHTML = '<div class="meta-status ok">✓ Committed ' + selected.length + ' file(s) to <strong>' + esc(branch) + '</strong> — <a href="' + commitUrl + '" target="_blank">view commit</a> · <a href="' + branchUrl + '" target="_blank">open branch</a></div>';
+    let resultHtml = '<div class="meta-status ok">✓ Committed ' + selected.length + ' file(s) to <strong>' + esc(branch) + '</strong> — <a href="' + commitUrl + '" target="_blank">view commit</a> · <a href="' + branchUrl + '" target="_blank">open branch</a>';
+
+    // 7. Create PR if requested (new branch mode only)
+    if (mode === 'new') {
+      const createPr = document.getElementById('commitCreatePr');
+      if (createPr && createPr.checked) {
+        try {
+          updProg('(creating pull request...)');
+          const prTitle = (document.getElementById('commitPrTitle').value || msg).trim();
+          const prBase = (document.getElementById('commitPrBase').value || metaCache.gitBranch || 'main').trim();
+          const prData = await ghFetch('/repos/' + repo + '/pulls', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ title: prTitle, head: branch, base: prBase, body: 'Created from SF Pipeline Tracker.\n\n' + selected.length + ' component(s) committed.' })
+          });
+          resultHtml += ' · <a href="' + esc(prData.html_url) + '" target="_blank">PR #' + prData.number + '</a>';
+        } catch (prErr) {
+          resultHtml += '</div><div class="meta-status warn">⚠ PR creation failed: ' + esc(prErr.message) + '</div>';
+        }
+      }
+    }
+
+    resultHtml += '</div>';
+    resultEl.innerHTML = resultHtml;
     toast('Committed to <strong>' + esc(branch) + '</strong> — <a href="' + branchUrl + '" target="_blank" style="color:inherit;text-decoration:underline">open branch ↗</a>', 'ok', 10000);
 
     // Add new branch to cached list & make it the default for next commit
