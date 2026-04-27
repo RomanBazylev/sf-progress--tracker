@@ -1515,6 +1515,10 @@ function enterProject() {
     }
     refreshData();
     startAutoRefresh();
+  } else if (safeSsGet('sf_oauth_pending')) {
+    // Returning from Metadata OAuth but project has no GitHub config yet
+    safeSsRemove('sf_oauth_pending');
+    showView('metadata');
   } else {
     showView('settings');
   }
