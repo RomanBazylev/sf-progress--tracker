@@ -6009,7 +6009,7 @@ async function cdRunComparison() {
         cdState.typeProgress[q.type].status = 'target';
         _cdUpdateTypeEl(q.type);
         setMsg('Target: Fetching ' + q.label + '...');
-        const items = await cdFetchTypeFromOrg(conn, q);
+        const items = await cdFetchTypeFromOrg(conn, q, { skipDateFilter: true });
         cdState.typeProgress[q.type].targetCount = items.length;
         cdState.typeProgress[q.type].status = 'done';
         _cdUpdateTypeEl(q.type);
@@ -6070,14 +6070,16 @@ async function cdRunComparison() {
 }
 
 // Fetch a single metadata type from an org
-async function cdFetchTypeFromOrg(conn, q) {
+async function cdFetchTypeFromOrg(conn, q, opts) {
   if (!conn || !conn.token || !conn.instance) throw new Error('Org not connected — session may have expired');
   const components = [];
   try {
     let soql = q.soql;
-    // Apply date filter — validate ISO date format before injecting
-    if (cdState.dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(cdState.dateFrom)) soql += " AND LastModifiedDate >= " + cdState.dateFrom + "T00:00:00Z";
-    if (cdState.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(cdState.dateTo)) soql += " AND LastModifiedDate <= " + cdState.dateTo + "T23:59:59Z";
+    // Apply date filter only when not skipped (target side skips it for accurate comparison)
+    if (!(opts && opts.skipDateFilter)) {
+      if (cdState.dateFrom && /^\d{4}-\d{2}-\d{2}$/.test(cdState.dateFrom)) soql += " AND LastModifiedDate >= " + cdState.dateFrom + "T00:00:00Z";
+      if (cdState.dateTo && /^\d{4}-\d{2}-\d{2}$/.test(cdState.dateTo)) soql += " AND LastModifiedDate <= " + cdState.dateTo + "T23:59:59Z";
+    }
     const endpoint = q.api === 'tooling' ? '/services/data/v' + SF_API_VERSION + '/tooling/query' : '/services/data/v' + SF_API_VERSION + '/query';
     let url = endpoint + '?q=' + encodeURIComponent(soql);
     let records = [];
@@ -6262,6 +6264,7 @@ function renderCdResults(el) {
   html += '<span class="cd-name">Name</span>';
   html += '<span class="cd-type-badge">Type</span>';
   html += '<span class="cd-diff-type">Difference</span>';
+  html += '<span class="cd-actions-col" style="width:36px;flex-shrink:0"></span>';
   html += '</div>';
 
   // Rows
@@ -6271,12 +6274,21 @@ function renderCdResults(el) {
   filtered.forEach((r, fi) => {
     const idx = results.indexOf(r);
     const selectable = r.diffType !== 'same';
+    // Build SF link from source or target _conn.instance + sfId
+    const sfComp = r._source || r._target;
+    const sfLink = (sfComp && sfComp.sfId && sfComp._conn && sfComp._conn.instance)
+      ? sfComp._conn.instance + '/' + sfComp.sfId : '';
     html += '<div class="cd-result-row' + (r.selected ? ' selected' : '') + '" onclick="cdShowItemDiff(' + idx + ')">';
     html += '<input type="checkbox" class="cd-cb" ' + (r.selected ? 'checked' : '') + ' ' + (selectable ? '' : 'disabled') +
       ' onclick="event.stopPropagation();cdToggleItem(' + idx + ',this.checked)">';
     html += '<span class="cd-name">' + esc(r.name) + '</span>';
     html += '<span class="cd-type-badge">' + esc(r.label) + '</span>';
     html += '<span class="cd-diff-type ' + r.diffType + '">' + ({ new: 'New', different: 'Changed', deleted: 'Deleted', same: 'Same' }[r.diffType] || r.diffType) + '</span>';
+    if (sfLink) {
+      html += '<a class="btn btn-sm" href="' + esc(sfLink) + '" target="_blank" onclick="event.stopPropagation()" style="padding:2px 6px;font-size:11px;flex-shrink:0" title="Open in Salesforce">SF</a>';
+    } else {
+      html += '<span style="width:36px;flex-shrink:0"></span>';
+    }
     html += '</div>';
   });
   html += '</div></div>'; // grid, sidebar
