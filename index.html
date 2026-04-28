@@ -5782,8 +5782,8 @@ function renderCompareDeployView() {
   // Date filter
   html += '<div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px">';
   html += '<span style="font-size:13px;font-weight:600">Date filter:</span>';
-  ['all','today','7d','30d','custom'].forEach(p => {
-    const labels = {all:'All time',today:'Today','7d':'Last 7 days','30d':'Last 30 days',custom:'Custom'};
+  ['all','today','3d','7d','30d','custom'].forEach(p => {
+    const labels = {all:'All time',today:'Today','3d':'Last 3 days','7d':'Last 7 days','30d':'Last 30 days',custom:'Custom'};
     html += '<button class="date-preset' + (cdState.datePreset === p ? ' active' : '') + '" onclick="cdSetDatePreset(\'' + p + '\')">' + labels[p] + '</button>';
   });
   if (cdState.datePreset === 'custom') {
@@ -5941,6 +5941,7 @@ function cdSelectPreset(preset) {
 function cdSetDatePreset(p) {
   cdState.datePreset = p;
   if (p === 'today') { const d = new Date().toISOString().slice(0,10); cdState.dateFrom = d; cdState.dateTo = d; }
+  else if (p === '3d') { const d = new Date(); d.setDate(d.getDate()-3); cdState.dateFrom = d.toISOString().slice(0,10); cdState.dateTo = new Date().toISOString().slice(0,10); }
   else if (p === '7d') { const d = new Date(); d.setDate(d.getDate()-7); cdState.dateFrom = d.toISOString().slice(0,10); cdState.dateTo = new Date().toISOString().slice(0,10); }
   else if (p === '30d') { const d = new Date(); d.setDate(d.getDate()-30); cdState.dateFrom = d.toISOString().slice(0,10); cdState.dateTo = new Date().toISOString().slice(0,10); }
   else if (p === 'all') { cdState.dateFrom = ''; cdState.dateTo = ''; }
@@ -6319,7 +6320,7 @@ function renderCdResults(el) {
   html += '<span class="cd-name">Name</span>';
   html += '<span class="cd-type-badge">Type</span>';
   html += '<span class="cd-diff-type">Difference</span>';
-  html += '<span class="cd-actions-col" style="width:36px;flex-shrink:0"></span>';
+  html += '<span class="cd-actions-col" style="width:80px;flex-shrink:0;text-align:right">View</span>';
   html += '</div>';
 
   // Rows
@@ -6329,21 +6330,37 @@ function renderCdResults(el) {
   filtered.forEach((r, fi) => {
     const idx = results.indexOf(r);
     const selectable = r.diffType !== 'same';
-    // Build SF link from source or target _conn.instance + sfId
-    const sfComp = r._source || r._target;
-    const sfLink = (sfComp && sfComp.sfId && sfComp._conn && sfComp._conn.instance)
-      ? sfComp._conn.instance + '/' + sfComp.sfId : '';
+    // Build view links for source and target
+    let srcLink = '', tgtLink = '';
+    if (cdState.sourceType === 'org' && r._source && r._source.sfId && r._source._conn && r._source._conn.instance) {
+      srcLink = r._source._conn.instance + '/' + r._source.sfId;
+    } else if (cdState.sourceType === 'git' && r._source && r._source._gitSha && projectData && projectData.repo) {
+      srcLink = 'https://github.com/' + projectData.repo + '/blob/' + encodeURIComponent(cdState.sourceBranch) + '/' + r._source.fullName;
+    }
+    if (cdState.targetType === 'org' && r._target && r._target.sfId && r._target._conn && r._target._conn.instance) {
+      tgtLink = r._target._conn.instance + '/' + r._target.sfId;
+    } else if (cdState.targetType === 'git' && r._target && r._target._gitSha && projectData && projectData.repo) {
+      tgtLink = 'https://github.com/' + projectData.repo + '/blob/' + encodeURIComponent(cdState.targetBranch) + '/' + r._target.fullName;
+    }
     html += '<div class="cd-result-row' + (r.selected ? ' selected' : '') + '" onclick="cdShowItemDiff(' + idx + ')">';
     html += '<input type="checkbox" class="cd-cb" ' + (r.selected ? 'checked' : '') + ' ' + (selectable ? '' : 'disabled') +
       ' onclick="event.stopPropagation();cdToggleItem(' + idx + ',this.checked)">';
     html += '<span class="cd-name">' + esc(r.name) + '</span>';
     html += '<span class="cd-type-badge">' + esc(r.label) + '</span>';
     html += '<span class="cd-diff-type ' + r.diffType + '">' + ({ new: 'New', different: 'Changed', deleted: 'Deleted', same: 'Same' }[r.diffType] || r.diffType) + '</span>';
-    if (sfLink) {
-      html += '<a class="btn btn-sm" href="' + esc(sfLink) + '" target="_blank" onclick="event.stopPropagation()" style="padding:2px 6px;font-size:11px;flex-shrink:0" title="Open in Salesforce">SF</a>';
-    } else {
-      html += '<span style="width:36px;flex-shrink:0"></span>';
+    html += '<span style="width:80px;flex-shrink:0;display:flex;gap:3px;justify-content:flex-end" onclick="event.stopPropagation()">';
+    if (srcLink) {
+      const srcIcon = cdState.sourceType === 'org' ? '📤' : '🌿';
+      const srcTitle = cdState.sourceType === 'org' ? 'View in source org' : 'View in source branch';
+      html += '<a class="btn btn-sm" href="' + esc(srcLink) + '" target="_blank" style="padding:2px 5px;font-size:10px" title="' + srcTitle + '">' + srcIcon + 'S</a>';
     }
+    if (tgtLink) {
+      const tgtIcon = cdState.targetType === 'org' ? '📥' : '🌿';
+      const tgtTitle = cdState.targetType === 'org' ? 'View in target org' : 'View in target branch';
+      html += '<a class="btn btn-sm" href="' + esc(tgtLink) + '" target="_blank" style="padding:2px 5px;font-size:10px" title="' + tgtTitle + '">' + tgtIcon + 'T</a>';
+    }
+    if (!srcLink && !tgtLink) html += '&nbsp;';
+    html += '</span>';
     html += '</div>';
   });
   html += '</div></div>'; // grid, sidebar
