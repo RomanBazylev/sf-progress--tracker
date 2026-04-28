@@ -6052,6 +6052,7 @@ async function cdRunComparison() {
     // Compare
     const allKeys = new Set([...Object.keys(sourceComps), ...Object.keys(targetComps)]);
     const results = [];
+    let emptyBodyCount = 0;
     for (const key of allKeys) {
       const s = sourceComps[key];
       const t = targetComps[key];
@@ -6064,9 +6065,23 @@ async function cdRunComparison() {
       } else if (s && t) {
         const sBody = (s.body || '').trim();
         const tBody = (t.body || '').trim();
-        const diffType = sBody === tBody ? 'same' : 'different';
+        let diffType;
+        const hasBodyField = !!_CD_BODY_FIELDS[type] || (qDef && qDef.soql && /\bMetadata\b/.test(qDef.soql));
+        if (sBody === '' && tBody === '' && hasBodyField) {
+          // Both bodies empty for a type that should have body — fall back to LastModifiedDate comparison
+          emptyBodyCount++;
+          const sDate = s.lastModified || '';
+          const tDate = t.lastModified || '';
+          diffType = (sDate && tDate && sDate !== tDate) ? 'different' : 'same';
+        } else {
+          diffType = sBody === tBody ? 'same' : 'different';
+        }
         results.push({ name, type, label: qDef?.label || type, fullName: s.fullName, diffType, sourceBody: s.body || '', targetBody: t.body || '', lastModified: s.lastModified || t.lastModified, selected: false, _source: s, _target: t });
       }
+    }
+
+    if (emptyBodyCount > 0) {
+      logMsg('warn', 'compare', emptyBodyCount + ' components had empty body on both sides — used LastModifiedDate fallback for comparison');
     }
 
     // Sort: different first, then new, then deleted, then same
@@ -6089,6 +6104,7 @@ async function cdRunComparison() {
 }
 
 // Fetch a single metadata type from an org
+const _CD_BODY_FIELDS = { ApexClass: 'Body', ApexTrigger: 'Body', ApexPage: 'Markup', ApexComponent: 'Markup' };
 async function cdFetchTypeFromOrg(conn, q, opts) {
   if (!conn || !conn.token || !conn.instance) throw new Error('Org not connected — session may have expired');
   const components = [];
@@ -6107,6 +6123,26 @@ async function cdFetchTypeFromOrg(conn, q, opts) {
       if (data.records) records = records.concat(data.records);
       url = data.nextRecordsUrl || null;
     }
+
+    // For types with body fields (ApexClass, ApexTrigger, ApexPage, ApexComponent),
+    // check if SOQL returned the body. If not, fetch individually via REST GET.
+    const bodyField = _CD_BODY_FIELDS[q.type];
+    if (bodyField && records.length > 0) {
+      const missingBody = records.filter(r => !r[bodyField]);
+      if (missingBody.length > 0) {
+        logMsg('info', 'compare', q.type + ': ' + missingBody.length + '/' + records.length + ' records missing ' + bodyField + ' from SOQL — fetching individually');
+        const sObj = q.type === 'LWC' ? 'LightningComponentBundle' : q.type === 'AuraBundle' ? 'AuraDefinitionBundle' : q.type;
+        for (const rec of missingBody) {
+          try {
+            const detail = await cdApiFetch(conn, '/services/data/v' + SF_API_VERSION + '/tooling/sobjects/' + sObj + '/' + rec.Id + '?fields=Id,' + bodyField);
+            rec[bodyField] = detail[bodyField] || '';
+          } catch (e) {
+            logMsg('warn', 'compare', q.type + ' ' + (rec.Name || rec.DeveloperName || rec.Id) + ': failed to fetch body — ' + e.message);
+          }
+        }
+      }
+    }
+
     for (const rec of records) {
       const name = rec.DeveloperName || rec.Name || rec.ValidationName || rec.TestSuiteName || rec.Definition?.DeveloperName || '';
       const body = rec.Body || rec.Markup || (rec.Metadata ? metadataJsonToXml(rec.Metadata, q.type) : '') || '';
