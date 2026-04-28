@@ -1517,6 +1517,7 @@ function enterProject() {
   if (projectData.pat && projectData.repo && projectData.envs.length) {
     if (safeSsGet('cd_oauth_pending')) {
       // Returning from Compare & Deploy OAuth — navigate to Compare tab
+      safeSsRemove('sf_oauth_pending');
       showView('compare');
     } else if (safeSsGet('sf_oauth_pending')) {
       safeSsRemove('sf_oauth_pending');
@@ -1563,6 +1564,13 @@ function lockProject() {
   cdConnections = {};
   safeSsRemove('cd_oauth_pending');
   safeSsRemove('cd_oauth_env_idx');
+  safeSsRemove('cd_oauth_password');
+  safeSsRemove('cd_oauth_source_type');
+  safeSsRemove('cd_oauth_target_type');
+  safeSsRemove('cd_oauth_source_env');
+  safeSsRemove('cd_oauth_target_env');
+  safeSsRemove('cd_oauth_source_branch');
+  safeSsRemove('cd_oauth_target_branch');
   cdState = {
     sourceType: 'org', targetType: 'org', sourceEnvIdx: -1, targetEnvIdx: -1,
     sourceBranch: '', targetBranch: '',
@@ -5658,6 +5666,15 @@ function cdOAuthLogin(envIdx) {
   safeSsSet('sf_oauth_pending', '1');
   safeSsSet('sf_oauth_project_idx', String(currentProjectIndex));
   safeSsSet('sf_instance_pending', instance);
+  // Save password for auto-unlock on OAuth return
+  if (currentPassword) safeSsSet('cd_oauth_password', currentPassword);
+  // Save CD state selections so picklist values persist across redirect
+  safeSsSet('cd_oauth_source_type', cdState.sourceType);
+  safeSsSet('cd_oauth_target_type', cdState.targetType);
+  safeSsSet('cd_oauth_source_env', String(cdState.sourceEnvIdx));
+  safeSsSet('cd_oauth_target_env', String(cdState.targetEnvIdx));
+  safeSsSet('cd_oauth_source_branch', cdState.sourceBranch);
+  safeSsSet('cd_oauth_target_branch', cdState.targetBranch);
   const redirect = _oauthRedirectUri();
   location.href = instance + '/services/oauth2/authorize?response_type=token&client_id=' +
     encodeURIComponent(clientId) + '&redirect_uri=' + encodeURIComponent(redirect) + '&scope=api';
@@ -5695,17 +5712,6 @@ function renderCompareDeployView() {
   const el = document.getElementById('cdContent');
   if (!projectData) { el.innerHTML = '<p style="color:var(--muted);text-align:center;padding:40px">Open a project first.</p>'; return; }
   cdRestoreConns();
-
-  // Check if returning from CD OAuth
-  if (safeSsGet('cd_oauth_pending')) {
-    const envIdx = parseInt(safeSsGet('cd_oauth_env_idx') || '-1');
-    safeSsRemove('cd_oauth_pending');
-    safeSsRemove('cd_oauth_env_idx');
-    if (envIdx >= 0 && sfState.token) {
-      cdSetConn(envIdx, sfState.token, sfState.instance);
-      cdFetchUser(cdConnections[envIdx]).then(() => renderCompareDeployView()).catch(e => { toast('Failed to load user info: ' + e.message, 'warn'); renderCompareDeployView(); });
-    }
-  }
 
   if (cdState.phase === 'results' || cdState.phase === 'deploying' || cdState.phase === 'deployed') {
     renderCdResults(el);
@@ -7683,11 +7689,30 @@ showView = function(name) {
   }
   if (name === 'compare') {
     cdRestoreConns();
-    // If returning from CD OAuth, capture the token
+    // If returning from CD OAuth, capture the token and restore state
     if (safeSsGet('cd_oauth_pending')) {
       const envIdx = parseInt(safeSsGet('cd_oauth_env_idx') || '-1');
       safeSsRemove('cd_oauth_pending');
       safeSsRemove('cd_oauth_env_idx');
+      // Restore cd selections saved before OAuth redirect
+      const savedSrcType = safeSsGet('cd_oauth_source_type');
+      const savedTgtType = safeSsGet('cd_oauth_target_type');
+      const savedSrcEnv = safeSsGet('cd_oauth_source_env');
+      const savedTgtEnv = safeSsGet('cd_oauth_target_env');
+      const savedSrcBranch = safeSsGet('cd_oauth_source_branch');
+      const savedTgtBranch = safeSsGet('cd_oauth_target_branch');
+      if (savedSrcType) cdState.sourceType = savedSrcType;
+      if (savedTgtType) cdState.targetType = savedTgtType;
+      if (savedSrcEnv !== null) cdState.sourceEnvIdx = parseInt(savedSrcEnv);
+      if (savedTgtEnv !== null) cdState.targetEnvIdx = parseInt(savedTgtEnv);
+      if (savedSrcBranch) cdState.sourceBranch = savedSrcBranch;
+      if (savedTgtBranch) cdState.targetBranch = savedTgtBranch;
+      safeSsRemove('cd_oauth_source_type');
+      safeSsRemove('cd_oauth_target_type');
+      safeSsRemove('cd_oauth_source_env');
+      safeSsRemove('cd_oauth_target_env');
+      safeSsRemove('cd_oauth_source_branch');
+      safeSsRemove('cd_oauth_target_branch');
       if (envIdx >= 0 && sfState.token) {
         cdSetConn(envIdx, sfState.token, sfState.instance);
         cdFetchUser(cdConnections[envIdx]).then(() => renderCompareDeployView()).catch(e => { toast('Failed to load user info: ' + e.message, 'warn'); renderCompareDeployView(); });
@@ -7703,16 +7728,40 @@ showView = function(name) {
 handleSfOAuthCallback();
 renderProjectList();
 
-// Auto-open unlock modal if returning from SF OAuth redirect
-if (safeSsGet('sf_oauth_pending')) {
+// Auto-unlock or open unlock modal if returning from SF OAuth redirect
+if (safeSsGet('sf_oauth_pending') || safeSsGet('cd_oauth_pending')) {
   const idx = parseInt(safeSsGet('sf_oauth_project_idx'));
+  const savedPass = safeSsGet('cd_oauth_password');
+  safeSsRemove('cd_oauth_password');
   if (!isNaN(idx) && idx >= 0) {
     const projects = getProjects();
     if (projects[idx]) {
-      openUnlockModal(idx);
+      if (savedPass) {
+        // Auto-unlock with saved password (from CD OAuth redirect)
+        (async () => {
+          try {
+            const data = await Crypto.decrypt(savedPass, { salt: projects[idx].salt, iv: projects[idx].iv, ciphertext: projects[idx].ciphertext });
+            currentProjectIndex = idx;
+            currentPassword = savedPass;
+            projectData = data;
+            safeSsRemove('sf_oauth_project_idx');
+            enterProject();
+          } catch {
+            // Password mismatch — fall back to manual unlock
+            safeSsRemove('sf_oauth_project_idx');
+            openUnlockModal(idx);
+          }
+        })();
+      } else {
+        openUnlockModal(idx);
+        safeSsRemove('sf_oauth_project_idx');
+      }
+    } else {
+      safeSsRemove('sf_oauth_project_idx');
     }
+  } else {
+    safeSsRemove('sf_oauth_project_idx');
   }
-  safeSsRemove('sf_oauth_project_idx');
 }
 </script>
 </body>
