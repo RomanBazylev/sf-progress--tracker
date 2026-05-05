@@ -1578,7 +1578,8 @@ function lockProject() {
     datePreset: 'all', dateFrom: '', dateTo: '', compareBranch: '',
     phase: 'config', results: [], progress: { current: 0, total: 0, message: '' },
     deploySteps: [], resultsFilter: 'all', resultsTypeFilter: '', resultsSearch: '',
-    isComparing: false, isDeploying: false, _deployCancelled: false, _fetchErrors: []
+    isComparing: false, isDeploying: false, _deployCancelled: false, _fetchErrors: [],
+    testLevel: 'NoTestRun', specifiedTests: ''
   };
   document.getElementById('mainNav').style.display = 'none';
   document.getElementById('lockBtn').style.display = 'none';
@@ -5704,7 +5705,9 @@ let cdState = {
   _deployCancelled: false,
   _fetchErrors: [],
   _lastValidation: null, // { asyncId, timestamp, componentCount, testResults }
-  _lastTestResults: null  // { total, passed, failed, tests:[] }
+  _lastTestResults: null,  // { total, passed, failed, tests:[] }
+  testLevel: 'NoTestRun',  // NoTestRun | RunLocalTests | RunAllTestsInOrg | RunSpecifiedTests
+  specifiedTests: ''       // comma-separated test class names (RunSpecifiedTests only)
 };
 
 // ── RENDER: Compare & Deploy View ──
@@ -6372,6 +6375,20 @@ function renderCdResults(el) {
   html += '<button class="btn btn-sm" onclick="cdSelectAllChanged()">Select All Changed</button>';
   html += '<button class="btn btn-sm" onclick="cdDeselectAll()">Deselect All</button>';
   if (cdState.targetType === 'org') {
+    // Test level selector
+    html += '<label style="font-size:12px;color:var(--muted);margin:0 4px 0 8px">Tests:</label>';
+    html += '<select style="font-size:12px;padding:3px 6px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--text)" onchange="cdSetTestLevel(this.value)">';
+    html += '<option value="NoTestRun"' + (cdState.testLevel === 'NoTestRun' ? ' selected' : '') + '>No Tests</option>';
+    html += '<option value="RunLocalTests"' + (cdState.testLevel === 'RunLocalTests' ? ' selected' : '') + '>Local Tests</option>';
+    html += '<option value="RunAllTestsInOrg"' + (cdState.testLevel === 'RunAllTestsInOrg' ? ' selected' : '') + '>All Tests</option>';
+    html += '<option value="RunSpecifiedTests"' + (cdState.testLevel === 'RunSpecifiedTests' ? ' selected' : '') + '>Specified Tests</option>';
+    html += '</select>';
+    if (cdState.testLevel === 'RunSpecifiedTests') {
+      html += '<input type="text" placeholder="TestClassA,TestClassB" value="' + esc(cdState.specifiedTests) + '" ' +
+        'oninput="cdSetSpecifiedTests(this.value)" ' +
+        'title="Comma-separated Apex test class names" ' +
+        'style="font-size:12px;padding:3px 8px;border-radius:4px;border:1px solid var(--border);background:var(--bg2);color:var(--text);min-width:220px" />';
+    }
     html += '<button class="btn btn-primary" ' + (selectedCount ? '' : 'disabled') + ' onclick="cdValidateDeploy()" title="Check-only deployment: run tests without applying changes">✓ Validate</button>';
     // Quick Deploy button — available after successful validation
     if (cdState._lastValidation && (Date.now() - cdState._lastValidation.timestamp < 10 * 24 * 3600000)) {
@@ -6546,6 +6563,13 @@ function cdSelectAllVisible(checked) {
   filtered.forEach(r => { if (r.diffType !== 'same') r.selected = checked; });
   renderCdResults(document.getElementById('cdContent'));
 }
+function cdSetTestLevel(v) {
+  cdState.testLevel = v;
+  renderCdResults(document.getElementById('cdContent'));
+}
+function cdSetSpecifiedTests(v) {
+  cdState.specifiedTests = v;
+}
 function cdBackToConfig() {
   cdState.phase = 'config';
   cdState.results = [];
@@ -6620,6 +6644,23 @@ async function cdDeployToOrg(checkOnly) {
   if (!selected.length) { toast('Select at least one item', 'warn'); return; }
   const conn = cdGetConn(cdState.targetEnvIdx);
   if (!conn) { toast('Target org not connected', 'warn'); return; }
+
+  // Guard: RunSpecifiedTests requires at least one class name
+  if (cdState.testLevel === 'RunSpecifiedTests') {
+    const specTests = (cdState.specifiedTests || '').split(',').map(t => t.trim()).filter(Boolean);
+    if (!specTests.length) { toast('Enter at least one test class name for RunSpecifiedTests', 'warn'); return; }
+  }
+
+  // Guard: Salesforce blocks NoTestRun on production orgs when Apex is included
+  const hasApex = selected.some(r => r.type === 'ApexClass' || r.type === 'ApexTrigger');
+  const isProdLike = conn.instance &&
+    !conn.instance.includes('.sandbox.') &&
+    !conn.instance.includes('.scratch.') &&
+    !conn.instance.includes('--');  // any sandbox with My Domain: org--sandbox.sandbox.my.salesforce.com
+  if (hasApex && isProdLike && cdState.testLevel === 'NoTestRun') {
+    toast('Production orgs require tests when deploying Apex. Switch to RunLocalTests or RunSpecifiedTests.', 'warn');
+    return;
+  }
 
   cdState.isDeploying = true;
   cdState.phase = 'deploying';
@@ -6743,11 +6784,17 @@ async function cdDeployToOrg(checkOnly) {
 
     // Deploy via SOAP Metadata API
     addStep('Deploying to Salesforce' + (checkOnly ? ' (validation only)' : '') + '...', 'running');
+    const testLevel = cdState.testLevel || 'NoTestRun';
+    const specifiedTestsXml = testLevel === 'RunSpecifiedTests'
+      ? (cdState.specifiedTests || '').split(',').map(t => t.trim()).filter(Boolean)
+          .map(t => '<meta:runTests>' + escXmlStr(t) + '</meta:runTests>').join('')
+      : '';
     const deployOpts = '<meta:DeployOptions>' +
       '<meta:rollbackOnError>true</meta:rollbackOnError>' +
       '<meta:singlePackage>true</meta:singlePackage>' +
       (checkOnly ? '<meta:checkOnly>true</meta:checkOnly>' : '') +
-      '<meta:testLevel>NoTestRun</meta:testLevel>' +
+      '<meta:testLevel>' + testLevel + '</meta:testLevel>' +
+      specifiedTestsXml +
       '</meta:DeployOptions>';
     const deploySoap = '<meta:deploy><meta:ZipFile>' + zipBlob + '</meta:ZipFile>' + deployOpts + '</meta:deploy>';
     const deployRes = await cdSoapFetch(conn, deploySoap);
